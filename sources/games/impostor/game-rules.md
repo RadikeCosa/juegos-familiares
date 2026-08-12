@@ -1,0 +1,403 @@
+# Impostor — Reglas del juego
+
+## Estado
+
+Estas son las reglas v0 de Impostor.
+
+Representan nuestra primera hipótesis jugable suficientemente definida como para diseñar e implementar el MVP.
+
+No se consideran definitivas.
+
+Después de jugar partidas reales debemos observar qué funciona, qué genera fricción y qué conviene modificar.
+
+---
+
+# Participantes
+
+El juego está diseñado inicialmente para grupos pequeños.
+
+## Rango inicial
+
+* mínimo: 3 jugadores;
+* recomendado: 3 a 8 jugadores;
+* caso principal de prueba: 4 jugadores.
+
+Cada participante utiliza su propio teléfono.
+
+---
+
+# Grupo
+
+Los jugadores pertenecen a un grupo persistente.
+
+El grupo mantiene:
+
+* integrantes;
+* banco de palabras;
+* configuración básica.
+
+Las partidas son temporales, pero el grupo y sus palabras permanecen disponibles para encuentros futuros.
+
+---
+
+# Banco de palabras
+
+El grupo posee un banco persistente.
+
+Puede combinar:
+
+* palabras precargadas por la aplicación;
+* palabras aportadas por los participantes.
+
+Cualquier integrante puede agregar palabras aunque no exista una partida activa.
+
+---
+
+## Visibilidad
+
+Los jugadores normales no necesitan consultar el banco completo.
+
+Pueden conocer:
+
+* las palabras que ellos mismos agregaron;
+* la cantidad total disponible.
+
+El administrador puede consultar y administrar el banco completo.
+
+---
+
+## Validación
+
+La aplicación debe impedir automáticamente:
+
+* palabras vacías;
+* duplicados triviales;
+* diferencias irrelevantes de espacios;
+* duplicados que solamente difieren en mayúsculas o minúsculas.
+
+También puede aplicar límites razonables de longitud.
+
+---
+
+# Tanda
+
+Una tanda es una sesión formada por múltiples rondas.
+
+Durante la tanda se mantienen:
+
+* jugadores participantes;
+* rondas realizadas;
+* palabras utilizadas;
+* marcador.
+
+No existe inicialmente un número obligatorio de rondas.
+
+El grupo decide cuándo finalizar.
+
+---
+
+# Preparación de una ronda
+
+Cada ronda utiliza:
+
+* los jugadores actualmente presentes;
+* una palabra secreta;
+* exactamente un impostor.
+
+La aplicación selecciona la palabra y el impostor.
+
+---
+
+# Selección de palabra
+
+La palabra se obtiene del banco disponible para el grupo.
+
+Para iniciar una ronda debe existir al menos una palabra disponible que todavía no haya sido utilizada durante la tanda actual.
+
+Una palabra utilizada no debe aparecer nuevamente durante la misma tanda.
+
+Puede volver a utilizarse en una tanda futura.
+
+Si no quedan palabras disponibles para la tanda:
+
+* no puede comenzar una nueva ronda;
+* la aplicación debe permitir agregar nuevas palabras o terminar la tanda;
+* no se reutilizan automáticamente palabras ya usadas durante esa misma tanda.
+
+---
+
+# Selección del impostor
+
+Existe exactamente un impostor por ronda.
+
+La selección debe incluir azar pero evitar distribuciones claramente injustas.
+
+Mientras existan jugadores que hayan sido impostores menos veces dentro de la tanda, deben tener prioridad respecto de quienes ya tuvieron el rol más veces.
+
+Entre los jugadores elegibles se selecciona aleatoriamente.
+
+El objetivo es combinar:
+
+* imprevisibilidad;
+* variedad;
+* distribución razonablemente equilibrada.
+
+---
+
+# Información privada
+
+Cada teléfono recibe únicamente la información correspondiente a su jugador.
+
+## Jugador normal
+
+Ve la palabra secreta.
+
+Ejemplo:
+
+> MILANESA
+
+## Impostor
+
+No recibe la palabra.
+
+Ve:
+
+> IMPOSTOR
+
+La privacidad no debe depender solamente de ocultar visualmente información que ya haya sido enviada al dispositivo.
+
+---
+
+# Comienzo de la ronda
+
+Cuando todos disponen de su información, la aplicación indica que puede comenzar el juego.
+
+No selecciona obligatoriamente quién habla primero.
+
+El grupo puede decidir quién comienza y continuar, por ejemplo, en sentido horario.
+
+---
+
+# Primera vuelta
+
+Cada jugador debe participar al menos una vez.
+
+Durante la primera vuelta, cada participante dice una palabra o frase breve relacionada con la palabra secreta.
+
+El objetivo del jugador normal es demostrar que conoce la palabra sin revelarla demasiado claramente.
+
+El objetivo del impostor es participar de manera convincente mientras intenta deducir la palabra.
+
+---
+
+# Conversación libre
+
+Después de la primera vuelta se permite una conversación presencial breve y libre.
+
+Los participantes pueden:
+
+* comentar pistas;
+* preguntar;
+* sospechar;
+* acusar;
+* defenderse.
+
+La aplicación no regula esta conversación.
+
+No existe inicialmente:
+
+* temporizador obligatorio;
+* cantidad máxima de intervenciones;
+* número fijo de vueltas adicionales.
+
+El grupo decide cuándo está listo para votar.
+
+---
+
+# Inicio de votación
+
+Cuando el grupo decide terminar la conversación, el host selecciona:
+
+`Ir a votación`
+
+Todos los dispositivos pasan al estado de votación.
+
+---
+
+# Votación
+
+Cada participante vota desde su propio teléfono por quien considera impostor.
+
+La votación es secreta.
+
+Un jugador no puede votarse a sí mismo.
+
+Los resultados no se muestran hasta que todos los jugadores hayan votado.
+
+---
+
+# Resultado de la votación
+
+Cuando todos votaron, la aplicación muestra el resultado simultáneamente.
+
+Ejemplo:
+
+> Camila — 3 votos
+> Pedro — 1 voto
+
+---
+
+# Empate
+
+Si dos o más jugadores comparten la mayor cantidad de votos:
+
+1. la aplicación informa el empate;
+2. el grupo puede discutir nuevamente;
+3. se realiza una segunda votación;
+4. solamente pueden recibir votos los jugadores empatados.
+
+En la segunda votación, el grupo solamente identifica al impostor si el impostor queda como único jugador con mayor cantidad de votos.
+
+Cualquier otro resultado da la victoria al impostor.
+
+Esto incluye:
+
+* un nuevo empate;
+* otro jugador como único más votado;
+* cualquier resultado donde el impostor no sea el único más votado.
+
+No hay más rondas de desempate.
+
+---
+
+# Impostor no descubierto
+
+Si el jugador más votado no es el impostor:
+
+**gana el impostor.**
+
+La ronda termina.
+
+---
+
+# Impostor descubierto
+
+Si el jugador más votado es efectivamente el impostor, todavía tiene una última oportunidad.
+
+La aplicación revela quién era el impostor pero no muestra inmediatamente la palabra.
+
+El impostor intenta decir en voz alta cuál cree que era la palabra secreta.
+
+Después se selecciona:
+
+`Comprobar palabra`
+
+La aplicación revela la palabra.
+
+El host registra si el impostor acertó o no.
+
+---
+
+# Condiciones de victoria
+
+## Victoria del impostor
+
+El impostor gana si ocurre cualquiera de estas situaciones:
+
+* el grupo acusa a otro jugador;
+* en la segunda votación, el impostor no queda como único jugador con mayor cantidad de votos;
+* el grupo descubre al impostor pero este adivina correctamente la palabra.
+
+## Victoria del grupo
+
+El grupo gana si:
+
+* identifica correctamente al impostor;
+* y el impostor no logra adivinar la palabra.
+
+---
+
+# Puntuación
+
+El sistema inicial prioriza simplicidad.
+
+## Victoria del impostor
+
+El impostor recibe:
+
+`+2 puntos`
+
+## Victoria del grupo
+
+Cada jugador normal recibe:
+
+`+1 punto`
+
+El impostor no recibe puntos.
+
+---
+
+# Marcador
+
+Después de cada ronda se muestra el marcador actualizado.
+
+Ejemplo:
+
+> Victoria — 4
+> Pedro — 3
+> Camila — 3
+> Ramiro — 2
+
+Desde esa pantalla el host puede:
+
+* iniciar una nueva ronda;
+* terminar la tanda.
+
+---
+
+# Nueva ronda
+
+Al comenzar una nueva ronda se conservan:
+
+* jugadores;
+* marcador;
+* banco de palabras;
+* registro de palabras ya utilizadas durante la tanda;
+* distribución anterior de roles necesaria para balancear la selección del próximo impostor.
+
+Se seleccionan:
+
+* una nueva palabra;
+* un nuevo impostor.
+
+---
+
+# Fin de la tanda
+
+La tanda puede terminar después de cualquier ronda.
+
+La aplicación muestra:
+
+* clasificación final;
+* ganador según puntuación;
+* cantidad de rondas jugadas.
+
+Las estadísticas adicionales son opcionales y no forman parte necesaria del MVP.
+
+---
+
+# Principio de diseño de las reglas
+
+Estas reglas no buscan reproducir obligatoriamente otra implementación existente de Impostor.
+
+Buscan producir una variante:
+
+* sencilla de explicar;
+* rápida;
+* social;
+* competitiva sin ser compleja;
+* divertida con cuatro personas;
+* escalable razonablemente a grupos pequeños;
+* con mínima intervención del teléfono durante la conversación.
+
+Las primeras sesiones reales determinarán qué reglas deben mantenerse o modificarse.
