@@ -1,5 +1,18 @@
 import type { Metadata, Viewport } from "next";
+import { Sora, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
+
+const sora = Sora({
+  subsets: ["latin"],
+  weight: ["600"],
+  variable: "--font-display"
+});
+
+const sourceSans = Source_Sans_3({
+  subsets: ["latin"],
+  weight: ["400", "600"],
+  variable: "--font-body"
+});
 
 export const metadata: Metadata = {
   title: "Juegos Familiares",
@@ -18,7 +31,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body>{children}</body>
+      <body className={`${sora.variable} ${sourceSans.variable}`}>{children}</body>
     </html>
   );
 }
