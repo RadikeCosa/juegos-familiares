@@ -191,7 +191,8 @@ Completado:
 * requisitos técnicos;
 * arquitectura conceptual;
 * plan incremental;
-* fundación técnica del proyecto.
+* fundación técnica del proyecto;
+* exploración y decisión de dirección visual para el Incremento 1.
 
 PENDIENTE:
 
@@ -220,6 +221,7 @@ PENDIENTE:
 | Arquitectura conceptual | COMPLETADA |
 | Plan incremental | COMPLETADA |
 | Fundación técnica | COMPLETADA |
+| Dirección visual del Incremento 1 | COMPLETADA |
 | Implementación de producto | PENDIENTE |
 | Playtesting | PENDIENTE |
 | Iteración | PENDIENTE |
@@ -384,6 +386,22 @@ No hay estimaciones de fecha en este documento.
 
 **Estado:** DECIDIDA.
 
+## Dirección visual: Cartas Geométricas
+
+**Decisión:** adoptar `Cartas Geométricas` como base visual para la primera UI real de Juegos Familiares.
+
+**Problema que resolvía:** definir una identidad clara para la portada del Incremento 1 sin atar la plataforma completa al tono de Impostor ni construir un design system prematuro.
+
+**Alternativas consideradas:** `Mesa Viva`, con mayor calidez familiar; `Secreto Amable`, con mayor relación conceptual con Impostor.
+
+**Motivo:** fue la dirección que mejor equilibró claridad mobile, carácter lúdico, accesibilidad, escalabilidad como plataforma y una implementación sencilla mediante tokens semánticos.
+
+**Trade-off:** puede sentirse menos cálida que `Mesa Viva` si se ejecuta de forma demasiado tecnológica. La calidez deberá aparecer en copy, espaciado y microdetalles, no mezclando arbitrariamente paletas de varias propuestas.
+
+**Definición inicial:** lenguaje contemporáneo, lúdico y claro; geometría basada en cartas/fichas; `Sora` para display; `Source Sans 3` para body/UI; iconografía `Lucide`; soporte light/dark desde la primera UI real; radios y sombras moderados; símbolo conceptual de cuatro fichas/cuadrados con una pieza diferenciada.
+
+**Estado:** DECIDIDA PARA INCREMENTO 1.
+
 ---
 
 # 9. Evolución de decisiones
@@ -411,6 +429,22 @@ Estado: REGISTRADA.
 Los requisitos técnicos describieron capacidades sin elegir proveedor.
 
 Luego la arquitectura conceptual cerró Supabase para el MVP: Auth, Postgres, RLS, Realtime y Presence cuando correspondan.
+
+Estado: REGISTRADA.
+
+## De exploración visual a dirección de plataforma
+
+Antes de implementar la portada se compararon tres direcciones visuales: `Mesa Viva`, `Cartas Geométricas` y `Secreto Amable`.
+
+La elección no se tomó como preferencia estética aislada. El criterio fue elegir una dirección que pudiera sostener a Juegos Familiares como plataforma, permitir futuros juegos y mantener claridad en mobile sin adelantar un design system completo.
+
+Se descartó basar la identidad general demasiado directamente en misterio, rol secreto, Impostor, estética gamer o estética infantil. `Cartas Geométricas` permite que Impostor sea la primera opción disponible sin convertirlo en la identidad completa del producto.
+
+La primera UI real usará una base pequeña de tokens semánticos para color, tipografía, radios, foco y sombra. Los componentes deberán depender de significado semántico, no de colores hardcodeados. La estructura podrá crecer solo cuando aparezcan necesidades reales.
+
+Se decidió incluir soporte light/dark desde esta primera UI porque el alcance visual todavía es pequeño y permite validar que los tokens son realmente semánticos. No queda cerrada todavía la UX de selección o persistencia del tema.
+
+Figma no se incorpora en esta etapa. La exploración ya permitió cerrar dirección, tipografías, iconografía, formas y símbolo conceptual; la siguiente validación de mayor valor será observar una primera UI pequeña funcionando en mobile.
 
 Estado: REGISTRADA.
 
@@ -490,7 +524,7 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | Incremento | Capacidad | Estado | Evidencia |
 | --- | --- | --- | --- |
 | 0 | Fundación del proyecto | COMPLETADO | Next.js, TypeScript, lint, Vitest, build y pantalla mobile-first mínima |
-| 1 | Portada de plataforma y entrada a Impostor | PENDIENTE | PENDIENTE |
+| 1 | Portada de plataforma y entrada a Impostor | PENDIENTE | Dirección visual `Cartas Geométricas` decidida |
 | 2 | Identidad liviana, grupo y jugador | PENDIENTE | PENDIENTE |
 | 3 | Banco de palabras del grupo | PENDIENTE | PENDIENTE |
 | 4 | Crear y unirse a una sala | PENDIENTE | PENDIENTE |
