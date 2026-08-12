@@ -27,7 +27,7 @@ El case study futuro debe mostrar tanto el resultado como el razonamiento que ll
 
 ```text
 Estado:
-Planificación cerrada / implementación todavía no iniciada
+Incremento 0 completado / Incremento 1 pendiente
 ```
 
 ## Ya existe
@@ -42,18 +42,19 @@ Planificación cerrada / implementación todavía no iniciada
 * modelo de estados;
 * requisitos técnicos;
 * arquitectura conceptual;
-* plan de implementación incremental.
+* plan de implementación incremental;
+* repositorio Git inicializado y estable;
+* línea base documental en `main`;
+* fundación frontend mínima en rama de trabajo.
 
 ## PENDIENTE
 
-* producto funcionando;
+* producto jugable;
 * deploy;
 * playtesting real;
 * métricas;
 * Supabase configurado;
-* repositorio Git inicializado y estable;
-* proyecto frontend inicializado;
-* tests reales;
+* tests de dominio;
 * UI final;
 * evidencia visual;
 * resultados de uso.
@@ -189,11 +190,12 @@ Completado:
 * modelo de estados;
 * requisitos técnicos;
 * arquitectura conceptual;
-* plan incremental.
+* plan incremental;
+* fundación técnica del proyecto.
 
 PENDIENTE:
 
-* implementación;
+* implementación de producto;
 * testing práctico;
 * diseño UI final;
 * validación en dispositivos reales;
@@ -217,7 +219,8 @@ PENDIENTE:
 | Comparación / decisión arquitectónica | COMPLETADA |
 | Arquitectura conceptual | COMPLETADA |
 | Plan incremental | COMPLETADA |
-| Implementación | PENDIENTE |
+| Fundación técnica | COMPLETADA |
+| Implementación de producto | PENDIENTE |
 | Playtesting | PENDIENTE |
 | Iteración | PENDIENTE |
 
@@ -486,7 +489,7 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 
 | Incremento | Capacidad | Estado | Evidencia |
 | --- | --- | --- | --- |
-| 0 | Fundación del proyecto | PENDIENTE | PENDIENTE |
+| 0 | Fundación del proyecto | COMPLETADO | Next.js, TypeScript, lint, Vitest, build y pantalla mobile-first mínima |
 | 1 | Portada de plataforma y entrada a Impostor | PENDIENTE | PENDIENTE |
 | 2 | Identidad liviana, grupo y jugador | PENDIENTE | PENDIENTE |
 | 3 | Banco de palabras del grupo | PENDIENTE | PENDIENTE |
@@ -510,6 +513,63 @@ El primer MVP jugable está previsto al cerrar el Incremento 12.
 # 13. Plantilla para registrar incrementos cerrados
 
 Duplicar esta plantilla solo cuando un incremento esté terminado o haya una decisión/problema importante que valga la pena conservar.
+
+## Incremento 0 — Fundación del proyecto
+
+Estado: `COMPLETADO`
+
+### Problema
+
+El proyecto debía pasar de un corpus documental a una base ejecutable sin perder `sources/`, sin crear un proyecto anidado y sin introducir arquitectura prematura antes de tener producto.
+
+Además, antes de implementar se detectó una carpeta `.git` vacía e inválida. Se auditó el estado del repositorio antes de reparar nada: raíz correcta, ausencia de repositorios padre o anidados, `.git` sin información recuperable y documentación intacta.
+
+### Qué implementamos
+
+Se inicializó Git correctamente en la raíz, se creó una línea base documental en `main`, se dejó `skills-lock.json` versionado y `.agents/` ignorado como estado local de skills instaladas.
+
+Sobre una rama de trabajo se creó una fundación frontend mínima directamente en la raíz existente: Next.js, TypeScript, npm, App Router, ESLint, Vitest y una pantalla inicial mobile-first de `Juegos Familiares`.
+
+### Decisiones relevantes
+
+La base de Next.js se creó manualmente en lugar de usar `create-next-app`. El scaffolding manual exigió más configuración inicial, pero permitió controlar exactamente qué entraba al proyecto y redujo el riesgo de sobrescribir documentación o crear una aplicación anidada.
+
+El alcance se mantuvo deliberadamente pequeño: no entraron Supabase, autenticación, realtime, dominio de Impostor, service worker, PWA avanzada, CI/CD ni diseño visual definitivo.
+
+El test mínimo quedó orientado a proteger una decisión real del proyecto, no una abstracción creada solo para tener algo testeable.
+
+### Ajustes durante la revisión
+
+Se eliminó `min-width: 320px` porque podía forzar overflow horizontal en viewports menores a 320px. La fundación técnica también debía respetar el criterio mobile-first mediante una composición fluida.
+
+También se eliminó una función `getAppName()` que envolvía un string sin aportar comportamiento real. Aunque era utilizada por la aplicación, su valor principal era fabricar una superficie de test, y eso iba contra el principio de evitar abstracciones prematuras.
+
+### Cómo lo validamos
+
+El incremento cerró con lint, test, build y revisión de diff. `sources/` permaneció intacta y no se creó ningún proyecto anidado.
+
+```text
+npm run lint      PASS
+npm test          PASS
+npm run build     PASS
+git diff --check  PASS
+```
+
+### Qué aprendí
+
+Resolver primero el estado del repositorio redujo el riesgo de perder trabajo o construir sobre una base ambigua.
+
+Una fundación técnica no es un logro de producto final, pero sí fija hábitos importantes: controlar el alcance, validar temprano, revisar el diff completo y eliminar complejidad que todavía no demuestra valor.
+
+### Evidencias
+
+* PR: PENDIENTE.
+* screenshot: PENDIENTE.
+* video: PENDIENTE.
+* test: Vitest mínimo ejecutado.
+* diagrama: PENDIENTE.
+
+---
 
 ## Incremento X — Nombre
 
