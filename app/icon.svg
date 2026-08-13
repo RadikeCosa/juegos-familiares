@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Juegos Familiares">
+  <rect width="416" height="416" x="48" y="48" fill="#2563EB" rx="96" />
+  <rect width="116" height="116" x="128" y="128" fill="#FFFFFF" rx="26" />
+  <rect width="116" height="116" x="268" y="128" fill="#E11D48" rx="26" />
+  <rect width="116" height="116" x="128" y="268" fill="#FFFFFF" rx="26" />
+  <rect width="116" height="116" x="268" y="268" fill="#FFFFFF" rx="26" />
+</svg>
