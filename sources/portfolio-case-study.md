@@ -228,6 +228,82 @@ PENDIENTE:
 
 No hay estimaciones de fecha en este documento.
 
+## Método de trabajo aplicado (IA + criterio humano)
+
+Este proyecto adopta explícitamente el método operativo definido en `sources/working-method.md`.
+
+En el case study final no solo debe mostrarse qué se construyó, sino también cómo se tomaron decisiones y cómo se validó cada paso.
+
+### Ciclo operativo
+
+Para cada incremento usamos este ciclo:
+
+```text
+entender el problema
+→ decidir con criterio
+→ implementar en pequeño
+→ validar según riesgo
+→ capturar aprendizaje
+→ ajustar siguiente paso
+```
+
+Esto evita dos riesgos frecuentes:
+
+* programar sin contexto suficiente;
+* aumentar complejidad sin una necesidad real.
+
+### Regla de trazabilidad documental
+
+Antes de cerrar una decisión relevante, debe poder trazarse contra el corpus de `sources/`:
+
+* `project-principles.md` para principios de producto y desarrollo;
+* `platform/product-brief.md` para alcance de plataforma;
+* `games/impostor/product-brief.md` para intención del juego;
+* `architecture.md` para límites entre plataforma, dominio e infraestructura;
+* `implementation-plan.md` para secuencia incremental;
+* `working-method.md` para forma de trabajo con IA.
+
+Si una implementación contradice estos documentos, la contradicción debe registrarse y resolverse explícitamente.
+
+### Regla de alcance por incremento
+
+Cada tarea delegada a IA debe declarar:
+
+* objetivo del cambio;
+* contexto mínimo necesario;
+* decisiones ya tomadas que no se negocian;
+* alcance y fuera de alcance;
+* criterios de calidad;
+* validación requerida.
+
+Si esto no está claro, la tarea se considera inmadura para implementación.
+
+### Validación proporcional al riesgo
+
+No todos los cambios requieren el mismo nivel de verificación.
+
+Criterio operativo:
+
+* bajo riesgo: revisión de diff, typecheck/lint/test de alcance local;
+* riesgo medio: agregar pruebas de comportamiento y verificación de estados;
+* alto riesgo: pruebas multi-dispositivo, revisión de seguridad/autorización y validación manual guiada.
+
+La pregunta guía es:
+
+> ¿Qué podría salir mal en este incremento y cómo lo comprobamos antes de continuar?
+
+### Qué debe verse en el case study público
+
+Para sostener credibilidad, cada hito importante debería mostrar:
+
+* problema que se resolvía;
+* alternativas consideradas;
+* decisión tomada y trade-off;
+* evidencia de validación;
+* aprendizaje y ajuste posterior.
+
+Este enfoque convierte el uso de IA en un acelerador de ejecución y análisis, no en una caja negra de decisiones.
+
 ---
 
 # 8. Decisiones clave
@@ -768,23 +844,81 @@ PENDIENTE.
 
 ## Desarrollo con IA
 
-PENDIENTE.
+Registrar aquí aprendizajes concretos derivados del uso del marco definido en la sección 18.
+
+Estado actual: PENDIENTE.
 
 ---
 
 # 18. Uso de IA
 
-ChatGPT y Codex ayudan a explorar, documentar, revisar e implementar.
+ChatGPT y Codex se usan como asistentes de análisis y ejecución, no como reemplazo del criterio de producto e ingeniería.
 
-Principios:
+Esta sección complementa el método descrito en la sección de proceso y registra cómo se aplica en la práctica.
 
-* las decisiones importantes deben seguir siendo comprensibles;
-* los cambios relevantes deben poder explicarse;
-* la IA puede acelerar exploración, redacción, revisión y ejecución;
-* no aceptar complejidad solamente porque una herramienta pueda generarla;
-* no presentar la IA como autora autónoma del proyecto.
+## Marco de uso
 
-Ejemplos concretos: `PENDIENTE`.
+La IA puede acelerar:
+
+* exploración del problema y síntesis de contexto;
+* estructuración documental;
+* implementación de tareas acotadas;
+* revisión de cambios y detección de riesgos;
+* propuesta de validaciones según riesgo.
+
+La responsabilidad humana mantiene:
+
+* decisiones de alcance;
+* decisiones de arquitectura y trade-offs;
+* aprobación final de cambios;
+* definición de criterios de calidad;
+* priorización de iteraciones.
+
+## Reglas operativas
+
+Para tareas relevantes, el prompt debe incluir:
+
+* objetivo;
+* contexto;
+* decisiones tomadas;
+* alcance;
+* fuera de alcance;
+* validación esperada.
+
+Además, cada salida importante de IA debe dejar trazabilidad mínima:
+
+* qué se pidió;
+* qué cambió;
+* por qué;
+* cómo se verificó;
+* qué riesgo residual queda.
+
+## Riesgos de uso y mitigaciones
+
+Riesgos a controlar:
+
+* complejidad accidental;
+* cambios fuera de alcance;
+* decisiones implícitas no discutidas;
+* sobreconfianza en salida no validada.
+
+Mitigaciones aplicadas:
+
+* dividir el trabajo en incrementos pequeños;
+* revisar diff completo por intención y alcance;
+* validar proporcionalmente al riesgo;
+* registrar contradicciones cuando aparezcan.
+
+## Evidencia para el portfolio
+
+Cuando exista material suficiente, conviene conservar:
+
+* ejemplos de prompts de trabajo (sin datos sensibles);
+* fragmentos de diff representativos;
+* evidencia de validación (tests, build, revisión manual);
+* casos donde se descartó una propuesta de IA por criterio de producto o simplicidad.
+
+Estado de ejemplos concretos: PENDIENTE.
 
 ---
 
