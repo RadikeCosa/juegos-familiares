@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ImpostorAnonymousOnboardingActions } from "./anonymous-onboarding-actions";
+import { ImpostorPlatformContextShell } from "./platform-context-shell";
 
 export const metadata: Metadata = {
   title: "Impostor | Juegos Familiares",
@@ -32,7 +32,7 @@ export default function ImpostorPage() {
               Todos conocen la palabra menos una persona. Hablen, sospechen y
               descubran quién es el impostor.
             </p>
-            <ImpostorAnonymousOnboardingActions />
+            <ImpostorPlatformContextShell />
           </div>
 
           <div

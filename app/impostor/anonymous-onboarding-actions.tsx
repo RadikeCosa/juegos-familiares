@@ -3,6 +3,11 @@
 import { useRef, useState, type FormEvent } from "react";
 import { createBrowserSupabaseClient } from "../../lib/supabase/browser-client";
 import {
+  bootstrapPlatformContext,
+  type PlatformBootstrapClient,
+  type RecognizedPlatformContext
+} from "../../lib/supabase/platform-bootstrap";
+import {
   createCreateGroupSubmitController,
   createJoinGroupSubmitController,
   createResolveGroupInvitationController,
@@ -37,6 +42,8 @@ type JoinByLinkState =
   | { status: "success"; result: JoinedGroupWithInvitation }
   | { status: "error"; message: string };
 
+type OnRecognizedContext = (context: RecognizedPlatformContext) => void;
+
 function getFriendlyError(error: unknown) {
   if (error instanceof Error) {
     return error.message;
@@ -53,7 +60,15 @@ function getInvitationUrl(path: string) {
   return `${window.location.origin}${path}`;
 }
 
-export function ImpostorAnonymousOnboardingActions() {
+function createPlatformBootstrapClient(): PlatformBootstrapClient {
+  return createBrowserSupabaseClient() as unknown as PlatformBootstrapClient;
+}
+
+export function ImpostorAnonymousOnboardingActions({
+  onRecognizedContext
+}: {
+  onRecognizedContext?: OnRecognizedContext;
+}) {
   const [state, setState] = useState<ActionState>({ status: "idle" });
   const createGroupSubmitController = useRef(createCreateGroupSubmitController());
   const resolveGroupInvitationController = useRef(
@@ -102,6 +117,10 @@ export function ImpostorAnonymousOnboardingActions() {
       );
 
       setState({ status: "create-success", result });
+      onRecognizedContext?.({
+        group: result.group,
+        player: result.player
+      });
     } catch (error) {
       setState({ status: "error", message: getFriendlyError(error) });
     }
@@ -162,6 +181,15 @@ export function ImpostorAnonymousOnboardingActions() {
       );
 
       setState({ status: "join-success", result });
+
+      const context = await bootstrapPlatformContext(createPlatformBootstrapClient());
+
+      if (context.status === "recognized") {
+        onRecognizedContext?.({
+          group: context.group,
+          player: context.player
+        });
+      }
     } catch (error) {
       setState({ status: "error", message: getFriendlyError(error) });
     }
@@ -351,9 +379,11 @@ export function ImpostorAnonymousOnboardingActions() {
 }
 
 export function ImpostorJoinByLinkActions({
-  invitationCode
+  invitationCode,
+  onRecognizedContext
 }: {
   invitationCode: string;
+  onRecognizedContext?: OnRecognizedContext;
 }) {
   const [state, setState] = useState<JoinByLinkState>({ status: "idle" });
   const resolveGroupInvitationController = useRef(
@@ -403,6 +433,15 @@ export function ImpostorJoinByLinkActions({
       );
 
       setState({ status: "success", result });
+
+      const context = await bootstrapPlatformContext(createPlatformBootstrapClient());
+
+      if (context.status === "recognized") {
+        onRecognizedContext?.({
+          group: context.group,
+          player: context.player
+        });
+      }
     } catch (error) {
       setState({ status: "error", message: getFriendlyError(error) });
     }
