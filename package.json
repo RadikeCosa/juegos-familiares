@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:db": "node supabase/tests/validate-2-2.mjs",
+    "supabase:reset": "supabase db reset",
+    "supabase:start": "supabase start -x realtime,storage-api,imgproxy,studio,mailpit,postgres-meta,edge-runtime,logflare,vector,supavisor",
+    "supabase:stop": "supabase stop"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
@@ -21,6 +25,7 @@
     "@types/react-dom": "latest",
     "eslint": "latest",
     "eslint-config-next": "latest",
+    "supabase": "^2.114.0",
     "typescript": "latest",
     "vitest": "latest"
   }

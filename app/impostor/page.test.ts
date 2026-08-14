@@ -1,6 +1,16 @@
 import { isValidElement, type ReactNode } from "react";
-import { describe, expect, it } from "vitest";
-import ImpostorPage from "./page";
+import { describe, expect, it, vi } from "vitest";
+
+const createBrowserSupabaseClient = vi.hoisted(() => vi.fn());
+const ensureAnonymousAuthIdentity = vi.hoisted(() => vi.fn());
+
+vi.mock("../../lib/supabase/browser-client", () => ({
+  createBrowserSupabaseClient
+}));
+
+vi.mock("../../lib/supabase/anonymous-auth", () => ({
+  ensureAnonymousAuthIdentity
+}));
 
 type InspectableProps = {
   children?: ReactNode;
@@ -47,7 +57,8 @@ function inspect(node: ReactNode): { text: string; hrefs: string[] } {
 }
 
 describe("ImpostorPage", () => {
-  it("presents the initial Impostor entry without domain gameplay", () => {
+  it("presents the initial Impostor entry without domain gameplay", async () => {
+    const { default: ImpostorPage } = await import("./page");
     const page = inspect(ImpostorPage());
 
     expect(page.text).toContain("Impostor");
@@ -62,5 +73,14 @@ describe("ImpostorPage", () => {
     expect(page.text).not.toContain("Comenzar");
     expect(page.text).not.toContain("nickname");
     expect(page.text).not.toContain("código");
+  });
+
+  it("does not create AuthIdentity when /impostor renders", async () => {
+    const { default: ImpostorPage } = await import("./page");
+
+    inspect(ImpostorPage());
+
+    expect(createBrowserSupabaseClient).not.toHaveBeenCalled();
+    expect(ensureAnonymousAuthIdentity).not.toHaveBeenCalled();
   });
 });
