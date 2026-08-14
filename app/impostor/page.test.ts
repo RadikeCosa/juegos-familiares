@@ -47,7 +47,7 @@ function inspect(node: ReactNode): { text: string; hrefs: string[] } {
 }
 
 describe("ImpostorPage", () => {
-  it("presents the initial Impostor entry without playable actions", () => {
+  it("presents the initial Impostor entry without domain gameplay", () => {
     const page = inspect(ImpostorPage());
 
     expect(page.text).toContain("Impostor");
@@ -60,5 +60,7 @@ describe("ImpostorPage", () => {
     expect(page.text).not.toContain("Unirse a sala");
     expect(page.text).not.toContain("Agregar palabra");
     expect(page.text).not.toContain("Comenzar");
+    expect(page.text).not.toContain("nickname");
+    expect(page.text).not.toContain("código");
   });
 });
