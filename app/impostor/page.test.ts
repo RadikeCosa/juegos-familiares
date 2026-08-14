@@ -84,3 +84,35 @@ describe("ImpostorPage", () => {
     expect(ensureAnonymousAuthIdentity).not.toHaveBeenCalled();
   });
 });
+
+describe("ImpostorJoinPage", () => {
+  it("presents an invitation entry without asking for a manual code", async () => {
+    const { default: ImpostorJoinPage } = await import("./join/[code]/page");
+    const page = inspect(
+      await ImpostorJoinPage({
+        params: Promise.resolve({ code: "K7M4Q9XA" })
+      })
+    );
+
+    expect(page.text).toContain("Impostor");
+    expect(page.text).toContain("Te invitaron a un grupo de Juegos Familiares");
+    expect(page.hrefs).toContain("/impostor");
+
+    expect(page.text).not.toContain("Código");
+    expect(page.text).not.toContain("Crear sala");
+    expect(page.text).not.toContain("Agregar palabra");
+  });
+
+  it("does not create AuthIdentity when /impostor/join/[code] renders", async () => {
+    const { default: ImpostorJoinPage } = await import("./join/[code]/page");
+
+    inspect(
+      await ImpostorJoinPage({
+        params: Promise.resolve({ code: "K7M4Q9XA" })
+      })
+    );
+
+    expect(createBrowserSupabaseClient).not.toHaveBeenCalled();
+    expect(ensureAnonymousAuthIdentity).not.toHaveBeenCalled();
+  });
+});
