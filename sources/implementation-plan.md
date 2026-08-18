@@ -449,11 +449,184 @@ Un usuario puede abrir la app, entender que está en Juegos Familiares, entrar a
 
 ### Objetivo
 
-Permitir que un dispositivo se asocie a un jugador dentro de un grupo persistente sin cuentas tradicionales.
+Consolidar la base de plataforma para identidad liviana, grupo y jugador sin cuentas tradicionales, manteniendo seguridad mínima desde el primer dato remoto.
 
-### Resultado observable
+### Modelo conceptual mínimo
 
-Un usuario abre Impostor, ingresa su nombre, crea o se une a un grupo, y en visitas posteriores la aplicación lo saluda por su nombre.
+Durante este incremento se usa explícitamente:
+
+```text
+AuthIdentity
+Group
+Player
+LocalIdentity
+```
+
+Relaciones:
+
+```text
+Group 1 -> N Player
+AuthIdentity 1 -> 1 Player
+Player -> Group
+```
+
+No se introduce todavía una entidad `Membership` separada.
+
+Para administrador inicial, en este incremento alcanza con:
+
+```text
+Group.adminPlayerId
+```
+
+No se persiste también `Player.role` para administrador salvo necesidad concreta posterior.
+
+### Regla de seguridad de identidad local
+
+`LocalIdentity` mejora UX, pero no autoriza acciones.
+
+Si existe `LocalIdentity` pero ya no hay `AuthIdentity` válida, no se recupera automáticamente el `Player` anterior usando `playerId`, `groupId`, nickname u otros datos locales.
+
+### Invariante de creación inicial
+
+Crear un grupo implica mantener coherentemente:
+
+```text
+AuthIdentity
+Group
+Player creador
+pertenencia Player -> Group
+Group.adminPlayerId
+```
+
+No debe existir como estado válido un `Group` sin `Player` administrador.
+
+### Subincremento 2.1 — Supabase + Auth anónima
+
+Objetivo:
+
+```text
+crear/restaurar AuthIdentity anónima
+```
+
+Sin crear todavía `Group` ni `Player`.
+
+La identidad se crea cuando una acción de producto la necesita, no por visitar portada.
+
+### Subincremento 2.2 — Group + Player administrador
+
+Objetivo:
+
+```text
+AuthIdentity
+↓
+crear Group
+↓
+crear Player
+↓
+establecer admin inicial
+```
+
+Debe introducir:
+
+* persistencia mínima;
+* invariantes básicas;
+* RLS mínima desde el inicio;
+* creación coherente/atómica.
+
+### Subincremento 2.3 — Invitación + segundo dispositivo
+
+Objetivo:
+
+```text
+Group
+↓
+código/enlace opaco
+↓
+segundo dispositivo
+↓
+segunda AuthIdentity
+↓
+segundo Player
+```
+
+La invitación usa código y enlace como la misma invitación conceptual.
+
+El identificador debe ser opaco, no secuencial y distinto de `groupId`.
+
+No se habilita enumeración pública de grupos.
+
+### Subincremento 2.4 — Bootstrap + LocalIdentity
+
+Objetivo:
+
+```text
+abrir/reabrir
+↓
+AuthIdentity
+↓
+Player
+↓
+Group
+↓
+contexto reconocido
+```
+
+Debe contemplar conceptualmente:
+
+* loading;
+* usuario no reconocido;
+* contexto reconocido;
+* contexto inconsistente;
+* `LocalIdentity` previa sin `AuthIdentity` válida.
+
+### Subincremento 2.5 — Endurecimiento
+
+No agrega capacidades nuevas.
+
+Incluye:
+
+* nickname duplicado;
+* doble submit;
+* reintentos;
+* código inválido;
+* aislamiento entre grupos;
+* contexto remoto inconsistente;
+* manipulación de `LocalIdentity`;
+* pérdida de sesión anónima;
+* revisión completa de RLS;
+* pruebas negativas;
+* validación con dos navegadores/dispositivos;
+* revisión mobile.
+
+Estado al cierre del Incremento 2:
+
+```text
+CERRADO
+```
+
+El cierre consolida lo implementado en los subincrementos 2.1 a 2.4:
+
+* Supabase Auth anónima se crea únicamente ante intención de producto, no al visitar `/` ni `/impostor`;
+* la creación de grupo, jugador administrador e invitación inicial ocurre mediante RPC autoritativa y atómica;
+* la invitación usa código opaco y permite que una segunda `AuthIdentity` cree su propio `Player` dentro del mismo `Group`;
+* `LocalIdentity` queda limitada a cache/pista UX y no autoriza acciones ni recupera jugadores sin sesión anónima válida;
+* el bootstrap resuelve estados de carga, usuario no reconocido, contexto reconocido, inconsistencia remota y error de conexión;
+* RLS queda activa desde la primera persistencia remota y las tablas no aceptan escrituras directas desde cliente.
+
+Endurecimiento aplicado en 2.5:
+
+* el error de nickname duplicado al unirse por invitación se muestra como mensaje de producto específico;
+* los errores de unicidad no relacionados con nickname siguen usando mensaje genérico;
+* el doble submit queda cubierto por controladores single-flight en acciones de crear, resolver invitación y unirse;
+* los casos de código inválido, aislamiento entre grupos, sesión ausente, identidad local manipulada y contexto remoto inconsistente quedan cubiertos por pruebas de unidad/integración o validaciones de DB.
+
+Trade-offs aceptados:
+
+* no se implementa rate limiting de invitaciones en este incremento;
+* no se agregan idempotency keys explícitas más allá de constraints, transacciones y single-flight cliente;
+* no se implementa recuperación automática de `Player` cuando se pierde la sesión anónima;
+* se mantiene la regla actual `AuthIdentity 1 -> 1 Player` y, por lo tanto, un dispositivo pertenece a un solo grupo en esta etapa;
+* la validación en dos navegadores/dispositivos y revisión mobile queda como checklist manual de cierre si el entorno local no permite ejecutarla.
 
 ### Dominio involucrado
 
@@ -474,39 +647,86 @@ Plataforma:
 
 ### Decisiones técnicas a cerrar
 
-* flujo exacto para crear grupo;
-* flujo exacto para unirse a grupo;
-* formato inicial de invitación al grupo;
-* estrategia de sesión anónima;
-* relación entre Auth identity, Player y Group;
-* permisos mínimos del administrador inicial.
+* mecanismo técnico concreto para asegurar creación coherente/atómica de grupo+jugador+admin;
+* formato exacto de código/enlace compartible;
+* política mínima de expiración o invalidez de invitación;
+* estrategia de bootstrap entre `AuthIdentity`, estado remoto y `LocalIdentity`.
 
 ### Tests / validación
 
-* unit tests para normalización de nickname si se define;
-* integración para crear grupo y jugador;
+* validación de creación/restauración de sesión anónima cuando una acción la requiere;
+* integración de creación coherente de `Group` + `Player` + `adminPlayerId`;
+* validación de join por código y por enlace;
 * integración/RLS: un jugador solo accede a su grupo;
-* validación manual: refresh conserva identidad;
-* validación manual: segundo teléfono puede unirse al mismo grupo.
+* validación manual con dos dispositivos/navegadores;
+* pruebas negativas de identidad local manipulada o sesión perdida.
 
 ### Riesgos
 
-* confundir identidad local con autorización;
-* introducir cuentas tradicionales por comodidad técnica;
-* diseñar perfiles públicos o sistema social;
-* hacer demasiado complejo el ingreso inicial.
+* confundir `LocalIdentity` con autorización;
+* permitir recuperación insegura del `Player` tras pérdida de sesión anónima;
+* dejar tablas remotas temporalmente abiertas sin RLS mínima;
+* duplicar la representación técnica de administrador sin necesidad;
+* hacer complejo el ingreso inicial.
 
 ### Fuera de alcance
 
+* múltiples grupos;
+* selector de grupos;
+* `Membership`;
+* cambio de grupo;
+* múltiples administradores;
+* transferencia de administrador;
+* perfiles;
+* avatares;
+* amigos;
+* email;
+* password;
+* social login;
+* recuperación avanzada;
+* QR;
 * salas;
-* realtime;
-* banco completo de administración visual;
-* múltiples grupos simultáneos;
-* recuperación avanzada de identidad.
+* host;
+* `RoomParticipant`;
+* Realtime;
+* Presence;
+* banco de palabras;
+* rondas;
+* votos;
+* marcador;
+* historial de partidas.
 
-### Criterio de terminado
+### Criterio de terminado consolidado
 
-La plataforma reconoce de forma estable a un jugador dentro de un grupo y diferencia correctamente administrador inicial y jugador normal.
+El incremento termina cuando se cumple:
+
+```text
+teléfono A
+→ crea un Group
+→ crea su Player
+→ queda como administrador
+
+teléfono B
+→ recibe código/enlace
+→ se une al mismo Group
+→ crea su propio Player
+
+ambos dispositivos
+→ al refrescar/reabrir recuperan su contexto
+    mediante Auth + datos remotos
+
+LocalIdentity
+→ mejora UX pero no concede autorización
+
+RLS
+→ impide consultar grupos ajenos
+
+la pérdida completa de Auth anónima
+→ no permite apropiarse automáticamente del Player anterior
+
+no existe todavía ninguna sala
+ni lógica jugable de Impostor
+```
 
 ### Conceptos a aprender
 
@@ -1597,7 +1817,11 @@ No se usa Supabase.
 
 ## Incremento 2
 
-Entra Supabase Auth, Postgres y RLS mínima para identidad, grupo y jugador.
+Estado: cerrado.
+
+Entraron Supabase Auth anónima, Postgres, RLS mínima, RPCs autoritativas, grupos, jugadores, invitaciones y bootstrap de contexto reconocido.
+
+Quedó explícitamente fuera de este cierre: banco de palabras, sala, realtime, presence, host, partida y recuperación avanzada.
 
 ## Incremento 3
 
