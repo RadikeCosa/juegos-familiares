@@ -206,7 +206,28 @@ Auth identity
 → Group
 ```
 
+Debe mantenerse explícitamente la separación conceptual:
+
+```text
+AuthIdentity
+≠ Player
+≠ Group
+≠ LocalIdentity
+```
+
 La identidad local del dispositivo puede ayudar a recordar al jugador, pero no debe ser la fuente de autorización.
+
+Regla:
+
+```text
+LocalIdentity
+→ cache / pista UX
+
+AuthIdentity + estado remoto
+→ identidad verificable y autorización
+```
+
+Si se pierde la sesión anónima y ya no existe `AuthIdentity` válida, no debe recuperarse automáticamente el `Player` anterior usando datos locales.
 
 La intención es que en el futuro el mismo `Player` pueda participar en otros juegos de Juegos Familiares.
 
@@ -297,7 +318,11 @@ Conceptualmente conserva:
 
 * grupos;
 * jugadores;
-* relaciones necesarias para identidad y membresía.
+* relaciones necesarias para identidad y pertenencia `Player -> Group`.
+
+Para el Incremento 2 no se introduce una entidad `Membership` separada.
+
+Al cierre del Incremento 2, esta capa ya tiene persistencia concreta para `groups`, `players` e invitaciones de grupo, con RLS activa y escrituras encapsuladas en RPCs autoritativas.
 
 ## Impostor
 
@@ -358,7 +383,7 @@ RLS protege acceso a datos compartidos.
 Debe permitir conceptualmente:
 
 * que un jugador acceda solo a los grupos donde corresponde;
-* que membresía y permisos no dependan del cliente.
+* que pertenencia y permisos no dependan del cliente.
 
 ## Impostor
 
@@ -378,6 +403,10 @@ No se escriben políticas RLS concretas en este documento.
 ## Group Admin
 
 Rol persistente y transversal del grupo.
+
+En el Incremento 2 se representa con `Group.adminPlayerId`.
+
+No hace falta persistir también `Player.role` para administrador en esta etapa.
 
 Puede:
 
@@ -780,9 +809,9 @@ Se difieren:
 
 * framework frontend exacto si todavía no está formalmente decidido;
 * estructura física definitiva de carpetas;
-* schema SQL;
-* RLS concreto;
-* RPC/Functions concretas;
+* schema SQL posterior a identidad/grupo/jugador;
+* RLS concreto para banco de palabras, salas, rondas, votos y permisos de Impostor;
+* RPC/Functions concretas posteriores a identidad, grupo e invitación;
 * Postgres Changes vs Broadcast por evento;
 * estrategia exacta service worker/cache;
 * limpieza de salas;

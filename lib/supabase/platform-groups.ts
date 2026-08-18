@@ -19,6 +19,18 @@ type AnonymousAuthClient = Parameters<typeof ensureAnonymousAuthIdentity>[0];
 
 type CreateGroupClient = AnonymousAuthClient & PlatformGroupsClient;
 
+type SupabaseErrorLike = {
+  code?: string;
+  message?: string;
+  details?: string;
+};
+
+const DUPLICATE_NICKNAME_JOIN_ERROR =
+  "Ese nombre ya está en uso en este grupo. Probá con otro.";
+
+const GENERIC_JOIN_ERROR =
+  "No pudimos unirte al grupo. Revisá tu nombre e intentá de nuevo.";
+
 type CreatedGroupWithAdminPlayerRow = {
   group_id: string;
   created_group_name: string;
@@ -95,6 +107,25 @@ function getSingleRow<TRow>(data: unknown): TRow | null {
 
 function getInvitationPath(code: string) {
   return `/impostor/join/${encodeURIComponent(code)}`;
+}
+
+function isSupabaseErrorLike(error: unknown): error is SupabaseErrorLike {
+  return typeof error === "object" && error !== null;
+}
+
+function getJoinGroupErrorMessage(error: unknown) {
+  if (isSupabaseErrorLike(error) && error.code === "23505") {
+    const errorText = `${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
+
+    if (
+      errorText.includes("players_group_id_nickname_normalized_key") ||
+      errorText.includes("nickname_normalized")
+    ) {
+      return DUPLICATE_NICKNAME_JOIN_ERROR;
+    }
+  }
+
+  return GENERIC_JOIN_ERROR;
 }
 
 function toCreatedGroupWithAdminPlayer(
@@ -214,7 +245,7 @@ export async function joinGroupWithInvitation(
   });
 
   if (result.error) {
-    throw new Error("No pudimos unirte al grupo. Revisá tu nombre e intentá de nuevo.");
+    throw new Error(getJoinGroupErrorMessage(result.error));
   }
 
   const row = getSingleRow<JoinedGroupWithInvitationRow>(result.data);

@@ -27,7 +27,7 @@ El case study futuro debe mostrar tanto el resultado como el razonamiento que ll
 
 ```text
 Estado:
-Incremento 0 completado / Incremento 1 pendiente
+Incremento 2 cerrado / Incremento 3 pendiente
 ```
 
 ## Ya existe
@@ -45,7 +45,16 @@ Incremento 0 completado / Incremento 1 pendiente
 * plan de implementación incremental;
 * repositorio Git inicializado y estable;
 * línea base documental en `main`;
-* fundación frontend mínima en rama de trabajo.
+* fundación frontend mínima en rama de trabajo;
+* portada de plataforma y entrada a Impostor;
+* configuración local de Supabase;
+* identidad anónima creada bajo intención de producto;
+* modelo remoto mínimo `Group` + `Player`;
+* invitación por código/enlace opaco;
+* bootstrap de contexto reconocido;
+* persistencia local defensiva mediante `LocalIdentity`;
+* RLS y RPCs autoritativas para identidad, grupo e invitación;
+* tests unitarios y validaciones de base de datos para Incremento 2.
 
 ## PENDIENTE
 
@@ -53,8 +62,10 @@ Incremento 0 completado / Incremento 1 pendiente
 * deploy;
 * playtesting real;
 * métricas;
-* Supabase configurado;
-* tests de dominio;
+* banco de palabras;
+* sala/lobby;
+* realtime/presence;
+* tests de dominio de juego;
 * UI final;
 * evidencia visual;
 * resultados de uso.
@@ -101,7 +112,9 @@ Retos asociados:
 * comportarse como PWA en iOS y Android;
 * usar infraestructura proporcional al caso familiar inicial.
 
-Estado: `PENDIENTE DE IMPLEMENTACIÓN`.
+Estado: `IMPLEMENTACIÓN PARCIAL`.
+
+La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. El juego jugable de Impostor todavía está pendiente: banco de palabras, sala, realtime, roles, votación, scoring e historial siguen en incrementos futuros.
 
 ---
 
@@ -192,11 +205,25 @@ Completado:
 * arquitectura conceptual;
 * plan incremental;
 * fundación técnica del proyecto;
-* exploración y decisión de dirección visual para el Incremento 1.
+* exploración y decisión de dirección visual para el Incremento 1;
+* portada mobile-first y entrada a Impostor;
+* base de plataforma del Incremento 2:
+  * Auth anónima sin cuentas tradicionales;
+  * grupo y jugador administrador;
+  * invitación por código/enlace;
+  * segundo dispositivo como segundo jugador;
+  * bootstrap de contexto reconocido;
+  * `LocalIdentity` como cache local no autoritativa;
+  * RLS, RPCs y pruebas negativas.
 
 PENDIENTE:
 
-* implementación de producto;
+* gameplay de Impostor;
+* banco de palabras;
+* lobby/sala;
+* realtime/presence;
+* privacidad de palabra y rol;
+* votación, scoring e historial;
 * testing práctico;
 * diseño UI final;
 * validación en dispositivos reales;
@@ -222,7 +249,9 @@ PENDIENTE:
 | Plan incremental | COMPLETADA |
 | Fundación técnica | COMPLETADA |
 | Dirección visual del Incremento 1 | COMPLETADA |
-| Implementación de producto | PENDIENTE |
+| Portada y entrada a Impostor | COMPLETADA |
+| Identidad, grupo, jugador e invitación | COMPLETADA |
+| Gameplay de Impostor | PENDIENTE |
 | Playtesting | PENDIENTE |
 | Iteración | PENDIENTE |
 
@@ -363,6 +392,39 @@ Este enfoque convierte el uso de IA en un acelerador de ejecución y análisis, 
 **Trade-off:** hay que cuidar que identidad local no se convierta en autorización.
 
 **Estado:** DECIDIDA.
+
+## Identidad sin cuentas tradicionales
+
+**Problema:** el producto necesita reconocer quién es cada jugador dentro de un grupo, pero pedir email, password o login social antes de una partida familiar agregaría fricción desproporcionada.
+
+**Tensión:** una identidad puramente local sería cómoda, pero insuficiente para autorizar acceso a datos remotos. Una cuenta tradicional sería robusta, pero demasiado pesada para el momento de uso.
+
+**Modelo adoptado:** separar explícitamente cuatro conceptos:
+
+```text
+AuthIdentity
+Player
+Group
+LocalIdentity
+```
+
+`AuthIdentity` es la identidad técnica anónima de Supabase. `Player` es la persona dentro del grupo. `Group` es el contexto familiar compartido. `LocalIdentity` es una pista de UX guardada en el dispositivo, no una credencial.
+
+**UX resultante:** crear un grupo o unirse por invitación crea/restaura la identidad anónima sólo cuando hay intención explícita. Visitar la portada o la pantalla inicial de Impostor no crea sesión por anticipado.
+
+**Consistencia:** la creación inicial de grupo, jugador administrador e invitación sucede en una RPC autoritativa. El cliente no envía `auth_user_id` ni decide pertenencia remota.
+
+**Invitación:** el segundo dispositivo entra mediante código/enlace opaco. Resolver la invitación no enumera grupos públicamente y unirse crea un nuevo `Player` asociado a la `AuthIdentity` de ese dispositivo.
+
+**Seguridad:** RLS queda activa desde el primer dato remoto. Las tablas de plataforma no aceptan escrituras directas desde el cliente y el acceso de lectura depende de pertenecer al grupo.
+
+**Persistencia local:** `LocalIdentity` mejora la reapertura de la app cuando la sesión anónima sigue vigente. Si la sesión se perdió, no se recupera automáticamente el jugador anterior usando datos locales manipulables.
+
+**Endurecimiento:** el nickname duplicado dentro del grupo se informa con un mensaje de producto específico: "Ese nombre ya está en uso en este grupo. Probá con otro." Otros errores de unicidad siguen siendo genéricos.
+
+**Trade-offs aceptados:** no se implementó rate limiting de invitaciones en este incremento. La mitigación actual depende de códigos opacos, RLS, RPCs acotadas y ausencia de enumeración pública. La recuperación avanzada de sesión y múltiples grupos por dispositivo quedan fuera del MVP inmediato.
+
+**Resultado del Incremento 2:** el proyecto ya tiene una base real para reconocer grupo y jugador sin cuentas tradicionales, sin convertir la identidad local en autorización y sin adelantar todavía banco de palabras, sala o realtime.
 
 ## Estado autoritativo
 
@@ -528,7 +590,9 @@ Estado: REGISTRADA.
 
 # 10. Arquitectura resumida
 
-La arquitectura está definida conceptualmente, pero la implementación todavía no comenzó.
+La arquitectura está definida conceptualmente y la primera capa de plataforma ya está implementada para identidad, grupo, jugador, invitación y bootstrap.
+
+La capa específica de juego todavía no comenzó: banco de palabras, salas, tandas, rondas, votos, marcador e historial permanecen en incrementos futuros.
 
 ```text
 Juegos Familiares PWA
@@ -571,9 +635,21 @@ Responsabilidad principal:
 
 # 11. Desafíos técnicos previstos
 
-Estado general: `PENDIENTE DE IMPLEMENTACIÓN`.
+Estado general: `IMPLEMENTACIÓN PARCIAL`.
 
-Desafíos que conviene documentar durante el desarrollo:
+Resuelto en el Incremento 2:
+
+* identidad técnica anónima sin cuentas tradicionales;
+* separación entre `AuthIdentity`, `Player`, `Group` y `LocalIdentity`;
+* creación atómica de grupo, jugador administrador e invitación inicial;
+* acceso por invitación desde segundo dispositivo;
+* nickname único dentro del grupo;
+* RLS mínima para que un jugador sólo lea su grupo;
+* escrituras remotas a través de RPCs autoritativas;
+* bootstrap de contexto reconocido al reabrir;
+* manejo defensivo de `LocalIdentity` manipulada o sesión perdida.
+
+Pendiente para el juego:
 
 * varios dispositivos sincronizados en una misma sala;
 * información privada distinta por jugador;
@@ -586,10 +662,10 @@ Desafíos que conviene documentar durante el desarrollo:
 * lifecycle PWA en mobile;
 * diferencias iOS/Safari y Android/Chrome;
 * cache sin exponer datos sensibles;
-* RLS para banco de palabras, participantes y permisos;
+* RLS para banco de palabras, sala, rondas, votos y permisos específicos de Impostor;
 * separación real entre dominio e infraestructura.
 
-No se registra todavía cómo fueron resueltos.
+La parte resuelta todavía no implica que Impostor sea jugable. Sólo cierra la base transversal de identidad, grupo y jugador.
 
 ---
 
@@ -600,8 +676,8 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | Incremento | Capacidad | Estado | Evidencia |
 | --- | --- | --- | --- |
 | 0 | Fundación del proyecto | COMPLETADO | Next.js, TypeScript, lint, Vitest, build y pantalla mobile-first mínima |
-| 1 | Portada de plataforma y entrada a Impostor | PENDIENTE | Dirección visual `Cartas Geométricas` decidida |
-| 2 | Identidad liviana, grupo y jugador | PENDIENTE | PENDIENTE |
+| 1 | Portada de plataforma y entrada a Impostor | COMPLETADO | Portada mobile-first, entrada a Impostor, manifest/metadatos e iconos base |
+| 2 | Identidad liviana, grupo y jugador | COMPLETADO | Auth anónima bajo intención, RPCs, RLS, invitaciones, bootstrap, LocalIdentity, `npm test`, `npm run test:db`, lint y build |
 | 3 | Banco de palabras del grupo | PENDIENTE | PENDIENTE |
 | 4 | Crear y unirse a una sala | PENDIENTE | PENDIENTE |
 | 5 | Presencia básica y sucesión de host | PENDIENTE | PENDIENTE |

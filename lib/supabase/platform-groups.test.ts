@@ -215,6 +215,48 @@ describe("joinGroupWithInvitation", () => {
     expect(supabase.rpc.mock.calls[0]?.[1]).not.toHaveProperty("group_id");
     expect(supabase.rpc.mock.calls[0]?.[1]).not.toHaveProperty("auth_user_id");
   });
+
+  it("surfaces duplicate nicknames with specific product-level feedback", async () => {
+    const supabase = {
+      rpc: vi.fn(async () => ({
+        data: null,
+        error: {
+          code: "23505",
+          message:
+            'duplicate key value violates unique constraint "players_group_id_nickname_normalized_key"'
+        }
+      }))
+    };
+
+    await expect(
+      joinGroupWithInvitation(supabase, {
+        invitationCode: "K7M4Q9XA",
+        playerNickname: "Pedro"
+      })
+    ).rejects.toThrow("Ese nombre ya está en uso en este grupo. Probá con otro.");
+  });
+
+  it("keeps non-nickname uniqueness failures generic", async () => {
+    const supabase = {
+      rpc: vi.fn(async () => ({
+        data: null,
+        error: {
+          code: "23505",
+          message:
+            'duplicate key value violates unique constraint "players_auth_user_id_key"'
+        }
+      }))
+    };
+
+    await expect(
+      joinGroupWithInvitation(supabase, {
+        invitationCode: "K7M4Q9XA",
+        playerNickname: "Pedro"
+      })
+    ).rejects.toThrow(
+      "No pudimos unirte al grupo. Revisá tu nombre e intentá de nuevo."
+    );
+  });
 });
 
 describe("joinGroupWithInvitationFromIntent", () => {
