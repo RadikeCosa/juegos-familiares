@@ -335,7 +335,7 @@ También permite listar integrantes del propio grupo mediante lectura autorizada
 
 Conceptualmente conserva:
 
-* palabras;
+* `GroupWord`;
 * estado operativo;
 * rondas;
 * votos;
@@ -361,7 +361,7 @@ No se diseñan todavía:
 
 ## Persistente de Impostor
 
-* `Word`
+* `GroupWord`
 * `GameSessionHistory`
 * `RoundHistory`
 
@@ -399,8 +399,9 @@ En el Incremento 2, las escrituras directas a plataforma permanecen bloqueadas p
 Debe permitir conceptualmente:
 
 * que un participante acceda a la sala correspondiente;
-* que un jugador normal no consulte el banco completo;
-* que un administrador pueda consultar y gestionar banco según reglas;
+* que un integrante no consulte el banco completo;
+* que el banco no sea explorable libremente por ningún integrante en el Incremento 3;
+* que un autor pueda consultar y borrar sus propios aportes;
 * que información privada no quede expuesta.
 
 No se escriben políticas RLS concretas en este documento.
@@ -420,9 +421,9 @@ No hace falta persistir también `Player.role` para administrador en esta etapa.
 Puede:
 
 * consultar integrantes;
-* eliminar integrantes;
-* ver banco completo de Impostor;
-* eliminar palabras según reglas actuales.
+* eliminar integrantes.
+
+En el Incremento 3 no puede explorar el banco completo de Impostor por ser administrador. Sus permisos sobre palabras se limitan a los de cualquier integrante: agregar, ver cantidad total, consultar sus aportes y borrar sus aportes.
 
 ## Room Host
 

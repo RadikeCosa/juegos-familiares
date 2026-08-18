@@ -104,9 +104,11 @@ El creador del grupo actúa inicialmente como administrador.
 Puede:
 
 * consultar integrantes;
-* eliminar integrantes;
-* consultar el banco completo de palabras;
-* eliminar palabras.
+* eliminar integrantes.
+
+En el MVP del banco de palabras no puede explorar el banco completo por ser administrador.
+
+La moderación completa del banco queda diferida hasta que exista una necesidad real.
 
 La administración permanente del grupo es independiente del rol temporal de host de una partida.
 
@@ -114,14 +116,13 @@ La administración permanente del grupo es independiente del rol temporal de hos
 
 # Banco de palabras
 
-Las palabras pertenecen al grupo y persisten entre partidas.
+Las palabras o frases cortas pertenecen al grupo y persisten entre partidas.
 
 Los participantes pueden agregar palabras en cualquier momento desde la pantalla principal.
 
-El banco puede contener:
+En el Incremento 3, el banco se alimenta con palabras agregadas por los integrantes.
 
-* palabras precargadas por la aplicación;
-* palabras agregadas por los jugadores.
+Las palabras precargadas quedan diferidas para una etapa posterior.
 
 Las palabras pueden relacionarse con personas, lugares, situaciones, objetos, recuerdos, personajes o referencias propias del grupo.
 
@@ -131,7 +132,7 @@ Esto permite que el contenido se vuelva progresivamente más personal y divertid
 
 # Privacidad del banco
 
-Los jugadores normales no necesitan poder consultar la lista completa.
+Los integrantes no necesitan poder consultar la lista completa.
 
 Pueden ver, por ejemplo:
 
@@ -139,7 +140,9 @@ Pueden ver, por ejemplo:
 
 y consultar las palabras que ellos mismos agregaron.
 
-El administrador puede revisar el banco completo.
+También pueden borrar sus propios aportes.
+
+En el MVP del banco, el administrador tampoco explora el banco completo. Esta decisión preserva la sorpresa porque el administrador también puede participar de las partidas.
 
 ---
 
@@ -151,7 +154,9 @@ La aplicación debe resolver automáticamente comprobaciones sencillas:
 * espacios innecesarios;
 * duplicados triviales;
 * diferencias de mayúsculas y minúsculas;
-* límites razonables de longitud.
+* límites de longitud entre 2 y 40 caracteres.
+
+La normalización conserva tildes, `ñ` y puntuación, y no intenta corregir lingüísticamente las entradas.
 
 Inicialmente las nuevas palabras no necesitan aprobación manual.
 
@@ -243,12 +248,13 @@ La interfaz de estadísticas no forma parte obligatoria del MVP visual.
 
 ## Palabras
 
-* palabras precargadas;
 * agregar palabras propias;
+* ver cantidad total disponible;
+* consultar y borrar aportes propios;
 * banco persistente;
 * validación automática;
 * evitar duplicados;
-* administración básica del banco.
+* privacidad del contenido del banco.
 
 ## Sala
 

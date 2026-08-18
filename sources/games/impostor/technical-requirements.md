@@ -190,9 +190,9 @@ Las acciones protegidas deben validarse conceptualmente según capacidades.
 Puede:
 
 * consultar integrantes;
-* eliminar integrantes;
-* consultar banco completo;
-* eliminar palabras.
+* eliminar integrantes.
+
+En el Incremento 3 no tiene una excepción para consultar el banco completo.
 
 ## Host
 
@@ -218,7 +218,8 @@ Puede:
 
 Puede:
 
-* consultar sus propias palabras.
+* consultar sus propias palabras;
+* borrar sus propias palabras.
 
 No se diseña todavía RBAC técnico.
 
@@ -236,11 +237,15 @@ Debe cumplirse:
 * cada jugador recibe solamente su rol e información privada correspondiente;
 * los votos individuales permanecen privados durante la votación;
 * los resultados agregados se revelan cuando corresponde;
-* un jugador normal no puede consultar el banco completo;
-* el administrador sí puede consultar el banco completo;
-* el autor puede consultar sus propias palabras.
+* ningún integrante necesita consultar el banco completo en el Incremento 3;
+* cada integrante puede consultar la cantidad total disponible;
+* el autor puede consultar y borrar sus propias palabras.
 
 La privacidad no puede depender solamente de ocultar datos en la UI.
+
+Las operaciones futuras del banco deben derivar pertenencia y autoría desde `auth.uid()`, `Player` y `Group`, sin confiar en identificadores enviados por el cliente.
+
+La normalización y los duplicados triviales deben tener una garantía remota, no solamente validación visual en el cliente.
 
 ---
 
@@ -615,7 +620,8 @@ Esto no elige todavía framework, proveedor ni infraestructura.
 * ¿Permite entregar vistas distintas por jugador?
 * ¿Evita que la palabra llegue al impostor?
 * ¿Evita exponer votos individuales durante la votación?
-* ¿Permite restringir el banco completo a administradores?
+* ¿Evita exponer el banco completo en el Incremento 3?
+* ¿Permite consultar cantidad total y aportes propios sin revelar aportes ajenos?
 
 ## Autorización
 

@@ -631,6 +631,12 @@ La arquitectura está definida conceptualmente y la primera capa de plataforma y
 
 La capa específica de juego todavía no comenzó: banco de palabras, salas, tandas, rondas, votos, marcador e historial permanecen en incrementos futuros.
 
+Decisión preparada para el Incremento 3: el banco persistente se modelará como `GroupWord`, una entrada propia del grupo y distinta de la futura palabra seleccionada para una ronda. Esto permite alimentar el contenido entre partidas sin adelantar `Room`, `GameSession`, selección aleatoria ni registro de palabras usadas.
+
+También se decidió que, para preservar la sorpresa, nadie podrá explorar libremente el banco completo en el MVP del banco, incluido el administrador. Cada integrante podrá conocer la cantidad total, ver sus propios aportes y borrar sus propios aportes. La moderación completa queda diferida porque el grupo cerrado por invitación, los duplicados automáticos y el borrado propio son suficientes para esta etapa familiar.
+
+Las palabras precargadas también quedan fuera del Incremento 3. La opción futura preferida es un catálogo global separado, no copiar defaults automáticamente a cada grupo.
+
 ```text
 Juegos Familiares PWA
         │

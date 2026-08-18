@@ -128,13 +128,15 @@ El creador del grupo es inicialmente su administrador.
 El administrador puede:
 
 * consultar integrantes;
-* eliminar integrantes;
-* consultar el banco completo de palabras;
-* eliminar palabras.
+* eliminar integrantes.
+
+En el MVP del banco de palabras, el administrador no tiene una excepción para explorar el banco completo.
 
 ## Motivo
 
 El contexto familiar permite mantener una administración sencilla sin construir un sistema complejo de roles.
+
+La moderación completa del banco queda diferida hasta que aparezca un problema real de contenido.
 
 ---
 
@@ -148,10 +150,10 @@ Las operaciones protegidas deben distinguir conceptualmente al menos estas capac
 
 Puede:
 
-* consultar el banco completo de palabras;
-* eliminar palabras;
 * consultar integrantes;
 * eliminar integrantes.
+
+En el Incremento 3, sus permisos sobre el banco son los mismos que los de cualquier integrante: agregar palabras, consultar cantidad total, consultar sus propios aportes y borrar sus propios aportes.
 
 ### Host de sala
 
@@ -174,7 +176,10 @@ Puede:
 
 ### Autor de palabra
 
-Puede consultar sus propias palabras.
+Puede:
+
+* consultar sus propias palabras;
+* borrar sus propias palabras.
 
 ## Motivo
 
@@ -230,9 +235,11 @@ No diseñamos todavía reconexión avanzada ni tiempos de tolerancia.
 
 ## Decisión
 
-Las palabras pertenecen al grupo y no a una partida concreta.
+Las palabras o frases cortas pertenecen al grupo y no a una partida concreta.
 
 Pueden agregarse en cualquier momento, incluso cuando no existe una sala activa.
+
+La entidad persistente concreta del banco es `GroupWord`.
 
 ## Motivo
 
@@ -244,12 +251,13 @@ Queremos que el banco crezca progresivamente y se convierta en contenido propio 
 
 ## Decisión
 
-El banco puede combinar:
-
-* palabras precargadas por la aplicación;
-* palabras creadas por los integrantes.
+En el Incremento 3, el banco se alimenta con palabras creadas por los integrantes.
 
 Inicialmente no necesitamos organizar obligatoriamente las palabras por categorías.
+
+Las palabras precargadas quedan diferidas fuera del Incremento 3.
+
+La opción futura preferida es un catálogo global separado, por ejemplo `default_words`, sin copiar automáticamente palabras iniciales a cada grupo.
 
 ---
 
@@ -257,18 +265,26 @@ Inicialmente no necesitamos organizar obligatoriamente las palabras por categor�
 
 ## Decisión
 
-Los jugadores normales no pueden explorar libremente el banco completo.
+Ningún integrante puede explorar libremente el banco completo en el MVP del Incremento 3.
 
-Pueden conocer:
+Cualquier integrante, incluido el administrador, puede conocer:
 
 * las palabras que ellos mismos agregaron;
 * la cantidad total disponible.
 
-El administrador sí puede consultar el banco completo.
+También puede borrar sus propios aportes.
 
 ## Motivo
 
 Mostrar todas las palabras reduciría la sorpresa de rondas futuras.
+
+Esta decisión evoluciona la política anterior: aunque el administrador podía consultar el banco completo en una versión conceptual inicial, en el MVP se elimina esa excepción porque el administrador también puede jugar y conocer todas las palabras le daría una ventaja innecesaria.
+
+La moderación suficiente para esta etapa combina:
+
+* borrado de aportes propios;
+* duplicados automáticos;
+* grupo cerrado por invitación.
 
 ---
 
@@ -300,7 +316,11 @@ Inicialmente:
 * normalizar espacios;
 * comparar sin distinguir mayúsculas y minúsculas;
 * impedir duplicados triviales;
-* limitar longitud.
+* limitar longitud entre 2 y 40 caracteres;
+* conservar tildes, `ñ` y puntuación;
+* rechazar emojis.
+
+La normalización no debe ser lingüísticamente agresiva. Por ejemplo, `Camion` y `Camión` son entradas distintas, mientras que `Elefante`, `elefante` y `ELEFANTE` son duplicados.
 
 ## Motivo
 
@@ -316,7 +336,9 @@ El administrador no debería dedicar tiempo a tareas que el software puede resol
 
 No habrá aprobación obligatoria de palabras en el MVP familiar.
 
-El administrador podrá revisar y eliminar contenido cuando sea necesario.
+En el Incremento 3 no se incorpora un panel administrativo para revisar y eliminar contenido de otros integrantes.
+
+Cada autor podrá borrar sus propios aportes.
 
 ## Evolución posible
 
@@ -653,7 +675,6 @@ No agregaremos datos históricos adicionales si no son necesarios para el conjun
 * identidad sencilla;
 * administración básica;
 * banco persistente de palabras;
-* palabras precargadas;
 * agregar palabras;
 * validación automática;
 * crear sala;

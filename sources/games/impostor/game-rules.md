@@ -44,25 +44,26 @@ Las partidas son temporales, pero el grupo y sus palabras permanecen disponibles
 
 El grupo posee un banco persistente.
 
-Puede combinar:
-
-* palabras precargadas por la aplicación;
-* palabras aportadas por los participantes.
+En el Incremento 3, el banco se alimenta con palabras o frases cortas aportadas por los participantes.
 
 Cualquier integrante puede agregar palabras aunque no exista una partida activa.
+
+Las palabras precargadas quedan diferidas para una etapa posterior.
 
 ---
 
 ## Visibilidad
 
-Los jugadores normales no necesitan consultar el banco completo.
+Los integrantes no necesitan consultar el banco completo.
 
 Pueden conocer:
 
 * las palabras que ellos mismos agregaron;
 * la cantidad total disponible.
 
-El administrador puede consultar y administrar el banco completo.
+También pueden borrar sus propios aportes.
+
+En este MVP, el administrador tampoco puede explorar libremente el banco completo.
 
 ---
 
@@ -73,9 +74,11 @@ La aplicación debe impedir automáticamente:
 * palabras vacías;
 * duplicados triviales;
 * diferencias irrelevantes de espacios;
-* duplicados que solamente difieren en mayúsculas o minúsculas.
+* duplicados que solamente difieren en mayúsculas o minúsculas;
+* entradas de menos de 2 caracteres o más de 40 caracteres;
+* emojis.
 
-También puede aplicar límites razonables de longitud.
+La normalización conserva tildes, `ñ` y puntuación. No intenta convertir palabras parecidas en una misma entrada si esa conversión puede cambiar el significado.
 
 ---
 
