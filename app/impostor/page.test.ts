@@ -116,3 +116,23 @@ describe("ImpostorJoinPage", () => {
     expect(ensureAnonymousAuthIdentity).not.toHaveBeenCalled();
   });
 });
+
+describe("ImpostorGroupPage", () => {
+  it("presents the group route with navigation back to Impostor", async () => {
+    const { default: ImpostorGroupPage } = await import("./grupo/page");
+    const page = inspect(ImpostorGroupPage());
+
+    expect(page.text).toContain("Saltar al contenido");
+    expect(page.text).toContain("Impostor");
+    expect(page.hrefs).toContain("/impostor");
+  });
+
+  it("does not create AuthIdentity when /impostor/grupo renders", async () => {
+    const { default: ImpostorGroupPage } = await import("./grupo/page");
+
+    inspect(ImpostorGroupPage());
+
+    expect(createBrowserSupabaseClient).not.toHaveBeenCalled();
+    expect(ensureAnonymousAuthIdentity).not.toHaveBeenCalled();
+  });
+});

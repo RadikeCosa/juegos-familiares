@@ -604,21 +604,33 @@ Estado al cierre del Incremento 2:
 CERRADO
 ```
 
-El cierre consolida lo implementado en los subincrementos 2.1 a 2.4:
+El cierre local consolida lo implementado en los subincrementos 2.1 a 2.5:
 
 * Supabase Auth anónima se crea únicamente ante intención de producto, no al visitar `/` ni `/impostor`;
 * la creación de grupo, jugador administrador e invitación inicial ocurre mediante RPC autoritativa y atómica;
 * la invitación usa código opaco y permite que una segunda `AuthIdentity` cree su propio `Player` dentro del mismo `Group`;
 * `LocalIdentity` queda limitada a cache/pista UX y no autoriza acciones ni recupera jugadores sin sesión anónima válida;
-* el bootstrap resuelve estados de carga, usuario no reconocido, contexto reconocido, inconsistencia remota y error de conexión;
-* RLS queda activa desde la primera persistencia remota y las tablas no aceptan escrituras directas desde cliente.
+* el bootstrap resuelve estados de carga, usuario no reconocido, contexto reconocido, inconsistencia remota y error de conexión sin crear identidad;
+* RLS queda activa desde la primera persistencia remota y las tablas no aceptan escrituras directas desde cliente;
+* `/impostor` muestra el grupo reconocido y permite entrar a una vista navegable;
+* `/impostor/grupo` muestra nombre del grupo, integrantes y navegación de vuelta a Impostor;
+* el administrador puede recuperar su invitación activa mediante `get_my_active_group_invitation()` bajo `auth.uid()`, sin parámetros y sin abrir acceso directo a `group_invitations`;
+* un jugador no administrador ve integrantes, pero no CTA administrativa ni código/enlace de invitación.
 
 Endurecimiento aplicado en 2.5:
 
 * el error de nickname duplicado al unirse por invitación se muestra como mensaje de producto específico;
 * los errores de unicidad no relacionados con nickname siguen usando mensaje genérico;
 * el doble submit queda cubierto por controladores single-flight en acciones de crear, resolver invitación y unirse;
-* los casos de código inválido, aislamiento entre grupos, sesión ausente, identidad local manipulada y contexto remoto inconsistente quedan cubiertos por pruebas de unidad/integración o validaciones de DB.
+* los casos de código inválido, aislamiento entre grupos, sesión ausente, identidad local manipulada y contexto remoto inconsistente quedan cubiertos por pruebas de unidad/integración o validaciones de DB;
+* la lista de integrantes usa lectura normal autorizada por RLS del grupo;
+* la recuperación de invitación activa del administrador conserva una sola invitación activa por grupo.
+
+Evidencia de cierre local:
+
+* validación DB desde base limpia para creación, RLS, aislamiento, escrituras directas bloqueadas, invitaciones, join, códigos inválidos/inactivos, unicidad de nickname, concurrencia, recuperación de invitación admin, grants y firmas;
+* validación unit/static con tests, lint, build y `git diff --check`;
+* smoke browser aprobado para admin, invitación, clipboard, refresh, segundo jugador, no-admin, acceso directo sin Auth y mobile 360x640 / 390x844.
 
 Trade-offs aceptados:
 
@@ -626,7 +638,12 @@ Trade-offs aceptados:
 * no se agregan idempotency keys explícitas más allá de constraints, transacciones y single-flight cliente;
 * no se implementa recuperación automática de `Player` cuando se pierde la sesión anónima;
 * se mantiene la regla actual `AuthIdentity 1 -> 1 Player` y, por lo tanto, un dispositivo pertenece a un solo grupo en esta etapa;
-* la validación en dos navegadores/dispositivos y revisión mobile queda como checklist manual de cierre si el entorno local no permite ejecutarla.
+* no se implementan regeneración, revocación ni expiración de invitaciones;
+* `Group` queda resuelto como contexto social persistente, pero `Room` sigue fuera de alcance.
+
+Producción:
+
+El Incremento 2 queda cerrado localmente a nivel técnico y UX. Todavía falta aplicar migrations al Supabase remoto y validar Vercel/producción mediante un procedimiento separado.
 
 ### Dominio involucrado
 
@@ -715,6 +732,11 @@ ambos dispositivos
 → al refrescar/reabrir recuperan su contexto
     mediante Auth + datos remotos
 
+grupo
+→ es navegable
+→ muestra integrantes
+→ permite invitar solo al administrador
+
 LocalIdentity
 → mejora UX pero no concede autorización
 
@@ -726,6 +748,7 @@ la pérdida completa de Auth anónima
 
 no existe todavía ninguna sala
 ni lógica jugable de Impostor
+ni producción validada
 ```
 
 ### Conceptos a aprender

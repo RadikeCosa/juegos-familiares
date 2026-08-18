@@ -49,9 +49,11 @@ Este documento describe el modelo conceptual necesario para Impostor.
 Algunos conceptos pueden pertenecer al nivel compartido de Juegos Familiares:
 
 ```text
+AuthIdentity
 Group
 Player
 LocalIdentity
+Invitation
 ```
 
 Otros conceptos son propios de Impostor:
@@ -70,6 +72,13 @@ RoundHistory
 ```
 
 No estamos definiendo todavía un modelo conceptual general para todos los juegos.
+
+En el Incremento 2, `Group` ya existe como contexto social persistente. `Room` sigue siendo una entidad futura de Impostor.
+
+```text
+Group = quiénes somos
+Room  = dónde/qué estamos jugando ahora
+```
 
 ---
 
@@ -115,6 +124,8 @@ El grupo determina:
 * qué banco de palabras utiliza;
 * quién tiene permisos de administración.
 
+En el Incremento 2, la pantalla de grupo muestra el nombre y la lista de integrantes. No representa todavía una sala ni una partida activa.
+
 ---
 
 # 2. Jugador
@@ -141,20 +152,14 @@ Player
 - id
 - groupId
 - nickname
-- role
 - createdAt
 ```
 
-## Role
+Para el Incremento 2, la condición de administrador del grupo se deriva de `Group.adminPlayerId`.
 
-Inicialmente puede ser:
+No hace falta persistir además un `Player.role` para administrador en esta etapa.
 
-```text
-admin
-player
-```
-
-El rol permanente del grupo no debe confundirse con ser host de una sala ni impostor en una ronda.
+Esto no se confunde con roles temporales de partida, como host de sala o impostor de ronda.
 
 ## Persistencia
 
@@ -210,9 +215,47 @@ Esta entidad puede no existir finalmente como registro remoto independiente.
 
 Su implementación dependerá de la arquitectura elegida.
 
+Para el Incremento 2, `LocalIdentity` no guarda invitaciones ni lista de jugadores, no autoriza acciones y no permite recuperar una identidad perdida si ya no existe una `AuthIdentity` válida.
+
 ---
 
-# 4. Palabra
+# 4. Invitación de grupo
+
+## Qué representa
+
+Una forma compartible para que otra persona se una al mismo `Group`.
+
+La invitación pertenece al grupo, no a una sala.
+
+## Información mínima
+
+```text
+Invitation
+- code
+- groupId
+- createdAt
+- revokedAt / expiresAt (futuro o según política)
+```
+
+El código debe ser opaco, no secuencial y distinto de `groupId`.
+
+## Persistencia
+
+Persistente mientras esté activa.
+
+En el Incremento 2 existe una invitación activa por grupo.
+
+## Visibilidad
+
+El administrador puede recuperar la invitación activa de su grupo.
+
+Un jugador común no necesita ver código ni enlace de invitación.
+
+El cliente no debe acceder directamente a la tabla de invitaciones. Resolver o unirse a una invitación ocurre mediante operaciones autoritativas.
+
+---
+
+# 5. Palabra
 
 ## Qué representa
 
@@ -284,11 +327,13 @@ Si no existe ninguna palabra disponible, la sesión no puede avanzar a una nueva
 
 ---
 
-# 5. Sala
+# 6. Sala
 
 ## Qué representa
 
 Una sesión temporal donde un subconjunto del grupo se reúne para jugar.
+
+Todavía no existe en el Incremento 2.
 
 Ejemplo:
 
@@ -337,7 +382,7 @@ Compartida entre los participantes de la sala.
 
 ---
 
-# 6. Participación en sala
+# 7. Participación en sala
 
 ## Qué representa
 
@@ -384,7 +429,7 @@ Temporal.
 
 ---
 
-# 7. Tanda
+# 8. Tanda
 
 ## Qué representa
 
@@ -435,7 +480,7 @@ El resumen histórico de la tanda debe conservarse para estadísticas futuras.
 
 ---
 
-# 8. Participante de la tanda
+# 9. Participante de la tanda
 
 ## Qué representa
 
@@ -467,7 +512,7 @@ Temporal.
 
 ---
 
-# 9. Ronda
+# 10. Ronda
 
 ## Qué representa
 
@@ -512,7 +557,7 @@ Al finalizar la tanda, solamente debe conservarse un resumen histórico mínimo 
 
 ---
 
-# 10. Información privada de la ronda
+# 11. Información privada de la ronda
 
 ## Problema
 
@@ -554,7 +599,7 @@ La arquitectura debe impedir que información secreta innecesaria llegue al disp
 
 ---
 
-# 11. Voto
+# 12. Voto
 
 ## Qué representa
 
@@ -601,7 +646,7 @@ Los resultados agregados se revelan solamente cuando corresponde.
 
 ---
 
-# 12. Resultado de ronda
+# 13. Resultado de ronda
 
 ## Qué representa
 
@@ -634,7 +679,7 @@ Los datos necesarios para estadísticas futuras se conservan después en el hist
 
 ---
 
-# 13. Marcador
+# 14. Marcador
 
 El marcador puede representarse mediante el `score` de cada `SessionPlayer`.
 
@@ -665,7 +710,7 @@ cada jugador normal +1
 
 ---
 
-# 14. Permisos conceptuales
+# 15. Permisos conceptuales
 
 No necesitamos inicialmente una entidad compleja de permisos.
 
@@ -689,7 +734,7 @@ La identidad local ayuda a recordar al jugador en el dispositivo, pero no reempl
 
 ---
 
-# 15. Historial persistente
+# 16. Historial persistente
 
 El estado operativo de una sala y una tanda sigue siendo temporal.
 

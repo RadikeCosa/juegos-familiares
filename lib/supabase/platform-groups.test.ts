@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createCreateGroupSubmitController,
+  createGetMyActiveGroupInvitationController,
   createJoinGroupSubmitController,
   createResolveGroupInvitationController,
   createGroupWithAdminPlayer,
   createGroupWithAdminPlayerFromIntent,
+  getMyActiveGroupInvitation,
   joinGroupWithInvitation,
   joinGroupWithInvitationFromIntent,
   resolveGroupInvitation,
@@ -39,6 +41,10 @@ const joinedInvitationRow = {
   is_admin: false
 };
 
+const activeGroupInvitationRow = {
+  code: "K7M4Q9XA"
+};
+
 afterEach(() => {
   vi.clearAllMocks();
 });
@@ -47,7 +53,7 @@ describe("createGroupWithAdminPlayer", () => {
   it("calls the authoritative RPC without sending auth_user_id", async () => {
     const supabase = {
       rpc: vi.fn(
-        async (fn: string, args: Record<string, string>) => {
+        async (fn: string, args?: Record<string, string>) => {
           void fn;
           void args;
 
@@ -112,7 +118,7 @@ describe("createGroupWithAdminPlayer", () => {
 describe("resolveGroupInvitation", () => {
   it("calls the authoritative resolver with only the invitation code", async () => {
     const supabase = {
-      rpc: vi.fn(async (_fn: string, _args: Record<string, string>) => {
+      rpc: vi.fn(async (_fn: string, _args?: Record<string, string>) => {
         void _fn;
         void _args;
 
@@ -182,7 +188,7 @@ describe("resolveGroupInvitationFromIntent", () => {
 describe("joinGroupWithInvitation", () => {
   it("calls the authoritative join RPC without group_id or auth_user_id", async () => {
     const supabase = {
-      rpc: vi.fn(async (_fn: string, _args: Record<string, string>) => {
+      rpc: vi.fn(async (_fn: string, _args?: Record<string, string>) => {
         void _fn;
         void _args;
 
@@ -289,6 +295,72 @@ describe("joinGroupWithInvitationFromIntent", () => {
     });
 
     expect(calls).toEqual(["auth", "rpc"]);
+  });
+});
+
+describe("getMyActiveGroupInvitation", () => {
+  it("calls the authoritative admin invitation RPC without identifiers", async () => {
+    const supabase = {
+      rpc: vi.fn(async (_fn: string, _args?: Record<string, string>) => {
+        void _fn;
+        void _args;
+
+        return {
+          data: [activeGroupInvitationRow],
+          error: null
+        };
+      })
+    };
+
+    await expect(getMyActiveGroupInvitation(supabase)).resolves.toEqual({
+      code: "K7M4Q9XA",
+      path: "/impostor/join/K7M4Q9XA"
+    });
+
+    expect(supabase.rpc).toHaveBeenCalledWith("get_my_active_group_invitation");
+    expect(supabase.rpc.mock.calls[0]?.[1]).toBeUndefined();
+  });
+
+  it("surfaces missing active invitation failures with safe product feedback", async () => {
+    const supabase = {
+      rpc: vi.fn(async () => ({
+        data: null,
+        error: {
+          code: "P0002",
+          message: "No hay una invitacion activa disponible."
+        }
+      }))
+    };
+
+    await expect(getMyActiveGroupInvitation(supabase)).rejects.toThrow(
+      "No hay una invitación activa disponible."
+    );
+  });
+
+  it("surfaces unexpected RPC failures with generic product feedback", async () => {
+    const supabase = {
+      rpc: vi.fn(async () => ({
+        data: null,
+        error: new Error("network")
+      }))
+    };
+
+    await expect(getMyActiveGroupInvitation(supabase)).rejects.toThrow(
+      "No pudimos recuperar la invitación. Intentá de nuevo."
+    );
+  });
+
+  it("surfaces empty results as a missing active invitation", async () => {
+    const supabase = {
+      rpc: vi.fn(async () => ({
+        data: [],
+        error: null
+      }))
+    };
+
+    await expect(getMyActiveGroupInvitation(supabase)).rejects.toThrow(
+      "No hay una invitación activa disponible."
+    );
   });
 });
 
@@ -437,6 +509,38 @@ describe("join/resolve submit controllers", () => {
     expect(ensureAnonymousAuthIdentity).toHaveBeenCalledTimes(1);
 
     resolveAuth();
+
+    await expect(Promise.all([firstSubmit, secondSubmit])).resolves.toHaveLength(2);
+    expect(supabase.rpc).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("createGetMyActiveGroupInvitationController", () => {
+  it("shares one pending invitation recovery across double click", async () => {
+    let resolveRpc!: () => void;
+
+    const supabase = {
+      rpc: vi.fn(
+        () =>
+          new Promise<{ data: typeof activeGroupInvitationRow[]; error: null }>(
+            (resolve) => {
+              resolveRpc = () =>
+                resolve({
+                  data: [activeGroupInvitationRow],
+                  error: null
+                });
+            }
+          )
+      )
+    };
+
+    const controller = createGetMyActiveGroupInvitationController();
+    const firstSubmit = controller.submit(supabase);
+    const secondSubmit = controller.submit(supabase);
+
+    expect(secondSubmit).toBe(firstSubmit);
+
+    resolveRpc();
 
     await expect(Promise.all([firstSubmit, secondSubmit])).resolves.toHaveLength(2);
     expect(supabase.rpc).toHaveBeenCalledTimes(1);

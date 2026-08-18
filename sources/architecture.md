@@ -270,6 +270,9 @@ Orientación conceptual:
 
 /impostor
 → Impostor
+
+/impostor/grupo
+→ contexto persistente del Group para Impostor
 ```
 
 La portada permitirá acceder a juegos disponibles.
@@ -281,6 +284,8 @@ Un juego futuro podría usar:
 ```
 
 No se diseñan todavía componentes, layouts ni estética.
+
+`/impostor/grupo` pertenece a plataforma aplicada al primer juego: muestra `Group` y `Player`, no una `Room` de Impostor.
 
 ---
 
@@ -323,6 +328,8 @@ Conceptualmente conserva:
 Para el Incremento 2 no se introduce una entidad `Membership` separada.
 
 Al cierre del Incremento 2, esta capa ya tiene persistencia concreta para `groups`, `players` e invitaciones de grupo, con RLS activa y escrituras encapsuladas en RPCs autoritativas.
+
+También permite listar integrantes del propio grupo mediante lectura autorizada por RLS, y recuperar la invitación activa del administrador mediante una RPC sin parámetros basada en `auth.uid()`.
 
 ## Impostor
 
@@ -384,6 +391,8 @@ Debe permitir conceptualmente:
 
 * que un jugador acceda solo a los grupos donde corresponde;
 * que pertenencia y permisos no dependan del cliente.
+
+En el Incremento 2, las escrituras directas a plataforma permanecen bloqueadas para el cliente. Crear grupo, unirse por invitación y recuperar invitación activa usan operaciones autoritativas acotadas.
 
 ## Impostor
 

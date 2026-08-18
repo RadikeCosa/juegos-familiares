@@ -125,6 +125,16 @@ async function joinGroup(client, invitationCode, playerNickname) {
   return singleRow(data, "Join group RPC returned no row.");
 }
 
+async function getMyActiveGroupInvitation(client) {
+  const { data, error } = await client.rpc("get_my_active_group_invitation");
+
+  if (error) {
+    throw error;
+  }
+
+  return singleRow(data, "Get active group invitation RPC returned no row.");
+}
+
 async function expectRpcFailure(operation) {
   try {
     const row = await operation();
@@ -238,6 +248,11 @@ async function validate() {
   );
   results.push(["A Group crea invitación", "PASS", "Auth A created Group + admin Player + active invitation."]);
 
+  const activeInvitationForA = await getMyActiveGroupInvitation(authA.client);
+  assertEqual(activeInvitationForA.code, invitationCodeA, "Case A2 admin recovered wrong invitation.");
+  assertEqual(Object.keys(activeInvitationForA).sort().join(","), "code", "Case A2 returned extra fields.");
+  results.push(["A2 admin recupera invitación", "PASS", "Admin recovers only the active invitation code for its own Group."]);
+
   const authB = await signInAnonymously("Auth B");
   const resolvedByB = await resolveInvitation(authB.client, ` ${invitationCodeA.toLowerCase()} `);
 
@@ -257,6 +272,9 @@ async function validate() {
   assertEqual(joinedB.is_admin, false, "Case C second player should not be admin.");
   assertEqual(countPlayersForAuthUser(authB.userId), 1, "Case C Auth B player count mismatch.");
   results.push(["C join", "PASS", "Auth B joined Group A through invitation and created one Player."]);
+
+  await expectRpcFailure(() => getMyActiveGroupInvitation(authB.client));
+  results.push(["C2 no-admin sin invitación", "PASS", "A non-admin Player in the same Group cannot recover the active invitation."]);
 
   const groupsVisibleToA = await readAllGroups(authA.client);
   const groupsVisibleToB = await readAllGroups(authB.client);
@@ -289,6 +307,13 @@ async function validate() {
        set active = false
      where code = ${sqlString(invitationCodeA)};
   `);
+  const invitationsBeforeInactiveAdminRecovery = countRows("group_invitations");
+  await expectRpcFailure(() => getMyActiveGroupInvitation(authA.client));
+  assertEqual(
+    countRows("group_invitations"),
+    invitationsBeforeInactiveAdminRecovery,
+    "Case G active invitation recovery should not create invitations."
+  );
   const authD = await signInAnonymously("Auth D");
   await expectRpcFailure(() => resolveInvitation(authD.client, invitationCodeA));
   await expectRpcFailure(() => joinGroup(authD.client, invitationCodeA, "Victoria"));
@@ -311,8 +336,12 @@ async function validate() {
   const authOtherGroup = await signInAnonymously("Auth other group");
   const createdOtherGroup = await createGroup(authOtherGroup.client, "Familia 2.3 B", "Pedro");
   const groupBId = createdOtherGroup.group_id;
+  const invitationCodeB = createdOtherGroup.invitation_code;
   assert(groupBId !== groupAId, "Case I expected another group.");
   assertEqual(countNicknameInGroup(groupBId, "pedro"), 1, "Case I nickname in other group missing.");
+  const activeInvitationForOtherGroup = await getMyActiveGroupInvitation(authOtherGroup.client);
+  assertEqual(activeInvitationForOtherGroup.code, invitationCodeB, "Case I admin should recover only its own Group invitation.");
+  assert(activeInvitationForOtherGroup.code !== invitationCodeA, "Case I other Group admin recovered Group A invitation.");
   results.push(["I mismo nickname otro Group", "PASS", "Same normalized nickname is allowed in another group."]);
 
   const authDoubleJoin = await signInAnonymously("Auth double join");
@@ -360,18 +389,32 @@ async function validate() {
   await expectDirectWriteDenied(() => authB.client.from("group_invitations").delete().eq("code", invitationCodeA));
   results.push(["M invitaciones no enumerables", "PASS", "Authenticated clients cannot select/write group_invitations directly."]);
 
-  const joinSignatureChecks = psql(`
+  const noAuthClient = createAnonymousClient();
+  await expectRpcFailure(() => getMyActiveGroupInvitation(noAuthClient));
+  results.push(["M2 invitación requiere Auth", "PASS", "Unauthenticated clients cannot recover active invitations."]);
+
+  const rpcSignatureChecks = psql(`
     select
       to_regprocedure('public.join_group_with_invitation(text,text)') is not null,
       to_regprocedure('public.join_group_with_invitation(text,text,uuid)') is null,
       has_function_privilege('anon', 'public.join_group_with_invitation(text,text)', 'EXECUTE'),
-      has_function_privilege('authenticated', 'public.join_group_with_invitation(text,text)', 'EXECUTE');
+      has_function_privilege('authenticated', 'public.join_group_with_invitation(text,text)', 'EXECUTE'),
+      to_regprocedure('public.get_my_active_group_invitation()') is not null,
+      to_regprocedure('public.get_my_active_group_invitation(uuid)') is null,
+      to_regprocedure('public.get_my_active_group_invitation(text)') is null,
+      has_function_privilege('anon', 'public.get_my_active_group_invitation()', 'EXECUTE'),
+      has_function_privilege('authenticated', 'public.get_my_active_group_invitation()', 'EXECUTE');
   `).split("|");
-  assertEqual(joinSignatureChecks[0], "t", "Case N expected join function signature.");
-  assertEqual(joinSignatureChecks[1], "t", "Case N should not expose group_id overload.");
-  assertEqual(joinSignatureChecks[2], "f", "Case N anon should not execute join.");
-  assertEqual(joinSignatureChecks[3], "t", "Case N authenticated should execute join.");
-  results.push(["N no join arbitrario", "PASS", "Join RPC exposes only code + nickname, not groupId."]);
+  assertEqual(rpcSignatureChecks[0], "t", "Case N expected join function signature.");
+  assertEqual(rpcSignatureChecks[1], "t", "Case N should not expose group_id overload.");
+  assertEqual(rpcSignatureChecks[2], "f", "Case N anon should not execute join.");
+  assertEqual(rpcSignatureChecks[3], "t", "Case N authenticated should execute join.");
+  assertEqual(rpcSignatureChecks[4], "t", "Case N expected active invitation function signature.");
+  assertEqual(rpcSignatureChecks[5], "t", "Case N should not expose uuid overload for active invitation.");
+  assertEqual(rpcSignatureChecks[6], "t", "Case N should not expose text overload for active invitation.");
+  assertEqual(rpcSignatureChecks[7], "f", "Case N anon should not execute active invitation recovery.");
+  assertEqual(rpcSignatureChecks[8], "t", "Case N authenticated should execute active invitation recovery.");
+  results.push(["N no RPCs arbitrarias", "PASS", "Join and active invitation RPCs do not accept Group/Auth identifiers."]);
 
   const beforeRollback = {
     groups: countRows("groups"),

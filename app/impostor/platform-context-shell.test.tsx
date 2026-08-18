@@ -1,5 +1,7 @@
 import { isValidElement, type ReactNode } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { renderAdminInvitationPanel } from "./admin-invitation-panel";
 import { renderImpostorPlatformContext } from "./platform-context-shell";
 import type { PlatformBootstrapState } from "../../lib/supabase/platform-bootstrap";
 
@@ -56,7 +58,7 @@ describe("renderImpostorPlatformContext", () => {
     expect(text).toContain("Unirme a un grupo");
   });
 
-  it("shows the recognized Player and Group", () => {
+  it("shows the recognized Player and Group with a clear group link", () => {
     const state: PlatformBootstrapState = {
       status: "recognized",
       player: {
@@ -73,12 +75,42 @@ describe("renderImpostorPlatformContext", () => {
       }
     };
 
-    const text = inspect(renderImpostorPlatformContext(state));
+    const text = renderToStaticMarkup(renderImpostorPlatformContext(state));
 
     expect(text).toContain("Hola, Ramiro");
-    expect(text).toContain("Grupo: Familia");
+    expect(text).toContain("Tu grupo");
+    expect(text).toContain("Familia");
+    expect(text).toContain("Ver grupo");
     expect(text).not.toContain("Crear sala");
     expect(text).not.toContain("Agregar palabra");
+    expect(text).not.toContain("Invitar personas");
+  });
+
+  it("does not duplicate the invitation CTA for a non-admin Player", () => {
+    const state: PlatformBootstrapState = {
+      status: "recognized",
+      player: {
+        id: "player-2",
+        groupId: "group-1",
+        nickname: "Pedro",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      },
+      group: {
+        id: "group-1",
+        name: "Familia",
+        adminPlayerId: "player-1",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      }
+    };
+
+    const text = renderToStaticMarkup(renderImpostorPlatformContext(state));
+
+    expect(text).toContain("Hola, Pedro");
+    expect(text).toContain("Tu grupo");
+    expect(text).toContain("Familia");
+    expect(text).toContain("Ver grupo");
+    expect(text).not.toContain("Invitá a los demás");
+    expect(text).not.toContain("Invitar personas");
   });
 
   it("shows connection errors without onboarding", () => {
@@ -92,5 +124,57 @@ describe("renderImpostorPlatformContext", () => {
     expect(text).toContain("Revisá tu conexión");
     expect(text).not.toContain("Crear grupo");
     expect(text).not.toContain("Unirme a un grupo");
+  });
+});
+
+describe("renderAdminInvitationPanel", () => {
+  const noop = () => undefined;
+
+  it("renders a loading state with the CTA disabled", () => {
+    const markup = renderToStaticMarkup(
+      renderAdminInvitationPanel(
+        { status: "loading" },
+        { onLoadInvitation: noop, onCopy: noop }
+      )
+    );
+
+    expect(markup).toContain("Buscando invitación");
+    expect(markup).toContain("disabled");
+  });
+
+  it("renders the recovered invitation code and link", () => {
+    const markup = renderToStaticMarkup(
+      renderAdminInvitationPanel(
+        {
+          status: "success",
+          invitation: {
+            code: "K7M4Q9XA",
+            path: "/impostor/join/K7M4Q9XA"
+          }
+        },
+        { onLoadInvitation: noop, onCopy: noop }
+      )
+    );
+
+    expect(markup).toContain("Código de invitación");
+    expect(markup).toContain("K7M4Q9XA");
+    expect(markup).toContain("/impostor/join/K7M4Q9XA");
+    expect(markup).toContain("Copiar código");
+    expect(markup).toContain("Copiar enlace");
+  });
+
+  it("renders recoverable error feedback", () => {
+    const markup = renderToStaticMarkup(
+      renderAdminInvitationPanel(
+        {
+          status: "error",
+          message: "No pudimos recuperar la invitación. Intentá de nuevo."
+        },
+        { onLoadInvitation: noop, onCopy: noop }
+      )
+    );
+
+    expect(markup).toContain("Invitar personas");
+    expect(markup).toContain("No pudimos recuperar la invitación");
   });
 });
