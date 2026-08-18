@@ -12,6 +12,10 @@ type ImpostorGroupWordsClient = {
     (
       fn: "get_my_group_word_count" | "list_my_group_words"
     ): PromiseLike<SupabaseRpcResult<unknown>>;
+    (
+      fn: "delete_my_group_word",
+      args: { word_id: string }
+    ): PromiseLike<SupabaseRpcResult<unknown>>;
   };
 };
 
@@ -30,6 +34,8 @@ const GENERIC_GROUP_WORD_ERROR =
   "No pudimos agregar la palabra. Revisá el texto e intentá de nuevo.";
 const GENERIC_GROUP_WORD_READ_ERROR =
   "No pudimos consultar las palabras. Intentá de nuevo.";
+const GENERIC_GROUP_WORD_DELETE_ERROR =
+  "No pudimos borrar la palabra. Intentá de nuevo.";
 
 type AddedGroupWordRow = {
   id: string;
@@ -111,6 +117,20 @@ function getReadGroupWordsErrorMessage(error: unknown) {
   }
 
   return GENERIC_GROUP_WORD_READ_ERROR;
+}
+
+function getDeleteGroupWordErrorMessage(error: unknown) {
+  if (isSupabaseErrorLike(error)) {
+    if (error.code === "28000" || error.code === "42501") {
+      return UNAUTHENTICATED_GROUP_WORD_ERROR;
+    }
+
+    if (error.code === "P0002") {
+      return MISSING_PLAYER_GROUP_WORD_ERROR;
+    }
+  }
+
+  return GENERIC_GROUP_WORD_DELETE_ERROR;
 }
 
 function toAddedGroupWord(row: AddedGroupWordRow): AddedGroupWord {
@@ -199,4 +219,23 @@ export async function listMyGroupWords(
   }
 
   return result.data.map(toMyGroupWord);
+}
+
+export async function deleteMyGroupWord(
+  supabase: ImpostorGroupWordsClient,
+  wordId: string
+): Promise<boolean> {
+  const result = await supabase.rpc("delete_my_group_word", {
+    word_id: wordId
+  });
+
+  if (result.error) {
+    throw new Error(getDeleteGroupWordErrorMessage(result.error));
+  }
+
+  if (typeof result.data !== "boolean") {
+    throw new Error("No pudimos confirmar si la palabra fue borrada.");
+  }
+
+  return result.data;
 }

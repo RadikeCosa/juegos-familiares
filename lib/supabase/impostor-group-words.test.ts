@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   addGroupWord,
+  deleteMyGroupWord,
   getMyGroupWordCount,
   listMyGroupWords
 } from "./impostor-group-words";
@@ -289,6 +290,99 @@ describe("listMyGroupWords", () => {
 
     await expect(listMyGroupWords(supabase)).rejects.toThrow(
       "No pudimos cargar tus palabras."
+    );
+  });
+});
+
+describe("deleteMyGroupWord", () => {
+  it("calls the authoritative delete RPC with only the word id", async () => {
+    const supabase = {
+      rpc: vi.fn(async (_fn: string, _args?: Record<string, string>) => {
+        void _fn;
+        void _args;
+
+        return {
+          data: true,
+          error: null
+        };
+      })
+    };
+
+    await expect(deleteMyGroupWord(supabase, "word-1")).resolves.toBe(true);
+
+    expect(supabase.rpc).toHaveBeenCalledWith("delete_my_group_word", {
+      word_id: "word-1"
+    });
+    expect(supabase.rpc.mock.calls[0]?.[1]).not.toHaveProperty("group_id");
+    expect(supabase.rpc.mock.calls[0]?.[1]).not.toHaveProperty("player_id");
+    expect(supabase.rpc.mock.calls[0]?.[1]).not.toHaveProperty("author_player_id");
+    expect(supabase.rpc.mock.calls[0]?.[1]).not.toHaveProperty("auth_user_id");
+  });
+
+  it("maps a not found or unauthorized delete to false", async () => {
+    const supabase = {
+      rpc: vi.fn(async () => ({
+        data: false,
+        error: null
+      }))
+    };
+
+    await expect(deleteMyGroupWord(supabase, "word-unknown")).resolves.toBe(false);
+  });
+
+  it("surfaces delete auth failures with safe product-level feedback", async () => {
+    const supabase = {
+      rpc: vi.fn(async () => ({
+        data: null,
+        error: {
+          code: "42501"
+        }
+      }))
+    };
+
+    await expect(deleteMyGroupWord(supabase, "word-1")).rejects.toThrow(
+      "Necesitás entrar a tu grupo antes de agregar palabras."
+    );
+  });
+
+  it("surfaces delete missing Player context explicitly", async () => {
+    const supabase = {
+      rpc: vi.fn(async () => ({
+        data: null,
+        error: {
+          code: "P0002"
+        }
+      }))
+    };
+
+    await expect(deleteMyGroupWord(supabase, "word-1")).rejects.toThrow(
+      "No pudimos reconocer tu jugador para agregar la palabra."
+    );
+  });
+
+  it("keeps unexpected delete failures generic", async () => {
+    const supabase = {
+      rpc: vi.fn(async () => ({
+        data: null,
+        error: new Error("network")
+      }))
+    };
+
+    await expect(deleteMyGroupWord(supabase, "word-1")).rejects.toThrow(
+      "No pudimos borrar la palabra. Intentá de nuevo."
+    );
+  });
+
+  it("rejects malformed delete responses", async () => {
+    const supabase = {
+      rpc: vi.fn(async () => ({
+        data: [],
+        error: null
+      }))
+    };
+
+    await expect(deleteMyGroupWord(supabase, "word-1")).rejects.toThrow(
+      "No pudimos confirmar si la palabra fue borrada."
     );
   });
 });
