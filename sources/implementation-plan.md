@@ -643,7 +643,17 @@ Trade-offs aceptados:
 
 Producción:
 
-El Incremento 2 queda cerrado localmente a nivel técnico y UX. Todavía falta aplicar migrations al Supabase remoto y validar Vercel/producción mediante un procedimiento separado.
+El Incremento 2 queda cerrado también en producción.
+
+Evidencia resumida:
+
+* migration history local/remoto alineado para `20260814122000`, `20260814152000` y `20260818120000`;
+* Vercel apunta al Supabase remoto esperado y contiene el código del incremento;
+* smoke A/B aprobado con administrador y segundo jugador en contextos aislados;
+* creación de grupo, reapertura de contexto, navegación a `/impostor/grupo`, listado de integrantes e invitación administrativa funcionan en producción;
+* refresh de administrador y segundo jugador conserva el grupo reconocido;
+* nickname duplicado, invitación inválida y acceso directo sin Auth muestran feedback de producto sin exponer detalles internos;
+* revisión mobile 360x640 y 390x844 aprobada sin overflow horizontal ni controles inaccesibles.
 
 ### Dominio involucrado
 

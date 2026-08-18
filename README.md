@@ -106,4 +106,4 @@ npm run supabase:stop
 
 Los comandos de reset documentados son para Supabase local. La migracion de produccion se realiza por un procedimiento controlado separado.
 
-No hay todavia un flujo de produccion documentado como validado de punta a punta.
+Para el Incremento 2, las migrations remotas quedaron alineadas con el historial local y el smoke de produccion en Vercel fue aprobado de punta a punta.

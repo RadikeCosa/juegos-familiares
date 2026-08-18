@@ -56,12 +56,13 @@ Incremento 2 cerrado / Incremento 3 pendiente
 * invitación administrativa recuperable desde contexto reconocido;
 * persistencia local defensiva mediante `LocalIdentity`;
 * RLS y RPCs autoritativas para identidad, grupo e invitación;
-* tests unitarios, validaciones de base de datos y smoke browser/mobile para Incremento 2.
+* tests unitarios, validaciones de base de datos y smoke browser/mobile para Incremento 2;
+* migrations remotas aplicadas y alineadas con el historial local;
+* smoke de producción aprobado en Vercel con dos identidades reales aisladas.
 
 ## PENDIENTE
 
 * producto jugable;
-* deploy;
 * playtesting real;
 * métricas;
 * banco de palabras;
@@ -219,6 +220,7 @@ Completado:
   * CTA de invitación solo para administrador;
   * `LocalIdentity` como cache local no autoritativa;
   * RLS, RPCs y pruebas negativas.
+* validación de producción del flujo completo en Vercel con dos identidades aisladas.
 
 PENDIENTE:
 
@@ -232,7 +234,6 @@ PENDIENTE:
 * diseño UI final;
 * validación en dispositivos reales;
 * playtesting;
-* deploy;
 * iteración sobre uso real.
 
 ---
@@ -457,6 +458,8 @@ LocalIdentity
 **Valor del smoke real:** unit tests y DB tests cubrieron invariantes técnicos, pero no detectaron pantalla muerta, invitación perdida visualmente ni falta de un lugar para entrar al grupo. El smoke browser/mobile encontró esos huecos de producto.
 
 **Validación:** el cierre combinó unit/static, DB real, smoke browser y revisión mobile. El resultado no es todavía un juego jugable, pero sí una experiencia donde el usuario puede reconocer su grupo, entrar, ver quiénes están y sumar personas si es administrador.
+
+**Cierre en producción:** el modelo se validó primero localmente con tests y base limpia. El smoke manual encontró huecos de UX que los tests no mostraban: una pantalla reconocida sin próxima acción clara, una invitación creada pero no recuperable visualmente y la falta de una vista concreta para el grupo. Después de corregir esos puntos, la base remota se alineó mediante migrations versionadas y el flujo completo se volvió a probar en Vercel con dos identidades reales aisladas. El resultado de producto en producción es que una persona puede crear o unirse a un grupo, reabrir su contexto, entrar a la vista del grupo, ver integrantes e invitar de forma segura si es administradora.
 
 **Trade-offs deliberados:** quedan fuera recovery avanzado de Auth perdida, múltiples grupos por identidad, `Membership`, múltiples admins, expiración/regeneración/revocación de invitaciones, rate limiting específico, `Room`, Realtime y Presence.
 
@@ -713,7 +716,7 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | --- | --- | --- | --- |
 | 0 | Fundación del proyecto | COMPLETADO | Next.js, TypeScript, lint, Vitest, build y pantalla mobile-first mínima |
 | 1 | Portada de plataforma y entrada a Impostor | COMPLETADO | Portada mobile-first, entrada a Impostor, manifest/metadatos e iconos base |
-| 2 | Identidad liviana, grupo y jugador | COMPLETADO LOCAL | Auth anónima bajo intención, RPCs, RLS, invitaciones, bootstrap, LocalIdentity, vista de grupo, smoke UX, `npm test`, `npm run test:db`, lint y build |
+| 2 | Identidad liviana, grupo y jugador | COMPLETADO | Auth anónima bajo intención, RPCs, RLS, invitaciones, bootstrap, LocalIdentity, vista de grupo, migrations remotas alineadas y smoke Vercel A/B aprobado |
 | 3 | Banco de palabras del grupo | PENDIENTE | PENDIENTE |
 | 4 | Crear y unirse a una sala | PENDIENTE | PENDIENTE |
 | 5 | Presencia básica y sucesión de host | PENDIENTE | PENDIENTE |
