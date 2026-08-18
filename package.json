@@ -7,7 +7,7 @@
     "build": "next build",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:db": "node supabase/tests/validate-2-2.mjs && node supabase/tests/validate-2-3.mjs",
+    "test:db": "node supabase/tests/validate-2-2.mjs && node supabase/tests/validate-2-3.mjs && node supabase/tests/validate-3-1.mjs",
     "supabase:reset": "supabase db reset",
     "supabase:start": "supabase start -x realtime,storage-api,imgproxy,studio,mailpit,postgres-meta,edge-runtime,logflare,vector,supavisor",
     "supabase:stop": "supabase stop"
