@@ -4,10 +4,15 @@ type SupabaseRpcResult<TData> = {
 };
 
 type ImpostorGroupWordsClient = {
-  rpc: (
-    fn: "add_group_word",
-    args: { word_text: string }
-  ) => PromiseLike<SupabaseRpcResult<unknown>>;
+  rpc: {
+    (
+      fn: "add_group_word",
+      args: { word_text: string }
+    ): PromiseLike<SupabaseRpcResult<unknown>>;
+    (
+      fn: "get_my_group_word_count" | "list_my_group_words"
+    ): PromiseLike<SupabaseRpcResult<unknown>>;
+  };
 };
 
 type SupabaseErrorLike = {
@@ -23,6 +28,8 @@ const MISSING_PLAYER_GROUP_WORD_ERROR =
   "No pudimos reconocer tu jugador para agregar la palabra.";
 const GENERIC_GROUP_WORD_ERROR =
   "No pudimos agregar la palabra. Revisá el texto e intentá de nuevo.";
+const GENERIC_GROUP_WORD_READ_ERROR =
+  "No pudimos consultar las palabras. Intentá de nuevo.";
 
 type AddedGroupWordRow = {
   id: string;
@@ -33,12 +40,28 @@ type AddedGroupWordRow = {
   created_at: string;
 };
 
+type GroupWordCountRow = {
+  total_count: number;
+};
+
+type MyGroupWordRow = {
+  id: string;
+  text: string;
+  created_at: string;
+};
+
 export type AddedGroupWord = {
   id: string;
   groupId: string;
   text: string;
   normalizedText: string;
   authorPlayerId: string;
+  createdAt: string;
+};
+
+export type MyGroupWord = {
+  id: string;
+  text: string;
   createdAt: string;
 };
 
@@ -76,6 +99,20 @@ function getAddGroupWordErrorMessage(error: unknown) {
   return GENERIC_GROUP_WORD_ERROR;
 }
 
+function getReadGroupWordsErrorMessage(error: unknown) {
+  if (isSupabaseErrorLike(error)) {
+    if (error.code === "28000" || error.code === "42501") {
+      return UNAUTHENTICATED_GROUP_WORD_ERROR;
+    }
+
+    if (error.code === "P0002") {
+      return MISSING_PLAYER_GROUP_WORD_ERROR;
+    }
+  }
+
+  return GENERIC_GROUP_WORD_READ_ERROR;
+}
+
 function toAddedGroupWord(row: AddedGroupWordRow): AddedGroupWord {
   return {
     id: row.id,
@@ -83,6 +120,24 @@ function toAddedGroupWord(row: AddedGroupWordRow): AddedGroupWord {
     text: row.text,
     normalizedText: row.normalized_text,
     authorPlayerId: row.author_player_id,
+    createdAt: row.created_at
+  };
+}
+
+function isMyGroupWordRow(value: unknown): value is MyGroupWordRow {
+  const row = value as Partial<MyGroupWordRow>;
+
+  return (
+    typeof row.id === "string" &&
+    typeof row.text === "string" &&
+    typeof row.created_at === "string"
+  );
+}
+
+function toMyGroupWord(row: MyGroupWordRow): MyGroupWord {
+  return {
+    id: row.id,
+    text: row.text,
     createdAt: row.created_at
   };
 }
@@ -106,4 +161,42 @@ export async function addGroupWord(
   }
 
   return toAddedGroupWord(row);
+}
+
+export async function getMyGroupWordCount(
+  supabase: ImpostorGroupWordsClient
+): Promise<number> {
+  const result = await supabase.rpc("get_my_group_word_count");
+
+  if (result.error) {
+    throw new Error(getReadGroupWordsErrorMessage(result.error));
+  }
+
+  const row = getSingleRow<GroupWordCountRow>(result.data);
+
+  if (!row || typeof row.total_count !== "number") {
+    throw new Error("No pudimos confirmar la cantidad de palabras.");
+  }
+
+  return row.total_count;
+}
+
+export async function listMyGroupWords(
+  supabase: ImpostorGroupWordsClient
+): Promise<MyGroupWord[]> {
+  const result = await supabase.rpc("list_my_group_words");
+
+  if (result.error) {
+    throw new Error(getReadGroupWordsErrorMessage(result.error));
+  }
+
+  if (!Array.isArray(result.data)) {
+    throw new Error("No pudimos cargar tus palabras.");
+  }
+
+  if (!result.data.every(isMyGroupWordRow)) {
+    throw new Error("No pudimos cargar tus palabras.");
+  }
+
+  return result.data.map(toMyGroupWord);
 }
