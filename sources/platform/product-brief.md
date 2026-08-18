@@ -52,6 +52,9 @@ Orientación inicial:
 /impostor
 → juego Impostor
 
+/impostor/grupo
+→ grupo reconocido de Impostor
+
 /tutti-frutti
 → posible juego futuro
 ```
@@ -67,7 +70,7 @@ Por ahora, las capacidades que pueden pertenecer a la aplicación contenedora so
 * identidad liviana;
 * grupo;
 * jugadores;
-* membresía del grupo;
+* pertenencia `Player -> Group`;
 * navegación entre juegos;
 * experiencia PWA;
 * infraestructura compartida cuando corresponda.
@@ -75,6 +78,162 @@ Por ahora, las capacidades que pueden pertenecer a la aplicación contenedora so
 La intención es que un jugador reconocido dentro de un grupo pueda participar más adelante en otros juegos sin recrear toda su identidad.
 
 No diseñamos todavía un sistema genérico de perfiles.
+
+---
+
+# Identidad liviana y grupo (Incremento 2)
+
+La primera experiencia de una persona nueva no comienza pidiendo nickname.
+
+Primero elige:
+
+```text
+[ Crear un grupo ]
+[ Unirme a un grupo ]
+```
+
+El nickname se solicita dentro del flujo elegido.
+
+## Crear grupo
+
+Formulario mínimo:
+
+```text
+Tu nombre
+Nombre del grupo
+
+[ Crear grupo ]
+```
+
+No incluye en este incremento:
+
+* descripción;
+* avatar;
+* preferencias;
+* password o PIN;
+* onboarding adicional.
+
+El creador del grupo queda como administrador inicial.
+
+Para este incremento no se diseña:
+
+* múltiples administradores;
+* transferencia de administrador;
+* RBAC configurable.
+
+## Invitación al grupo
+
+La invitación utiliza código y enlace compartible como dos representaciones de la misma invitación conceptual.
+
+El identificador de invitación debe ser opaco, no secuencial y distinto de `groupId`.
+
+No debe habilitar búsqueda o enumeración pública de grupos.
+
+QR queda fuera de alcance en esta etapa.
+
+La invitación a `Group` se mantiene separada de la futura invitación a `Room` de Impostor.
+
+El administrador puede volver a pedir su invitación activa desde la experiencia reconocida del grupo. Esa recuperación no debe depender de guardar el código localmente.
+
+## Unirse
+
+Por código:
+
+```text
+Unirme
+↓
+ingresar código
+↓
+resolver grupo
+↓
+mostrar nombre del grupo
+↓
+pedir nickname
+↓
+crear Player
+```
+
+Por enlace:
+
+```text
+abrir enlace
+↓
+resolver grupo
+↓
+mostrar nombre del grupo
+↓
+pedir nickname
+↓
+crear Player
+```
+
+Si el enlace es válido, no se vuelve a pedir el código.
+
+## Nickname
+
+Reglas conceptuales mínimas:
+
+* `trim`;
+* no vacío;
+* longitud razonable;
+* único por `Group` ignorando mayúsculas/minúsculas.
+
+Debe existir una forma normalizada de nickname para garantizar unicidad remota.
+
+No se define todavía una normalización lingüística compleja.
+
+## Separación de identidades
+
+Debe mantenerse explícitamente:
+
+```text
+AuthIdentity
+≠
+Player
+≠
+Group
+≠
+LocalIdentity
+```
+
+`LocalIdentity` es cache/pista de UX.
+
+No constituye autorización.
+
+La identidad verificable y la autorización dependen de `AuthIdentity` y estado remoto.
+
+Si se pierde la sesión anónima y ya no existe `AuthIdentity` válida, no debe recuperarse automáticamente el `Player` anterior usando datos locales.
+
+La recuperación avanzada queda fuera del MVP de este incremento.
+
+## Grupo reconocido
+
+Cuando una persona ya pertenece a un grupo, `/impostor` debe expresar claramente ese contexto:
+
+```text
+Hola, Ramiro
+
+Tu grupo
+Familia
+
+[ Ver grupo ]
+```
+
+`/impostor/grupo` funciona como espacio persistente del grupo:
+
+```text
+Familia
+
+Integrantes
+
+Ramiro · Admin
+Pedro
+Camila
+```
+
+El administrador ve una acción para invitar personas. Un jugador común entiende que pertenece al mismo grupo, pero no ve controles administrativos.
+
+Esta vista no es una sala de juego. Resuelve la pertenencia social antes de introducir `Room`.
 
 ---
 

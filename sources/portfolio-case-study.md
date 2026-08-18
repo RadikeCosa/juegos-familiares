@@ -52,9 +52,11 @@ Incremento 2 cerrado / Incremento 3 pendiente
 * modelo remoto mínimo `Group` + `Player`;
 * invitación por código/enlace opaco;
 * bootstrap de contexto reconocido;
+* vista navegable de grupo con integrantes;
+* invitación administrativa recuperable desde contexto reconocido;
 * persistencia local defensiva mediante `LocalIdentity`;
 * RLS y RPCs autoritativas para identidad, grupo e invitación;
-* tests unitarios y validaciones de base de datos para Incremento 2.
+* tests unitarios, validaciones de base de datos y smoke browser/mobile para Incremento 2.
 
 ## PENDIENTE
 
@@ -213,6 +215,8 @@ Completado:
   * invitación por código/enlace;
   * segundo dispositivo como segundo jugador;
   * bootstrap de contexto reconocido;
+  * vista de grupo con integrantes visibles;
+  * CTA de invitación solo para administrador;
   * `LocalIdentity` como cache local no autoritativa;
   * RLS, RPCs y pruebas negativas.
 
@@ -425,6 +429,36 @@ LocalIdentity
 **Trade-offs aceptados:** no se implementó rate limiting de invitaciones en este incremento. La mitigación actual depende de códigos opacos, RLS, RPCs acotadas y ausencia de enumeración pública. La recuperación avanzada de sesión y múltiples grupos por dispositivo quedan fuera del MVP inmediato.
 
 **Resultado del Incremento 2:** el proyecto ya tiene una base real para reconocer grupo y jugador sin cuentas tradicionales, sin convertir la identidad local en autorización y sin adelantar todavía banco de palabras, sala o realtime.
+
+## De pertenecer a un grupo a tener un lugar
+
+**Problema inicial:** queríamos que una persona pudiera entrar rápido, sin email/password, pero que el sistema pudiera reconocerla, aislar grupos y permitir que otro teléfono se sumara al mismo contexto.
+
+**Tensión:** baja fricción, identidad verificable y autorización segura tiraban en direcciones distintas. Una identidad local pura era cómoda, pero no alcanzaba para proteger datos remotos. Una cuenta tradicional era robusta, pero demasiado pesada para el momento de uso.
+
+**Modelo mental:** el incremento separó `AuthIdentity`, `Player`, `Group` y `LocalIdentity`. La identidad técnica permite autorización; el `Player` representa a la persona dentro del grupo; el `Group` es el contexto social persistente; `LocalIdentity` solo ayuda a la UX.
+
+**Autoridad:** el cliente pide y la base decide. Las operaciones sensibles pasan por `auth.uid()`, Postgres, RLS y RPCs autoritativas. Crear grupo no es una suma de inserts desde UI: crea coherentemente Auth, Group, Player administrador e invitación.
+
+**Invitación:** el segundo jugador entra por código/enlace opaco, no por `groupId`. La resolución y el join ocurren mediante operaciones acotadas, sin acceso directo del cliente a `group_invitations`.
+
+**Bootstrap:** reabrir parte de la sesión anónima, busca `Player` y resuelve `Group`. No crea identidad nueva. Si la sesión se perdió, `LocalIdentity` no funciona como mecanismo mágico de recovery.
+
+**Primer aprendizaje del smoke manual:** técnicamente el sistema ya podía reconocer al usuario y recuperar su grupo, pero la UI expresaba poco de esa capacidad: mostraba el dato del grupo sin una próxima acción clara. La arquitectura estaba bien, pero la experiencia no decía "este es tu lugar".
+
+**Regresión de invitación:** después de crear el grupo, la invitación existía, pero se perdía visualmente al pasar al estado reconocido. La solución no fue guardar el código localmente ni abrir RLS sobre invitaciones. Se agregó `get_my_active_group_invitation()`, una RPC autoritativa que permite al administrador recuperar su invitación activa bajo intención.
+
+**Segundo aprendizaje UX:** aun con invitación disponible, apareció una pregunta más básica: ¿dónde está mi grupo? Eso separó pertenecer técnicamente a un `Group` de tener un espacio reconocible en la experiencia.
+
+**Solución:** se creó `/impostor/grupo` con nombre, integrantes, admin derivado y acción de invitación solo para administrador. La ruta resuelve la UX del grupo sin adelantar `Room`.
+
+**Group vs Room:** `Group` responde "quiénes somos". `Room` responderá más adelante "dónde/qué estamos jugando ahora". En el Incremento 2 no existe sala, lobby, realtime ni presence.
+
+**Valor del smoke real:** unit tests y DB tests cubrieron invariantes técnicos, pero no detectaron pantalla muerta, invitación perdida visualmente ni falta de un lugar para entrar al grupo. El smoke browser/mobile encontró esos huecos de producto.
+
+**Validación:** el cierre combinó unit/static, DB real, smoke browser y revisión mobile. El resultado no es todavía un juego jugable, pero sí una experiencia donde el usuario puede reconocer su grupo, entrar, ver quiénes están y sumar personas si es administrador.
+
+**Trade-offs deliberados:** quedan fuera recovery avanzado de Auth perdida, múltiples grupos por identidad, `Membership`, múltiples admins, expiración/regeneración/revocación de invitaciones, rate limiting específico, `Room`, Realtime y Presence.
 
 ## Estado autoritativo
 
@@ -644,6 +678,8 @@ Resuelto en el Incremento 2:
 * creación atómica de grupo, jugador administrador e invitación inicial;
 * acceso por invitación desde segundo dispositivo;
 * nickname único dentro del grupo;
+* vista navegable del grupo con integrantes;
+* recuperación autoritativa de invitación activa para administrador;
 * RLS mínima para que un jugador sólo lea su grupo;
 * escrituras remotas a través de RPCs autoritativas;
 * bootstrap de contexto reconocido al reabrir;
@@ -677,7 +713,7 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | --- | --- | --- | --- |
 | 0 | Fundación del proyecto | COMPLETADO | Next.js, TypeScript, lint, Vitest, build y pantalla mobile-first mínima |
 | 1 | Portada de plataforma y entrada a Impostor | COMPLETADO | Portada mobile-first, entrada a Impostor, manifest/metadatos e iconos base |
-| 2 | Identidad liviana, grupo y jugador | COMPLETADO | Auth anónima bajo intención, RPCs, RLS, invitaciones, bootstrap, LocalIdentity, `npm test`, `npm run test:db`, lint y build |
+| 2 | Identidad liviana, grupo y jugador | COMPLETADO LOCAL | Auth anónima bajo intención, RPCs, RLS, invitaciones, bootstrap, LocalIdentity, vista de grupo, smoke UX, `npm test`, `npm run test:db`, lint y build |
 | 3 | Banco de palabras del grupo | PENDIENTE | PENDIENTE |
 | 4 | Crear y unirse a una sala | PENDIENTE | PENDIENTE |
 | 5 | Presencia básica y sucesión de host | PENDIENTE | PENDIENTE |

@@ -27,6 +27,20 @@ Elegir Impostor
       ↓
 Inicio
       ↓
+┌────────────────┬──────────────────┐
+│ Crear un grupo │ Unirme a un grupo│
+└────────────────┴──────────────────┘
+      ↓
+Grupo reconocido
+      ↓
+Ver grupo
+      ↓
+Integrantes
+      ↓
+Invitar personas (solo admin)
+      ↓
+Futuro: sala / lobby
+      ↓
 ┌───────────────┬────────────────┬────────────────┐
 │ Crear sala    │ Unirse a sala  │ Agregar palabra│
 └───────────────┴────────────────┴────────────────┘
@@ -58,15 +72,14 @@ Nueva ronda / Terminar
 
 ## Primer acceso
 
-La aplicación necesita establecer una identidad sencilla.
+La primera decisión para una persona nueva es:
 
-Ejemplo:
+```text
+[ Crear un grupo ]
+[ Unirme a un grupo ]
+```
 
-> ¿Cómo te llamás?
-
-`Ramiro`
-
-`Continuar`
+El nickname se solicita dentro del flujo elegido.
 
 El objetivo es evitar una experiencia de registro tradicional.
 
@@ -85,12 +98,59 @@ Si el dispositivo todavía no pertenece a un grupo, debe poder:
 * crear grupo;
 * unirse a un grupo existente.
 
+### Crear grupo
+
+Flujo mínimo:
+
+```text
+Crear grupo
+↓
+Tu nombre
+Nombre del grupo
+↓
+Crear grupo
+```
+
+### Unirse a grupo por código
+
+Flujo mínimo:
+
+```text
+Unirme
+↓
+Ingresar código
+↓
+Resolver grupo
+↓
+Mostrar nombre del grupo
+↓
+Pedir nickname
+```
+
+### Unirse a grupo por enlace
+
+Flujo mínimo:
+
+```text
+Abrir enlace
+↓
+Resolver grupo
+↓
+Mostrar nombre del grupo
+↓
+Pedir nickname
+```
+
+Si el enlace es válido, no se vuelve a pedir el código.
+
 Una vez asociado, el dispositivo recuerda:
 
 * jugador;
 * grupo.
 
 Las visitas siguientes deberían evitar repetir esa configuración.
+
+Visitar `/impostor`, `/impostor/join/[code]` o `/impostor/grupo` no debe crear Auth automáticamente. La identidad anónima se crea o reutiliza cuando la persona confirma una intención de producto, como crear grupo o unirse.
 
 ---
 
@@ -100,7 +160,53 @@ Para un jugador ya reconocido:
 
 > Hola, Ramiro
 
-Acciones principales:
+En el Incremento 2, la pantalla muestra:
+
+> Tu grupo
+
+> Familia
+
+> Ver grupo
+
+La acción principal es entrar al grupo.
+
+## Vista de grupo
+
+Flujo actual:
+
+```text
+/impostor
+↓
+Ver grupo
+↓
+/impostor/grupo
+```
+
+La vista de grupo muestra:
+
+```text
+Familia
+
+Integrantes
+
+Ramiro · Admin
+Pedro
+Camila
+```
+
+El administrador ve:
+
+```text
+[ Invitar personas ]
+```
+
+Un jugador común ve los integrantes, pero no ve acciones administrativas ni código/enlace de invitación.
+
+Refrescar directamente `/impostor/grupo` debe recuperar el contexto mediante sesión Auth, `Player` y `Group`; no depende de haber navegado antes desde `/impostor`.
+
+Si no hay sesión, la vista no crea Auth, no muestra un grupo ajeno y ofrece una salida clara hacia Impostor.
+
+Acciones futuras:
 
 ### Crear sala
 

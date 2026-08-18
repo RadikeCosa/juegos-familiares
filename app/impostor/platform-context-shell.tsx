@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createBrowserSupabaseClient } from "../../lib/supabase/browser-client";
 import {
@@ -25,10 +26,19 @@ function ImpostorRecognizedContext({
       aria-labelledby="impostor-platform-context-title"
     >
       <h2 id="impostor-platform-context-title">Hola, {player.nickname}</h2>
-      <p>Grupo: {group.name}</p>
+      <div className="impostor-group-summary">
+        <p>Tu grupo</p>
+        <strong>{group.name}</strong>
+      </div>
       <p className="impostor-platform-context__meta">
         Tu grupo ya está listo para seguir con Impostor.
       </p>
+      <Link
+        className="impostor-action impostor-action--primary"
+        href="/impostor/grupo"
+      >
+        Ver grupo
+      </Link>
     </section>
   );
 }

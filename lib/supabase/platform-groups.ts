@@ -9,9 +9,10 @@ type PlatformGroupsClient = {
   rpc: (
     fn:
       | "create_group_with_admin_player"
+      | "get_my_active_group_invitation"
       | "resolve_group_invitation"
       | "join_group_with_invitation",
-    args: Record<string, string>
+    args?: Record<string, string>
   ) => PromiseLike<SupabaseRpcResult<unknown>>;
 };
 
@@ -30,6 +31,9 @@ const DUPLICATE_NICKNAME_JOIN_ERROR =
 
 const GENERIC_JOIN_ERROR =
   "No pudimos unirte al grupo. Revisá tu nombre e intentá de nuevo.";
+
+const MISSING_ACTIVE_INVITATION_ERROR =
+  "No hay una invitación activa disponible.";
 
 type CreatedGroupWithAdminPlayerRow = {
   group_id: string;
@@ -51,6 +55,10 @@ type JoinedGroupWithInvitationRow = {
   group_name: string;
   joined_player_nickname: string;
   is_admin: boolean;
+};
+
+type GroupInvitationSummaryRow = {
+  code: string;
 };
 
 export type CreatedGroupWithAdminPlayer = {
@@ -97,6 +105,11 @@ export type JoinedGroupWithInvitation = {
   isAdmin: boolean;
 };
 
+export type GroupInvitationSummary = {
+  code: string;
+  path: string;
+};
+
 function getSingleRow<TRow>(data: unknown): TRow | null {
   if (Array.isArray(data)) {
     return data[0] ?? null;
@@ -126,6 +139,14 @@ function getJoinGroupErrorMessage(error: unknown) {
   }
 
   return GENERIC_JOIN_ERROR;
+}
+
+function getActiveGroupInvitationErrorMessage(error: unknown) {
+  if (isSupabaseErrorLike(error) && error.code === "P0002") {
+    return MISSING_ACTIVE_INVITATION_ERROR;
+  }
+
+  return "No pudimos recuperar la invitación. Intentá de nuevo.";
 }
 
 function toCreatedGroupWithAdminPlayer(
@@ -171,6 +192,15 @@ function toJoinedGroupWithInvitation(
       nickname: row.joined_player_nickname
     },
     isAdmin: row.is_admin
+  };
+}
+
+function toGroupInvitationSummary(
+  row: GroupInvitationSummaryRow
+): GroupInvitationSummary {
+  return {
+    code: row.code,
+    path: getInvitationPath(row.code)
   };
 }
 
@@ -264,6 +294,44 @@ export async function joinGroupWithInvitationFromIntent(
   await ensureAnonymousAuthIdentity(supabase);
 
   return joinGroupWithInvitation(supabase, input);
+}
+
+export async function getMyActiveGroupInvitation(
+  supabase: PlatformGroupsClient
+): Promise<GroupInvitationSummary> {
+  const result = await supabase.rpc("get_my_active_group_invitation");
+
+  if (result.error) {
+    throw new Error(getActiveGroupInvitationErrorMessage(result.error));
+  }
+
+  const row = getSingleRow<GroupInvitationSummaryRow>(result.data);
+
+  if (!row) {
+    throw new Error(MISSING_ACTIVE_INVITATION_ERROR);
+  }
+
+  return toGroupInvitationSummary(row);
+}
+
+export function createGetMyActiveGroupInvitationController() {
+  let activeRequest: Promise<GroupInvitationSummary> | null = null;
+
+  return {
+    submit(supabase: PlatformGroupsClient): Promise<GroupInvitationSummary> {
+      if (activeRequest) {
+        return activeRequest;
+      }
+
+      activeRequest = getMyActiveGroupInvitation(supabase);
+
+      void activeRequest.finally(() => {
+        activeRequest = null;
+      });
+
+      return activeRequest;
+    }
+  };
 }
 
 export function createCreateGroupSubmitController() {
