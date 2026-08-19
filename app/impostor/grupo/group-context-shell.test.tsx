@@ -2,6 +2,7 @@ import { isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import {
+  formatAvailableWords,
   renderGroupMembersList,
   renderImpostorGroupContext
 } from "./group-context-shell";
@@ -128,6 +129,9 @@ describe("renderImpostorGroupContext", () => {
     expect(markup).toContain("Admin");
     expect(markup).toContain("Pedro");
     expect(markup).toContain("Camila");
+    expect(markup).toContain("Banco de palabras");
+    expect(markup).toContain("Cargando banco");
+    expect(markup).toContain("/impostor/grupo/palabras");
     expect(markup).toContain("Invitar personas");
   });
 
@@ -218,5 +222,53 @@ describe("renderImpostorGroupContext", () => {
 
     expect(text).toContain("Familia");
     expect(text).toContain("Cargando integrantes");
+  });
+
+  it("renders the word bank summary for a recognized player", () => {
+    const markup = renderToStaticMarkup(
+      renderImpostorGroupContext(
+        adminBootstrapState,
+        {
+          status: "success",
+          players
+        },
+        {
+          groupWordsState: {
+            status: "success",
+            totalCount: 12,
+            ownWords: [
+              {
+                id: "word-1",
+                text: "Chocotorta",
+                createdAt: "2026-08-18T13:00:00.000Z"
+              },
+              {
+                id: "word-2",
+                text: "Torre Eiffel",
+                createdAt: "2026-08-18T13:01:00.000Z"
+              },
+              {
+                id: "word-3",
+                text: "Harry Potter",
+                createdAt: "2026-08-18T13:02:00.000Z"
+              }
+            ]
+          }
+        }
+      )
+    );
+
+    expect(markup).toContain("Banco de palabras");
+    expect(markup).toContain("12 disponibles");
+    expect(markup).toContain("Tus aportes");
+    expect(markup).toContain("<dd>3</dd>");
+    expect(markup).toContain("Agregar palabras");
+    expect(markup).toContain("/impostor/grupo/palabras");
+  });
+
+  it("pluralizes the available words count", () => {
+    expect(formatAvailableWords(0)).toBe("0 disponibles");
+    expect(formatAvailableWords(1)).toBe("1 disponible");
+    expect(formatAvailableWords(12)).toBe("12 disponibles");
   });
 });

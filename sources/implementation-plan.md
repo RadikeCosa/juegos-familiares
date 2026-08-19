@@ -184,8 +184,8 @@ Debe entrar cuando exista una necesidad real de:
 Introducción progresiva esperada:
 
 1. Supabase Auth liviana/anónima para identidad técnica.
-2. Postgres para `Group`, `Player` y `Word`.
-3. RLS para permisos de grupo, autor de palabra y administrador.
+2. Postgres para `Group`, `Player` y `GroupWord`.
+3. RLS para permisos de grupo, integrante y autor de palabra.
 4. Estado operativo de sala y tanda cuando haya lobby real.
 5. Realtime para propagación de cambios compartidos.
 6. Presence para conexión/desconexión y sucesión de host.
@@ -775,21 +775,37 @@ ni producción validada
 
 ### Objetivo
 
-Permitir agregar palabras al banco persistente del grupo, con validación y privacidad básica.
+Permitir agregar palabras o frases cortas al banco persistente del grupo, con validación, autoría y privacidad básica.
 
 ### Resultado observable
 
-Un jugador puede agregar una palabra, ver que fue agregada y consultar la cantidad total disponible.
+Un jugador puede agregar una palabra o frase, ver que fue agregada, consultar la cantidad total disponible, ver sus propios aportes y borrar uno propio.
 
 Si intenta agregar un duplicado trivial, recibe un error claro.
 
-El administrador puede revisar el banco completo.
+Ningún integrante, incluido el administrador, puede explorar libremente el banco completo en este incremento.
+
+La ruta conceptual prevista para la experiencia del banco es:
+
+```text
+/impostor/grupo/palabras
+```
+
+`/impostor/grupo` puede mostrar un resumen del banco:
+
+```text
+Banco de palabras
+12 disponibles
+Tus aportes: 3
+
+[ Agregar palabras ]
+```
 
 ### Dominio involucrado
 
 Impostor:
 
-* `Word`;
+* `GroupWord`;
 * normalización;
 * validación;
 * autoría;
@@ -798,49 +814,91 @@ Impostor:
 Plataforma:
 
 * permisos de grupo;
-* administrador.
+* pertenencia;
+* identidad autoritativa.
 
 ### Infraestructura necesaria
 
 * Postgres para palabras;
-* RLS para autor, integrante y administrador;
-* datos precargados mínimos si se decide incluirlos en este punto.
+* RLS para integrante y autor;
+* RPCs autoritativas para mutaciones y lecturas acotadas del banco.
 
-### Decisiones técnicas a cerrar
+### Decisiones cerradas
 
-* límite de longitud;
-* normalización exacta para comparar duplicados;
-* cómo representar palabras precargadas;
-* si las palabras precargadas son globales copiadas al grupo o compartidas como fuente común;
-* UX mínima de administración secundaria.
+* entidad persistente `GroupWord`;
+* implementación futura como `group_words`;
+* campos conceptuales `id`, `groupId`, `text`, `normalizedText`, `authorPlayerId`, `createdAt`;
+* longitud entre 2 y 40 caracteres;
+* normalización de espacios y comparación case-insensitive;
+* conservación de tildes, `ñ` y puntuación;
+* rechazo de emojis;
+* unicidad futura por grupo y texto normalizado;
+* autoría derivada desde `auth.uid()` → `Player` → `Group`;
+* palabras precargadas diferidas;
+* administración completa del banco diferida.
+
+Subincrementos previstos:
+
+* 3.0 — alinear documentación;
+* 3.1 — persistencia + alta autoritativa;
+* 3.2 — cantidad total + listado propio;
+* 3.3 — borrado propio;
+* 3.4 — UI vertical;
+* 3.5 — endurecimiento y cierre.
+
+Estado al cierre local del Incremento 3:
+
+```text
+COMPLETADO LOCAL
+```
+
+El cierre local consolida persistencia, alta, cantidad total, listado propio, borrado propio, UI vertical, privacidad parcial, tests DB/unitarios y smoke browser local con identidades aisladas. Queda fuera de este cierre la alineación remota y el smoke de producción.
 
 ### Tests / validación
 
 * unit tests de normalización;
 * unit tests de duplicados;
 * integración: cualquier integrante puede agregar;
-* integración/RLS: jugador normal ve sus palabras y cantidad, no banco completo;
-* integración/RLS: administrador ve y elimina;
-* validación manual en teléfono.
+* integración/RLS: integrante ve sus palabras y cantidad, no banco completo;
+* integración/RLS: administrador tampoco explora el banco completo;
+* integración/RLS: autor puede borrar lo propio;
+* integración/RLS: no autor no puede borrar aportes ajenos;
+* integración/RPC: mutaciones no aceptan `groupId`, `authorPlayerId` ni `authUserId` confiados al cliente;
+* validación manual en teléfono;
+* revisión de `git diff --check`.
 
 ### Riesgos
 
 * exponer el banco completo a jugadores normales;
+* exponer el banco completo al administrador antes de validar una necesidad real;
 * guardar duplicados por diferencias triviales;
 * convertir moderación futura en requisito del MVP;
-* hacer que agregar palabras dependa de una sala activa.
+* hacer que agregar palabras dependa de una sala activa;
+* mezclar palabras persistentes del grupo con palabras usadas en una tanda.
 
 ### Fuera de alcance
 
 * categorías;
+* edición;
 * aprobación manual;
+* moderación administrativa;
+* palabras precargadas;
 * ranking de palabras;
 * límites complejos de aporte;
-* estadísticas.
+* límite máximo de palabras por grupo;
+* rate limiting específico;
+* estadísticas;
+* Room;
+* Realtime;
+* Presence;
+* GameSession;
+* Round;
+* selección aleatoria;
+* palabra usada/no usada.
 
 ### Criterio de terminado
 
-El grupo tiene un banco persistente útil para jugar, con validación automática y privacidad acorde al MVP.
+El grupo tiene un banco persistente útil para jugar: cualquier integrante puede agregar una palabra/frase, consultar cantidad total, ver sus aportes y borrar aportes propios, sin que nadie pueda explorar libremente el banco completo.
 
 ### Conceptos a aprender
 
@@ -848,7 +906,7 @@ El grupo tiene un banco persistente útil para jugar, con validación automátic
 * normalización determinística;
 * restricciones de unicidad;
 * visibilidad parcial;
-* diferencia entre autor y administrador.
+* diferencia entre autor, integrante y administrador.
 
 ---
 
@@ -1858,7 +1916,9 @@ Quedó explícitamente fuera de este cierre: banco de palabras, sala, realtime, 
 
 ## Incremento 3
 
-Se agregan palabras, autoría, visibilidad parcial y permisos de administrador.
+Estado: completado localmente.
+
+Se agregaron `GroupWord`, autoría, cantidad total, listado propio, borrado propio y visibilidad parcial sin exploración completa del banco. Quedó pendiente para un paso posterior la alineación remota y el smoke de producción.
 
 ## Incremento 4
 
@@ -1906,9 +1966,9 @@ No se conservan votos individuales históricos salvo que aparezca una necesidad 
 
 Primer riesgo crítico: Incremento 3.
 
-Jugadores normales pueden ver sus propias palabras y cantidad total, no el banco completo.
+Cualquier integrante puede ver sus propias palabras y cantidad total, no el banco completo.
 
-Administrador puede revisar y eliminar.
+El administrador tampoco puede explorar el banco completo en el MVP del Incremento 3.
 
 ## Administrador
 

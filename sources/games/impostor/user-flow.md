@@ -192,6 +192,12 @@ Integrantes
 Ramiro · Admin
 Pedro
 Camila
+
+Banco de palabras
+12 disponibles
+Tus aportes: 3
+
+[ Agregar palabras ]
 ```
 
 El administrador ve:
@@ -220,6 +226,12 @@ Permite entrar a una sala creada por otro integrante.
 
 Permite alimentar el banco del grupo en cualquier momento.
 
+Ruta prevista:
+
+```text
+/impostor/grupo/palabras
+```
+
 ---
 
 # Agregar palabra
@@ -232,6 +244,8 @@ Flujo:
 Inicio
   ↓
 Agregar palabras
+  ↓
+/impostor/grupo/palabras
   ↓
 Campo de texto
   ↓
@@ -257,6 +271,8 @@ Después:
 > 64 palabras disponibles
 
 El jugador puede continuar agregando más palabras o volver al inicio.
+
+La pantalla futura permite agregar una palabra o frase por vez, ver la cantidad total disponible, consultar aportes propios y borrar aportes propios.
 
 ---
 
@@ -638,9 +654,14 @@ Puede acceder a:
 
 ## Palabras
 
-* ver banco completo;
-* buscar;
-* eliminar palabras.
+En el Incremento 3 no existe una sección administrativa para explorar el banco completo.
+
+La pantalla futura de palabras permite a cualquier integrante:
+
+* agregar una palabra o frase por vez;
+* ver la cantidad total disponible;
+* ver sus propios aportes;
+* borrar sus propios aportes.
 
 Las comprobaciones automáticas de duplicados y formato no requieren intervención manual.
 

@@ -25,7 +25,7 @@ El modelo puede pensarse así:
 ```text
 Grupo
 ├── Jugadores
-├── Palabras
+├── GroupWords
 └── Salas
      └── Tanda
           ├── Participantes
@@ -59,7 +59,7 @@ Invitation
 Otros conceptos son propios de Impostor:
 
 ```text
-Word
+GroupWord
 Room
 RoomParticipant
 GameSession
@@ -255,13 +255,13 @@ El cliente no debe acceder directamente a la tabla de invitaciones. Resolver o u
 
 ---
 
-# 5. Palabra
+# 5. GroupWord
 
 ## Qué representa
 
-Una palabra o concepto disponible para utilizar en una ronda.
+Una palabra o frase corta disponible para utilizar en una ronda futura.
 
-En este documento, `Word` representa el banco de palabras específico de Impostor.
+En este documento, `GroupWord` representa una entrada persistente del banco de palabras específico de Impostor.
 
 Ejemplos:
 
@@ -270,28 +270,78 @@ Milanesa
 Messi
 Chocotorta
 Bariloche
+Harry Potter
+Buenos Aires
 ```
 
 ## Información mínima
 
 ```text
-Word
+GroupWord
 - id
 - groupId
 - text
+- normalizedText
 - authorPlayerId
-- source
 - createdAt
 ```
 
-## Source
-
-Permite distinguir inicialmente entre:
+## Relaciones
 
 ```text
-preloaded
-player
+Group
+1 ───── N GroupWord
+
+Player
+1 ───── N GroupWord
+        como autor
 ```
+
+## Texto y normalización
+
+`text` conserva el valor canónico de display.
+
+Ejemplo:
+
+```text
+"  Harry   Potter  "
+→
+"Harry Potter"
+```
+
+`normalizedText` existe para detectar duplicados triviales dentro del grupo.
+
+La normalización:
+
+* elimina espacios externos;
+* colapsa whitespace interno;
+* compara sin distinguir mayúsculas/minúsculas;
+* conserva tildes;
+* conserva `ñ`;
+* conserva puntuación;
+* rechaza emojis;
+* no aplica normalización lingüística agresiva.
+
+Ejemplos:
+
+```text
+Elefante / elefante / ELEFANTE
+→ duplicado
+
+Camion / Camión
+→ distintos
+
+Papa / Papá
+→ distintos
+
+Spider-Man / spider-man
+→ duplicado
+
+Spider-Man / Spider Man
+→ distintos
+```
+
+La longitud conceptual para el Incremento 3 es de 2 a 40 caracteres.
 
 ## Persistencia
 
@@ -310,11 +360,23 @@ Puede conocer:
 
 ### Administrador
 
-Puede consultar todas las palabras.
+En el MVP del Incremento 3, no puede consultar todas las palabras por ser administrador.
+
+Puede agregar palabras, conocer la cantidad total, consultar sus propios aportes y borrar sus propios aportes como cualquier integrante.
+
+La moderación completa queda diferida.
 
 ### Durante una ronda
 
 La palabra seleccionada solamente debe llegar a los jugadores que no son impostores.
+
+## Diferencia con palabra de ronda
+
+`GroupWord` es una entrada persistente disponible en el banco del grupo.
+
+La palabra seleccionada para una ronda futura pertenece al estado de partida o ronda correspondiente.
+
+No se introduce todavía una entidad adicional para palabras usadas.
 
 ## Disponibilidad durante una tanda
 
@@ -725,7 +787,7 @@ Estas capacidades se derivan del estado compartido correspondiente.
 
 Ejemplos:
 
-* el administrador del grupo puede consultar y administrar el banco completo;
+* cualquier integrante puede agregar palabras, consultar cantidad total, consultar sus propios aportes y borrar sus propios aportes;
 * el host de la sala puede avanzar etapas de la tanda;
 * el participante de la sala puede recibir su información privada y votar;
 * el autor de una palabra puede consultar sus propias palabras.
@@ -792,7 +854,12 @@ Group
   1 ──────── N Player
 
 Group
-  1 ──────── N Word
+  1 ──────── N GroupWord
+
+Player
+  1 ──────── N GroupWord
+              ↑
+           autor
 
 Group
   1 ──────── N Room
@@ -810,7 +877,7 @@ GameSession
   1 ──────── N Round
 
 Round
-  N ──────── 1 Word
+  N ──────── 1 GroupWord
 
 Round
   N ──────── 1 Player
@@ -836,7 +903,7 @@ GameSessionHistory
 ```text
 Group
 Player
-Word
+GroupWord
 GameSessionHistory
 RoundHistory
 ```
@@ -898,9 +965,9 @@ voto individual
 banco de palabras
 ```
 
-Los jugadores normales no consultan el banco completo.
+Los integrantes no consultan el banco completo.
 
-El administrador sí.
+El administrador tampoco consulta el banco completo en el MVP del Incremento 3.
 
 ---
 

@@ -27,7 +27,7 @@ El case study futuro debe mostrar tanto el resultado como el razonamiento que ll
 
 ```text
 Estado:
-Incremento 2 cerrado / Incremento 3 pendiente
+Incremento 3 cerrado localmente / pendiente de alineación y smoke de producción
 ```
 
 ## Ya existe
@@ -58,14 +58,17 @@ Incremento 2 cerrado / Incremento 3 pendiente
 * RLS y RPCs autoritativas para identidad, grupo e invitación;
 * tests unitarios, validaciones de base de datos y smoke browser/mobile para Incremento 2;
 * migrations remotas aplicadas y alineadas con el historial local;
-* smoke de producción aprobado en Vercel con dos identidades reales aisladas.
+* smoke de producción aprobado en Vercel con dos identidades reales aisladas para Incremento 2;
+* banco persistente de palabras de Impostor validado localmente con alta, cantidad total, listado propio y borrado propio;
+* privacidad del banco validada localmente: los integrantes conocen la cantidad total y sólo ven sus propios aportes;
+* UI local del banco en `/impostor/grupo` y `/impostor/grupo/palabras`.
 
 ## PENDIENTE
 
 * producto jugable;
 * playtesting real;
 * métricas;
-* banco de palabras;
+* alineación remota y smoke de producción del banco de palabras;
 * sala/lobby;
 * realtime/presence;
 * tests de dominio de juego;
@@ -631,6 +634,12 @@ La arquitectura está definida conceptualmente y la primera capa de plataforma y
 
 La capa específica de juego todavía no comenzó: banco de palabras, salas, tandas, rondas, votos, marcador e historial permanecen en incrementos futuros.
 
+Decisión preparada para el Incremento 3: el banco persistente se modelará como `GroupWord`, una entrada propia del grupo y distinta de la futura palabra seleccionada para una ronda. Esto permite alimentar el contenido entre partidas sin adelantar `Room`, `GameSession`, selección aleatoria ni registro de palabras usadas.
+
+También se decidió que, para preservar la sorpresa, nadie podrá explorar libremente el banco completo en el MVP del banco, incluido el administrador. Cada integrante podrá conocer la cantidad total, ver sus propios aportes y borrar sus propios aportes. La moderación completa queda diferida porque el grupo cerrado por invitación, los duplicados automáticos y el borrado propio son suficientes para esta etapa familiar.
+
+Las palabras precargadas también quedan fuera del Incremento 3. La opción futura preferida es un catálogo global separado, no copiar defaults automáticamente a cada grupo.
+
 ```text
 Juegos Familiares PWA
         │
@@ -717,7 +726,7 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 0 | Fundación del proyecto | COMPLETADO | Next.js, TypeScript, lint, Vitest, build y pantalla mobile-first mínima |
 | 1 | Portada de plataforma y entrada a Impostor | COMPLETADO | Portada mobile-first, entrada a Impostor, manifest/metadatos e iconos base |
 | 2 | Identidad liviana, grupo y jugador | COMPLETADO | Auth anónima bajo intención, RPCs, RLS, invitaciones, bootstrap, LocalIdentity, vista de grupo, migrations remotas alineadas y smoke Vercel A/B aprobado |
-| 3 | Banco de palabras del grupo | PENDIENTE | PENDIENTE |
+| 3 | Banco de palabras del grupo | COMPLETADO LOCAL | GroupWord persistente, validación/normalización, unicidad por grupo, privacidad count vs contenido, borrado propio, UI mobile-first y smoke browser local |
 | 4 | Crear y unirse a una sala | PENDIENTE | PENDIENTE |
 | 5 | Presencia básica y sucesión de host | PENDIENTE | PENDIENTE |
 | 6 | Iniciar tanda y preparar ronda privada | PENDIENTE | PENDIENTE |
@@ -792,6 +801,58 @@ Una fundación técnica no es un logro de producto final, pero sí fija hábitos
 * screenshot: PENDIENTE.
 * video: PENDIENTE.
 * test: Vitest mínimo ejecutado.
+* diagrama: PENDIENTE.
+
+---
+
+## Incremento 3 — Banco de palabras del grupo
+
+Estado: `COMPLETADO LOCAL`
+
+### Problema
+
+Impostor necesita un banco persistente de palabras que pueda crecer entre encuentros sin convertir la preparación del juego en una pantalla administrativa ni revelar el contenido completo antes de jugar.
+
+### Qué implementamos
+
+Se creó `GroupWord` como dato persistente del grupo, con texto normalizado para duplicados, autoría derivada desde la AuthIdentity y permisos acotados mediante RPCs. La experiencia visible permite ver el resumen del banco en `/impostor/grupo`, entrar a `/impostor/grupo/palabras`, agregar palabras o frases, consultar la cantidad total, ver los aportes propios y borrar aportes propios.
+
+### Decisión relevante
+
+La privacidad del banco quedó diseñada como visibilidad parcial: todos los integrantes conocen el total disponible, pero cada integrante sólo consulta sus aportes. El administrador no tiene excepción para explorar o borrar aportes ajenos en este MVP.
+
+### Problema encontrado
+
+Durante el cierre se detectó que la UI dependía únicamente de estado React para evitar doble submit y doble delete, y que el count podía actualizarse localmente después de mutaciones.
+
+### Cómo lo resolvimos
+
+Se agregaron guards sincrónicos con refs para evitar doble alta y doble borrado del mismo aporte. Después de alta y borrado confirmados, la UI intenta refrescar el banco desde los wrappers autoritativos y conserva un fallback local sólo si esa recarga falla.
+
+### Cómo lo validamos
+
+El cierre local se validó con reset completo de Supabase, suite DB, tests unitarios, lint, build, revisión de diff y smoke browser local con Chromium headless por CDP en viewports móviles. El smoke cubrió visita directa sin Auth, dos identidades aisladas en el mismo grupo, privacidad de aportes, duplicado cruzado, borrado propio y otro grupo.
+
+```text
+npm run supabase:reset  PASS
+npm run test:db         PASS
+npm test                PASS
+npm run lint            PASS
+npm run build           PASS
+git diff --check        PASS
+smoke browser local     PASS
+```
+
+### Qué aprendí
+
+El banco muestra una tensión útil del producto: alcanza con un total compartido para comunicar progreso del grupo, mientras el contenido se mantiene privado para preservar sorpresa. En UI, las acciones repetitivas necesitan feedback rápido, pero las decisiones de seguridad y pertenencia siguen perteneciendo al backend.
+
+### Evidencias
+
+* PR: PENDIENTE.
+* screenshot: PENDIENTE.
+* video: PENDIENTE.
+* test: Vitest, validadores DB y smoke CDP local ejecutados.
 * diagrama: PENDIENTE.
 
 ---
