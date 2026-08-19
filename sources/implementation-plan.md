@@ -846,6 +846,14 @@ Subincrementos previstos:
 * 3.4 — UI vertical;
 * 3.5 — endurecimiento y cierre.
 
+Estado al cierre local del Incremento 3:
+
+```text
+COMPLETADO LOCAL
+```
+
+El cierre local consolida persistencia, alta, cantidad total, listado propio, borrado propio, UI vertical, privacidad parcial, tests DB/unitarios y smoke browser local con identidades aisladas. Queda fuera de este cierre la alineación remota y el smoke de producción.
+
 ### Tests / validación
 
 * unit tests de normalización;
@@ -1908,7 +1916,9 @@ Quedó explícitamente fuera de este cierre: banco de palabras, sala, realtime, 
 
 ## Incremento 3
 
-Se agregan `GroupWord`, autoría, cantidad total, listado propio, borrado propio y visibilidad parcial sin exploración completa del banco.
+Estado: completado localmente.
+
+Se agregaron `GroupWord`, autoría, cantidad total, listado propio, borrado propio y visibilidad parcial sin exploración completa del banco. Quedó pendiente para un paso posterior la alineación remota y el smoke de producción.
 
 ## Incremento 4
 

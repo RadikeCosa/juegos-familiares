@@ -171,7 +171,7 @@ describe("renderWordBankContent", () => {
         },
         {
           status: "deleting",
-          wordId: "word-1",
+          wordIds: ["word-1"],
           message: "Eliminando Chocotorta..."
         },
         { inputValue: "" }
@@ -180,6 +180,17 @@ describe("renderWordBankContent", () => {
 
     expect(markup).toContain("Eliminando...");
     expect(markup).toContain("Eliminar Torre Eiffel");
+  });
+
+  it("documents synchronous single-flight guards for repeated add and delete taps", () => {
+    const source = readFileSync(
+      join(process.cwd(), "app/impostor/grupo/palabras/word-bank-shell.tsx"),
+      "utf8"
+    );
+
+    expect(source).toContain("isAddingRef.current");
+    expect(source).toContain("deletingWordIdsRef.current.has(word.id)");
+    expect(source).toContain("deletingWordIdsRef.current.add(word.id)");
   });
 });
 

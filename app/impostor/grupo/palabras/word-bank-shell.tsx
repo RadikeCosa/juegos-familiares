@@ -33,7 +33,7 @@ type WordBankDataState =
 type WordMutationState =
   | { status: "idle"; message: string }
   | { status: "adding"; message: string }
-  | { status: "deleting"; wordId: string; message: string };
+  | { status: "deleting"; wordIds: string[]; message: string };
 
 const GENERIC_LOAD_ERROR = "No pudimos cargar el banco de palabras. Intentá de nuevo.";
 const EMPTY_WORD_ERROR = "Escribí una palabra o frase.";
@@ -303,7 +303,7 @@ export function renderWordBankContent(
                 {dataState.ownWords.map((word) => {
                   const isDeleting =
                     mutationState.status === "deleting" &&
-                    mutationState.wordId === word.id;
+                    mutationState.wordIds.includes(word.id);
 
                   return (
                     <li key={word.id}>
@@ -346,6 +346,8 @@ export function ImpostorWordBankShell() {
   });
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const isAddingRef = useRef(false);
+  const deletingWordIdsRef = useRef(new Set<string>());
 
   async function runBootstrap(showLoading: boolean) {
     if (showLoading) {
@@ -357,17 +359,21 @@ export function ImpostorWordBankShell() {
     setBootstrapState(await bootstrapPlatformContext(createPlatformBootstrapClient()));
   }
 
+  async function fetchWordBankData(): Promise<WordBankDataState> {
+    const client = createImpostorGroupWordsClient();
+    const [totalCount, ownWords] = await Promise.all([
+      getMyGroupWordCount(client),
+      listMyGroupWords(client)
+    ]);
+
+    return { status: "success", totalCount, ownWords };
+  }
+
   async function loadWordBank() {
     setDataState({ status: "loading" });
 
     try {
-      const client = createImpostorGroupWordsClient();
-      const [totalCount, ownWords] = await Promise.all([
-        getMyGroupWordCount(client),
-        listMyGroupWords(client)
-      ]);
-
-      setDataState({ status: "success", totalCount, ownWords });
+      setDataState(await fetchWordBankData());
     } catch (error) {
       setDataState({
         status: "error",
@@ -379,7 +385,7 @@ export function ImpostorWordBankShell() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (mutationState.status === "adding" || dataState.status !== "success") {
+    if (isAddingRef.current || dataState.status !== "success") {
       return;
     }
 
@@ -392,6 +398,7 @@ export function ImpostorWordBankShell() {
       return;
     }
 
+    isAddingRef.current = true;
     setMutationState({ status: "adding", message: "Agregando palabra..." });
 
     try {
@@ -405,6 +412,13 @@ export function ImpostorWordBankShell() {
         text: addedWord.text,
         createdAt: addedWord.createdAt
       }));
+
+      try {
+        setDataState(await fetchWordBankData());
+      } catch {
+        // The mutation already succeeded; keep the confirmed local row visible.
+      }
+
       setInputValue("");
       setMutationState({ status: "idle", message: ADD_SUCCESS_MESSAGE });
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -417,17 +431,20 @@ export function ImpostorWordBankShell() {
         )
       });
       inputRef.current?.focus();
+    } finally {
+      isAddingRef.current = false;
     }
   }
 
   async function handleDelete(word: MyGroupWord) {
-    if (mutationState.status === "deleting") {
+    if (deletingWordIdsRef.current.has(word.id)) {
       return;
     }
 
+    deletingWordIdsRef.current.add(word.id);
     setMutationState({
       status: "deleting",
-      wordId: word.id,
+      wordIds: Array.from(deletingWordIdsRef.current),
       message: `Eliminando ${word.text}...`
     });
 
@@ -439,12 +456,24 @@ export function ImpostorWordBankShell() {
 
       if (wasDeleted) {
         setDataState((currentState) => applyDeletedWord(currentState, word.id));
+
+        try {
+          setDataState(await fetchWordBankData());
+        } catch {
+          // The mutation already succeeded; keep the confirmed local removal visible.
+        }
+
         setMutationState({ status: "idle", message: DELETE_SUCCESS_MESSAGE });
 
         return;
       }
 
-      await loadWordBank();
+      try {
+        setDataState(await fetchWordBankData());
+      } catch {
+        // Keep current data if the recovery refresh fails.
+      }
+
       setMutationState({ status: "idle", message: DELETE_FALSE_MESSAGE });
     } catch (error) {
       setMutationState({
@@ -454,6 +483,16 @@ export function ImpostorWordBankShell() {
           "No pudimos borrar la palabra. Intentá de nuevo."
         )
       });
+    } finally {
+      deletingWordIdsRef.current.delete(word.id);
+
+      if (deletingWordIdsRef.current.size > 0) {
+        setMutationState({
+          status: "deleting",
+          wordIds: Array.from(deletingWordIdsRef.current),
+          message: "Actualizando palabras..."
+        });
+      }
     }
   }
 
