@@ -3,7 +3,7 @@ type SupabaseRpcResult<TData> = {
   error: unknown;
 };
 
-type ImpostorGroupWordsClient = {
+export type ImpostorGroupWordsClient = {
   rpc: {
     (
       fn: "add_group_word",

@@ -5,6 +5,12 @@ import { useEffect, useState } from "react";
 import { AdminInvitationSection } from "../admin-invitation-panel";
 import { createBrowserSupabaseClient } from "../../../lib/supabase/browser-client";
 import {
+  getMyGroupWordCount,
+  listMyGroupWords,
+  type ImpostorGroupWordsClient,
+  type MyGroupWord
+} from "../../../lib/supabase/impostor-group-words";
+import {
   bootstrapPlatformContext,
   type PlatformBootstrapClient,
   type PlatformBootstrapState,
@@ -22,12 +28,26 @@ type GroupPlayersState =
   | { status: "success"; players: GroupPlayer[] }
   | { status: "error"; message: string };
 
+type GroupWordsSummaryState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; totalCount: number; ownWords: MyGroupWord[] }
+  | { status: "error"; message: string };
+
 function createPlatformBootstrapClient(): PlatformBootstrapClient {
   return createBrowserSupabaseClient() as unknown as PlatformBootstrapClient;
 }
 
 function createPlatformPlayersClient(): PlatformPlayersClient {
   return createBrowserSupabaseClient() as unknown as PlatformPlayersClient;
+}
+
+function createImpostorGroupWordsClient(): ImpostorGroupWordsClient {
+  return createBrowserSupabaseClient() as unknown as ImpostorGroupWordsClient;
+}
+
+export function formatAvailableWords(count: number) {
+  return count === 1 ? "1 disponible" : `${count} disponibles`;
 }
 
 function sortPlayersForGroup(players: GroupPlayer[], adminPlayerId: string) {
@@ -70,8 +90,10 @@ export function renderImpostorGroupContext(
   bootstrapState: PlatformBootstrapState,
   playersState: GroupPlayersState,
   options: {
+    groupWordsState?: GroupWordsSummaryState;
     onRetryBootstrap?: () => void;
     onRetryPlayers?: () => void;
+    onRetryGroupWords?: () => void;
   } = {}
 ) {
   if (bootstrapState.status === "loading") {
@@ -137,6 +159,7 @@ export function renderImpostorGroupContext(
 
   const { group, player } = bootstrapState;
   const isAdmin = group.adminPlayerId === player.id;
+  const groupWordsState = options.groupWordsState ?? { status: "idle" };
 
   return (
     <section
@@ -176,6 +199,53 @@ export function renderImpostorGroupContext(
         ) : null}
       </div>
 
+      <div
+        className="impostor-group-section impostor-word-bank-summary"
+        aria-labelledby="impostor-word-bank-summary-title"
+      >
+        <h2 id="impostor-word-bank-summary-title">Banco de palabras</h2>
+
+        {groupWordsState.status === "loading" ||
+        groupWordsState.status === "idle" ? (
+          <p aria-live="polite">Cargando banco...</p>
+        ) : null}
+
+        {groupWordsState.status === "success" ? (
+          <dl className="impostor-word-bank-stats">
+            <div>
+              <dt>Total</dt>
+              <dd>{formatAvailableWords(groupWordsState.totalCount)}</dd>
+            </div>
+            <div>
+              <dt>Tus aportes</dt>
+              <dd>{groupWordsState.ownWords.length}</dd>
+            </div>
+          </dl>
+        ) : null}
+
+        {groupWordsState.status === "error" ? (
+          <div className="impostor-group-error" aria-live="polite">
+            <p>{groupWordsState.message}</p>
+            {options.onRetryGroupWords ? (
+              <button
+                className="impostor-action"
+                type="button"
+                onClick={options.onRetryGroupWords}
+              >
+                Reintentar
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
+        <Link
+          className="impostor-action impostor-action--primary"
+          href="/impostor/grupo/palabras"
+        >
+          Agregar palabras
+        </Link>
+      </div>
+
       {isAdmin ? <AdminInvitationSection /> : null}
     </section>
   );
@@ -188,11 +258,15 @@ export function ImpostorGroupContextShell() {
   const [playersState, setPlayersState] = useState<GroupPlayersState>({
     status: "idle"
   });
+  const [groupWordsState, setGroupWordsState] = useState<GroupWordsSummaryState>({
+    status: "idle"
+  });
 
   async function runBootstrap(showLoading: boolean) {
     if (showLoading) {
       setBootstrapState({ status: "loading" });
       setPlayersState({ status: "idle" });
+      setGroupWordsState({ status: "idle" });
     }
 
     setBootstrapState(await bootstrapPlatformContext(createPlatformBootstrapClient()));
@@ -215,6 +289,27 @@ export function ImpostorGroupContextShell() {
           : "No pudimos cargar los integrantes. Intentá de nuevo.";
 
       setPlayersState({ status: "error", message });
+    }
+  }
+
+  async function loadGroupWordsSummary() {
+    setGroupWordsState({ status: "loading" });
+
+    try {
+      const client = createImpostorGroupWordsClient();
+      const [totalCount, ownWords] = await Promise.all([
+        getMyGroupWordCount(client),
+        listMyGroupWords(client)
+      ]);
+
+      setGroupWordsState({ status: "success", totalCount, ownWords });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No pudimos cargar el banco de palabras. Intentá de nuevo.";
+
+      setGroupWordsState({ status: "error", message });
     }
   }
 
@@ -270,11 +365,57 @@ export function ImpostorGroupContextShell() {
     };
   }, [bootstrapState]);
 
+  useEffect(() => {
+    if (bootstrapState.status !== "recognized") {
+      return;
+    }
+
+    let isActive = true;
+
+    void Promise.resolve()
+      .then(() => {
+        if (isActive) {
+          setGroupWordsState({ status: "loading" });
+        }
+
+        const client = createImpostorGroupWordsClient();
+
+        return Promise.all([
+          getMyGroupWordCount(client),
+          listMyGroupWords(client)
+        ]);
+      })
+      .then(([totalCount, ownWords]) => {
+        if (isActive) {
+          setGroupWordsState({ status: "success", totalCount, ownWords });
+        }
+      })
+      .catch((error) => {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "No pudimos cargar el banco de palabras. Intentá de nuevo.";
+
+        if (isActive) {
+          setGroupWordsState({ status: "error", message });
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [bootstrapState]);
+
   return renderImpostorGroupContext(bootstrapState, playersState, {
+    groupWordsState,
     onRetryBootstrap: () => void runBootstrap(true),
     onRetryPlayers:
       bootstrapState.status === "recognized"
         ? () => void loadPlayers(bootstrapState)
+        : undefined,
+    onRetryGroupWords:
+      bootstrapState.status === "recognized"
+        ? () => void loadGroupWordsSummary()
         : undefined
   });
 }

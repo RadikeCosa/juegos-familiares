@@ -136,3 +136,27 @@ describe("ImpostorGroupPage", () => {
     expect(ensureAnonymousAuthIdentity).not.toHaveBeenCalled();
   });
 });
+
+describe("ImpostorGroupWordsPage", () => {
+  it("presents the word bank route with navigation back to the group", async () => {
+    const { default: ImpostorGroupWordsPage } = await import(
+      "./grupo/palabras/page"
+    );
+    const page = inspect(ImpostorGroupWordsPage());
+
+    expect(page.text).toContain("Saltar al contenido");
+    expect(page.text).toContain("Tu grupo");
+    expect(page.hrefs).toContain("/impostor/grupo");
+  });
+
+  it("does not create AuthIdentity when /impostor/grupo/palabras renders", async () => {
+    const { default: ImpostorGroupWordsPage } = await import(
+      "./grupo/palabras/page"
+    );
+
+    inspect(ImpostorGroupWordsPage());
+
+    expect(createBrowserSupabaseClient).not.toHaveBeenCalled();
+    expect(ensureAnonymousAuthIdentity).not.toHaveBeenCalled();
+  });
+});
