@@ -31,14 +31,14 @@ const recognizedState: PlatformBootstrapState = {
 
 const singlePlayerLobby: RoomLobby = {
     room: { code: "AB7KQ2M4", status: "lobby" },
-    participants: [{ nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
+    participants: [{ nickname: "Ramiro", isHost: true, isSelf: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
 };
 
 const twoPlayerLobby: RoomLobby = {
     room: { code: "AB7KQ2M4", status: "lobby" },
     participants: [
         { nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" },
-        { nickname: "Pedro", isHost: false, joinedAt: "2026-08-19T12:05:00.000Z" }
+        { nickname: "Pedro", isHost: false, isSelf: true, joinedAt: "2026-08-19T12:05:00.000Z" }
     ]
 };
 
@@ -103,7 +103,10 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("Sala AB7KQ2M4");
         expect(markup).toContain("Ramiro");
         expect(markup).toContain("Host");
+        expect(markup).toContain("Vos");
         expect(markup).toContain("1 jugador");
+        expect(markup).toContain("Cerrar sala");
+        expect(markup).toContain("termina este lobby para todos");
         expect(markup).not.toContain("player-1");
         expect(markup).not.toContain("group-1");
         expect(markup).not.toContain("auth_user_id");
@@ -121,8 +124,43 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("Ramiro");
         expect(markup).toContain("Host");
         expect(markup).toContain("Pedro");
+        expect(markup).toContain("Vos");
         expect(markup).toContain("2 jugadores");
+        expect(markup).toContain("Salir de la sala");
+        expect(markup).not.toContain("Cerrar sala");
         expect(markup).not.toMatch(/player-\d|group-\d/);
+    });
+
+    it("disables the explicit host close action while it is in flight", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "success", lobby: singlePlayerLobby },
+                {
+                    roomCode: "AB7KQ2M4",
+                    lifecycleActionState: { status: "closing" }
+                }
+            )
+        );
+
+        expect(markup).toContain("Cerrando sala...");
+        expect(markup).toContain("disabled=\"\"");
+    });
+
+    it("disables the non-host leave action while it is in flight", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "success", lobby: twoPlayerLobby },
+                {
+                    roomCode: "AB7KQ2M4",
+                    lifecycleActionState: { status: "leaving" }
+                }
+            )
+        );
+
+        expect(markup).toContain("Saliendo...");
+        expect(markup).toContain("disabled=\"\"");
     });
 
     it("shows product-level feedback on data errors", () => {
@@ -213,5 +251,15 @@ describe("renderRoomLobbyContent", () => {
         expect(source).toContain("activeRoomId,");
         expect(source).toContain("[bootstrapState.status, activeRoomId, roomCode, router]");
         expect(source).not.toContain("[bootstrapState.status, dataState, roomCode, router]");
+    });
+
+    it("leaves the lobby route when an authoritative Realtime refetch returns no active Room", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("if (snapshot.status === \"absent\")");
+        expect(source).toContain("router.replace(\"/impostor/grupo\")");
     });
 });

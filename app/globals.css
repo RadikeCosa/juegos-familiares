@@ -431,6 +431,11 @@ body {
   color: var(--primary-foreground);
 }
 
+.impostor-action--danger {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 .impostor-action:hover:not(:disabled) {
   border-color: var(--accent);
   color: var(--accent);
@@ -731,6 +736,14 @@ body {
   line-height: 1.2;
 }
 
+.impostor-room-badges {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
 .impostor-group-error {
   display: grid;
   gap: var(--space-3);
@@ -805,6 +818,17 @@ body {
   color: var(--success);
   font-size: 1.125rem;
   font-weight: 700;
+}
+
+.impostor-room-danger-zone {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 28rem;
+  padding-top: var(--space-2);
+}
+
+.impostor-room-danger-zone .impostor-action {
+  width: fit-content;
 }
 
 .impostor-own-words {

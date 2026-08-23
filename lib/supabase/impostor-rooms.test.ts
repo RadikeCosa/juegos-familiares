@@ -1,15 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     createCreateRoomController,
+    createCloseRoomController,
     createJoinRoomByCodeController,
+    createLeaveRoomController,
     createLobbySyncController,
     clearRoomCreationIntent,
     clearRoomJoinIntent,
+    closeRoom,
     createRoom,
     getMyActiveRoom,
     hasRoomCreationIntent,
     hasRoomJoinIntent,
     joinRoomByCode,
+    leaveRoom,
     normalizeRoomJoinCode,
     recordRoomCreationIntent,
     recordRoomJoinIntent,
@@ -515,7 +519,7 @@ function createDeferred<T>() {
 }
 
 describe("subscribeToRoomChanges", () => {
-    it("subscribes only to the current Room membership inserts and Room updates", () => {
+    it("subscribes only to the current Room membership inserts/deletes and Room updates", () => {
         const callbacks: Array<(payload: unknown) => void> = [];
         const channel = {
             on: vi.fn((_type, _filter, callback) => {
@@ -552,6 +556,16 @@ describe("subscribeToRoomChanges", () => {
         expect(channel.on).toHaveBeenCalledWith(
             "postgres_changes",
             {
+                event: "DELETE",
+                schema: "public",
+                table: "room_participants",
+                filter: "room_id=eq.11111111-1111-4111-8111-111111111111"
+            },
+            expect.any(Function)
+        );
+        expect(channel.on).toHaveBeenCalledWith(
+            "postgres_changes",
+            {
                 event: "UPDATE",
                 schema: "public",
                 table: "rooms",
@@ -561,8 +575,9 @@ describe("subscribeToRoomChanges", () => {
         );
 
         callbacks[0]({ new: { participant_nickname: "Pedro" } });
+        callbacks[1]({ old: { room_id: "11111111-1111-4111-8111-111111111111" } });
 
-        expect(onInvalidate).toHaveBeenCalledTimes(1);
+        expect(onInvalidate).toHaveBeenCalledTimes(2);
     });
 
     it("invalidates on reconnect and removes the channel on cleanup", async () => {
@@ -593,6 +608,112 @@ describe("subscribeToRoomChanges", () => {
 
         expect(onInvalidate).toHaveBeenCalledTimes(1);
         expect(supabase.removeChannel).toHaveBeenCalledWith(channel);
+    });
+});
+
+describe("leaveRoom", () => {
+    it("calls the authoritative RPC without room, player or group arguments", async () => {
+        const supabase = {
+            rpc: vi.fn(async (_fn: string) => {
+                void _fn;
+
+                return { data: null, error: null };
+            })
+        };
+
+        await expect(leaveRoom(supabase)).resolves.toBeUndefined();
+
+        expect(supabase.rpc).toHaveBeenCalledWith("leave_room");
+        expect(supabase.rpc.mock.calls[0]).toHaveLength(1);
+    });
+
+    it("maps leave failures to product-level feedback", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0002" } }))
+        };
+
+        await expect(leaveRoom(supabase)).rejects.toThrow(
+            "No pudimos reconocer tu jugador para salir de la sala."
+        );
+    });
+});
+
+describe("closeRoom", () => {
+    it("calls the authoritative RPC without room, player or group arguments", async () => {
+        const supabase = {
+            rpc: vi.fn(async (_fn: string) => {
+                void _fn;
+
+                return { data: null, error: null };
+            })
+        };
+
+        await expect(closeRoom(supabase)).resolves.toBeUndefined();
+
+        expect(supabase.rpc).toHaveBeenCalledWith("close_room");
+        expect(supabase.rpc.mock.calls[0]).toHaveLength(1);
+    });
+
+    it("maps non-host close to product-level feedback", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0016" } }))
+        };
+
+        await expect(closeRoom(supabase)).rejects.toThrow(
+            "Solo el host puede cerrar la sala."
+        );
+    });
+
+    it("maps missing active Room close to product-level feedback", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0015" } }))
+        };
+
+        await expect(closeRoom(supabase)).rejects.toThrow(
+            "Ya no tenés una sala activa para cerrar."
+        );
+    });
+});
+
+describe("room lifecycle controllers", () => {
+    it("collapses concurrent leave submissions into a single in-flight RPC call", async () => {
+        let resolveRpc: (value: { data: unknown; error: unknown }) => void = () => { };
+        const rpcPromise = new Promise<{ data: unknown; error: unknown }>((resolve) => {
+            resolveRpc = resolve;
+        });
+        const supabase = {
+            rpc: vi.fn(() => rpcPromise)
+        };
+
+        const controller = createLeaveRoomController();
+        const firstSubmit = controller.submit(supabase);
+        const secondSubmit = controller.submit(supabase);
+
+        resolveRpc({ data: null, error: null });
+
+        await Promise.all([firstSubmit, secondSubmit]);
+
+        expect(supabase.rpc).toHaveBeenCalledTimes(1);
+    });
+
+    it("collapses concurrent close submissions into a single in-flight RPC call", async () => {
+        let resolveRpc: (value: { data: unknown; error: unknown }) => void = () => { };
+        const rpcPromise = new Promise<{ data: unknown; error: unknown }>((resolve) => {
+            resolveRpc = resolve;
+        });
+        const supabase = {
+            rpc: vi.fn(() => rpcPromise)
+        };
+
+        const controller = createCloseRoomController();
+        const firstSubmit = controller.submit(supabase);
+        const secondSubmit = controller.submit(supabase);
+
+        resolveRpc({ data: null, error: null });
+
+        await Promise.all([firstSubmit, secondSubmit]);
+
+        expect(supabase.rpc).toHaveBeenCalledTimes(1);
     });
 });
 

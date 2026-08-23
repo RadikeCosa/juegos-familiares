@@ -121,11 +121,11 @@ Postgres Changes
 
 El payload de Realtime no es fuente de verdad. Ante reconexión o eventos perdidos se ejecuta un refetch completo.
 
-Para el lobby de Incremento 4.4:
+Para el lobby de Incremento 4:
 
 * `room_participants INSERT` invalida y relee el lobby autoritativo;
 * `rooms UPDATE` invalida y relee para cubrir el lifecycle persistido `lobby|closed`;
-* `room_participants DELETE` se difiere hasta implementar salida/cierre funcional.
+* `room_participants DELETE` invalida y relee cuando un participante no-host sale.
 
 La autorización de Postgres Changes debe depender de RLS: un participante puede leer únicamente la
 Room y membresías de su Room activa; otro Group, o un Player del mismo Group que no participa en esa
