@@ -234,7 +234,7 @@ Un participante no-host puede abandonar el lobby. El host puede cerrar el lobby.
 
 El cierre explícito de una Room solo corresponde al host. Al cerrar, la Room pasa a `closed`, deja de ser activa y libera a sus participantes para crear o unirse a otra Room. Las filas de `RoomParticipant` pueden preservarse como rastro técnico de quién participó, pero eso no constituye una pantalla ni feature de historial.
 
-No existe expiración automática ni sucesión automática del host en este incremento. Liveness autoritativo pertenece a 5.2; la sucesión, el host desconectado como disparador de reasignación y el host original que vuelve después de ser reemplazado pertenecen a 5.3+.
+No existe expiración automática ni sucesión automática del host en Incremento 4. Liveness autoritativo quedó cerrado en 5.2; la sucesión autoritativa por host stale quedó cerrada en 5.3.
 
 ## Persistencia
 
@@ -265,7 +265,7 @@ Presence básica ya quedó validada como canal privado acotado por Room, autoriz
 
 ## Sucesión
 
-Pendiente para 5.3+: si el host deja de estar disponible, la sucesión requiere validación autoritativa de staleness. Incremento 5.2 quedó cerrado sin reasignar host: solamente introduce liveness autoritativo mínimo.
+Incremento 5.3 cerró la sucesión autoritativa de host. Si el host deja de estar disponible, la sucesión requiere validación autoritativa de staleness; Presence puede disparar la intención, pero no decide.
 
 La decisión inicial de 5.2 fue usar `room_participants.last_seen_at` como evidencia verificable de actividad reciente del Player dentro de esa Room. No representa Presence, conexión, abandono, host, ready ni estado de juego.
 
@@ -282,17 +282,36 @@ stale  = last_seen_at es null o now() - last_seen_at > 90s
 
 Los 90 segundos reemplazan la hipótesis previa de 60 segundos por el margen necesario frente a heartbeat de 30 segundos, throttling técnico, red y suspensión de timers móviles. Sigue siendo un parámetro técnico a validar, no una regla definitiva del juego ni una configuración para usuarios.
 
-El nuevo host es el participante disponible restante con `joinedAt` más antiguo.
+El recheck cliente de sucesión usa una cadencia lenta inicial de 30 segundos mientras el host siga ausente. Ese recheck solo solicita evaluación; el backend decide otra vez en cada intento.
+
+La regla implementada es:
+
+```text
+si host actual está stale:
+  considerar RoomParticipants restantes
+  excluir host actual
+  excluir participantes stale
+  ordenar por joined_at ASC, player_id ASC
+  persistir el primer candidato como rooms.host_player_id
+```
+
+`player_id` es solo desempate técnico determinístico y no criterio visible de producto.
+
+Si el host está fuera de Presence pero `last_seen_at` todavía está active, no hay sucesión.
+
+Si el host está stale y no hay candidatos active, la operación es no-op: la Room sigue `lobby`, el host actual permanece persistido y no hay cierre automático.
 
 Si el host original vuelve después de haber sido reemplazado, vuelve como participante normal y no recupera el rol automáticamente.
 
 El cambio de host debe sentirse liviano: la interfaz identifica al host actual y muestra feedback breve, no bloqueante, cuando cambia. No debe mostrar métricas técnicas, heartbeat ni `last_seen_at`.
 
+La acción explícita del host para cerrar/abandonar sigue usando el lifecycle vigente. Desconexión/staleness y cierre explícito no son el mismo concepto.
+
 ## Motivo
 
 Queremos que una ausencia breve, un bloqueo de pantalla o una transición background/foreground móvil no cierre ni desordene el lobby.
 
-También queremos evitar que un cliente pueda decidir el host solo porque observó una pérdida de Presence. El host es un rol persistido y debe cambiar mediante una decisión autoritativa.
+También queremos evitar que un cliente pueda decidir el host solo porque observó una pérdida de Presence. El host es un rol persistido y cambia mediante una decisión autoritativa derivada desde `auth.uid() -> Player -> Room`, sin aceptar IDs de ownership enviados por cliente.
 
 # Sincronización de lobby
 

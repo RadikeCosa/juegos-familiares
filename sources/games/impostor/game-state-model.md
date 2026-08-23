@@ -176,7 +176,7 @@ La sala existe y los jugadores pueden entrar antes de comenzar la tanda.
 * cantidad de jugadores;
 * código/enlace de Room.
 
-La pertenencia persistida no equivale a conexión. Presence básica de lobby pertenece al Incremento 5.1; liveness autoritativo, sucesión y recuperación avanzada quedan para 5.2+.
+La pertenencia persistida no equivale a conexión. Presence básica de lobby quedó cerrada en 5.1, liveness autoritativo quedó cerrado en 5.2 y sucesión autoritativa de host quedó cerrada en 5.3. Recuperación avanzada queda fuera de Incremento 5.
 
 ## Acciones posibles
 
@@ -200,8 +200,8 @@ Actor:
 Efecto:
 
 * elimina su pertenencia actual si no es host;
-* si es host, cierra la Room en Incremento 4;
-* no provoca sucesión automática.
+* si es host y usa la acción explícita de abandono/cierre vigente, cierra la Room;
+* no se confunde con sucesión por desconexión/staleness.
 
 ### Cerrar lobby
 
@@ -993,7 +993,7 @@ La política avanzada de recuperación de jugadores durante una tanda queda fuer
 
 # Desconexión del host
 
-La reasignación automática queda pendiente para 5.3+. En 5.1 y 5.2, un host desconectado conserva `rooms.host_player_id` y sigue marcado Host.
+Incremento 5.3 cerró la reasignación autoritativa cuando el host está stale. En 5.1 y 5.2, un host desconectado conservaba `rooms.host_player_id`; desde 5.3, la desconexión sigue sin bastar por sí sola y la autoridad debe validar liveness.
 
 Si el host deja de estar disponible:
 
@@ -1001,8 +1001,10 @@ Si el host deja de estar disponible:
 2. la autoridad valida staleness con `room_participants.last_seen_at` o representación física equivalente;
 3. se aplica un threshold inicial de 90 segundos;
 4. se identifican participantes disponibles restantes;
-5. se ordenan según `joinedAt`;
-6. se asigna como host al participante disponible más antiguo mediante actualización autoritativa y consistente.
+5. se ordenan según `joined_at ASC, player_id ASC`;
+6. se asigna como host al primer candidato mediante actualización autoritativa y consistente.
+
+`player_id` es solo desempate técnico determinístico.
 
 Evento conceptual:
 
@@ -1012,7 +1014,7 @@ Actor:
 
 `authority`
 
-Un cliente puede intentar disparar la intención de sucesión en 5.3+, pero no decide el nuevo host. La operación debe ser resistente a carreras si varios clientes la intentan simultáneamente.
+Un cliente puede intentar disparar la intención de sucesión, pero no decide el nuevo host. La operación está protegida con locking/revalidación para que varios clientes simultáneos converjan en una sola transición efectiva.
 
 Esto no modifica necesariamente el estado global de la partida.
 
@@ -1036,6 +1038,8 @@ Camila = host
 ```
 
 El host anterior no recupera automáticamente el rol.
+
+Si el host está stale y no hay candidatos active, no hay transición: la Room sigue `lobby`, el host actual permanece persistido y no se cierra automáticamente.
 
 El threshold de 90 segundos reemplaza la hipótesis previa de 60 segundos para la implementación inicial. Busca dar margen frente a heartbeat de 30 segundos, throttling, red y suspensión de timers móviles. No es una regla definitiva del juego ni configuración de usuario.
 

@@ -512,6 +512,21 @@ La Presence debe estar acotada a la Room activa y usar internamente `roomId` com
 
 Solo un Player autenticado que sea `RoomParticipant` de esa Room puede participar u observar la Presence de esa Room.
 
+Incremento 5.3 cerró la sucesión autoritativa de host sin convertir Presence en autoridad. `rooms.host_player_id` sigue siendo el host persistido y solo cambia cuando la autoridad valida que el host actual está stale según `last_seen_at`.
+
+Si corresponde sucesión, el sucesor se elige entre `RoomParticipants` restantes con liveness active, excluyendo al host actual y ordenando por:
+
+```text
+joined_at ASC
+player_id ASC
+```
+
+`player_id` es únicamente un desempate técnico determinístico. No se muestra como criterio de producto.
+
+Si el host está desconectado en Presence pero `last_seen_at` todavía está active, no hay sucesión. Si no hay candidatos active, no hay sucesión, la Room sigue `lobby` y el host actual permanece persistido.
+
+Si el host original vuelve después de haber sido reemplazado, vuelve como participante normal. No existe recuperación automática del rol, `previous_host` ni historial de hosts en 5.3.
+
 ## Persistencia
 
 Temporal.

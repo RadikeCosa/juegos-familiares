@@ -346,9 +346,9 @@ Ejemplo:
 
 El lobby muestra también el código/enlace para compartir y acciones de salida/cierre según el participante.
 
-Todavía no muestra `Iniciar partida`, mínimo de jugadores, `2 de 3`, Presence, roles, palabra, impostor ni marcador.
+En Incremento 4 todavía no muestra `Iniciar partida`, mínimo de jugadores, `2 de 3`, Presence, roles, palabra, impostor ni marcador.
 
-Un participante no-host puede salir. El host puede cerrar la Room. Si el host abandona durante Incremento 4, la Room se cierra; no existe sucesión automática.
+Un participante no-host puede salir. El host puede cerrar la Room. Si el host usa la acción explícita de abandono/cierre vigente, la Room se cierra. Eso no se confunde con sucesión por desconexión/staleness.
 
 Cuando un no-host elige `Salir de la sala`, deja de pertenecer a la Room y vuelve al contexto de Group. La Room sigue en `lobby` para el host y los demás participantes.
 
@@ -374,13 +374,17 @@ En 5.1 y 5.2, si el host deja de estar disponible, el lobby puede indicarlo de f
 
 5.2 agregó liveness autoritativo mínimo sin mostrarlo en la interfaz. El cliente mantiene esa señal con heartbeat cada 30 segundos mientras el lobby está activo y con refresh al volver a foreground. Un teléfono en background, bloqueado o con timers suspendidos no se considera abandono por ese solo hecho.
 
-Pendiente para 5.3+: si después de validar staleness la autoridad cambia el host, todos observan el cambio al releer el lobby:
+5.3 agregó sucesión autoritativa de host. Si después de validar staleness la autoridad cambia el host, todos observan el cambio al releer el lobby:
 
 ```text
 Camila ahora es host
 ```
 
 El aviso debe ser breve y no bloquear el uso del lobby.
+
+Si el host aparece `desconectado` en Presence pero su `last_seen_at` sigue active, no hay sucesión. Presence puede mostrar disponibilidad efímera, pero no decide el host.
+
+Si el host está stale y no hay otro participante active, no hay cambio: la Room sigue `lobby`, el host actual permanece y no se cierra automáticamente.
 
 Si el host original vuelve después de haber sido reemplazado, aparece como participante normal.
 

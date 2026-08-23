@@ -674,7 +674,7 @@ La Presence debe estar acotada a la Room activa. El identificador interno prefer
 
 Solo un Player autenticado que sea `RoomParticipant` de esa Room puede participar u observar su Presence.
 
-Un evento de pérdida de Presence no equivale inmediatamente a abandono. La desconexión de un host no modifica `host_player_id` en 5.1 ni en 5.2.
+Un evento de pérdida de Presence no equivale inmediatamente a abandono. La desconexión de un host no modifica `host_player_id` en 5.1 ni en 5.2, y desde 5.3 tampoco decide por sí sola la sucesión.
 
 Incremento 5.2 cerró `room_participants.last_seen_at` como señal mínima de liveness autoritativo. Ese timestamp representa evidencia verificable de actividad reciente del Player dentro de esa Room. No representa Presence, conexión, abandono, host, ready ni estado de juego.
 
@@ -730,7 +730,34 @@ last_seen_at = hace 10 segundos
 → todavía no stale autoritativamente
 ```
 
-La reasignación de host debe quedar registrada en el estado autoritativo. El flujo sigue siendo:
+Incremento 5.3 cerró la sucesión autoritativa de host mediante `reassign_room_host_if_stale()`. La RPC no recibe argumentos de ownership: deriva identidad desde `auth.uid() -> Player -> active Room`, valida server-side el host actual y usa `room_participants.last_seen_at` con reloj de Postgres para decidir si está stale.
+
+La regla implementada, cuando el host actual está stale, es:
+
+```text
+RoomParticipants restantes
+→ excluir host actual
+→ excluir participantes stale
+→ ordenar por joined_at ASC, player_id ASC
+→ persistir un sucesor en rooms.host_player_id
+```
+
+`player_id` solo desempata de forma técnica y determinística. No es criterio visible de producto.
+
+Si el host está ausente de Presence pero `last_seen_at` todavía está active, no hay sucesión:
+
+```text
+Presence host = disconnected
+last_seen_at todavía active
+
+→ no hay sucesión
+```
+
+Si no existe otro participante active, la operación es no-op: la Room sigue `lobby`, el host actual permanece persistido, `host_player_id` no queda `null` y la Room no se cierra automáticamente.
+
+Si el host original vuelve después de haber sido reemplazado, vuelve como participante normal. No recupera host automáticamente y no existe prioridad especial, `previous_host` ni historial de hosts en 5.3.
+
+La reasignación de host queda registrada en el estado autoritativo. El flujo sigue siendo:
 
 ```text
 estado persistido cambia
@@ -739,7 +766,7 @@ estado persistido cambia
 → todos observan el nuevo host
 ```
 
-Presence no se convierte en fuente de verdad del lobby persistente.
+Presence no se convierte en fuente de verdad del lobby persistente. El retorno de la RPC tampoco reemplaza el estado autoritativo del lobby: los clientes reconstruyen desde `get_my_active_room()`.
 
 ---
 
@@ -813,22 +840,36 @@ No definimos todavía implementación transaccional exacta.
 
 # 24. Host disconnect
 
-Comportamiento pendiente para 5.3+:
+Comportamiento cerrado en 5.3:
 
-Si el host deja de estar disponible:
+Si el host deja de estar disponible, el cliente puede solicitar una evaluación cuando observa ausencia candidata por Presence, al reconstruir lobby, al volver a foreground/reconectar o mediante un recheck lento inicial de 30 segundos mientras el host siga ausente. El backend vuelve a decidir en cada intento.
 
-1. observar ausencia candidata mediante Presence;
-2. validar staleness con una señal remota verificable de liveness;
-3. aplicar el threshold inicial de 90 segundos;
-4. excluir al host no disponible;
-5. ordenar participantes disponibles restantes por `joinedAt`;
-6. elegir el más antiguo;
-7. registrar el nuevo `host_player_id` autoritativamente y de forma resistente a carreras.
+La autoridad:
 
-Si el host original vuelve:
+1. deriva caller y Room desde `auth.uid()`;
+2. valida que la Room activa siga en `lobby`;
+3. revalida el host actual bajo la operación protegida;
+4. aplica el threshold inicial de 90 segundos sobre `last_seen_at`;
+5. excluye al host actual y a candidatos stale;
+6. ordena candidatos active por `joined_at ASC, player_id ASC`;
+7. registra el nuevo `host_player_id` de forma autoritativa si hay candidato.
 
-* vuelve como participante normal;
-* no recupera host automáticamente.
+No existe:
+
+* cliente esperando exactamente 90 segundos y cambiando host;
+* cliente eligiendo sucesor;
+* Broadcast como autoridad;
+* cierre automático por ausencia;
+* recuperación automática del rol por el host original.
+
+La implementación serializa la sucesión mediante locking de Room y revalidación de host/liveness. Las auditorías y validadores cubrieron callers simultáneos, convergencia a un único candidato e idempotencia posterior.
+
+Revival y sucesión son consistentes según el orden de serialización:
+
+* si el refresh del host gana antes de completar la sucesión, la revalidación detecta host active y no cambia host;
+* si la sucesión gana, el nuevo host queda persistido y el host anterior vuelve como participante normal cuando refresca.
+
+El lifecycle explícito no cambia: un no-host puede salir, el host puede cerrar la Room y el host que ejecuta la acción explícita de abandono/cierre conserva el comportamiento vigente. Desconexión/staleness y acción explícita son conceptos distintos.
 
 ---
 

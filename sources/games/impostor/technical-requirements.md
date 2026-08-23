@@ -514,20 +514,56 @@ El reloj autoritativo es server-side/Postgres. El threshold inicial de 90 segund
 
 Liveness es por Player-en-Room, no por conexión/tab. Dos pestañas pueden refrescar la misma fila.
 
-No se expone una RPC pública `is_player_stale()` para frontend. La implementación encapsula el cálculo active/stale en una función SQL de soporte para tests y futura sucesión, sin alimentar UI.
+No se expone una RPC pública `is_player_stale()` para frontend. La implementación encapsula el cálculo active/stale en una función SQL de soporte para tests y sucesión, sin alimentar UI.
 
-## Pendiente para 5.3+
+## Incremento 5.3
 
-Si el host deja de estar disponible, el sistema debe:
+5.3 cerró la sucesión autoritativa de host con una RPC `SECURITY DEFINER`:
 
-* observar una ausencia candidata;
-* validar staleness con una señal remota verificable de liveness que no dependa solamente de la afirmación de otro cliente;
-* aplicar el threshold inicial de 90 segundos;
-* identificar participantes disponibles restantes;
-* elegir al disponible con `joinedAt` más antiguo;
-* reasignar host de forma autoritativa, atómica/consistente y resistente a carreras.
+```text
+reassign_room_host_if_stale()
+```
+
+La RPC no recibe `player_id`, `room_id`, `host_player_id`, timestamp ni ningún argumento de ownership. Deriva autoridad desde:
+
+```text
+auth.uid()
+→ Player
+→ active Room
+```
+
+Cualquier `RoomParticipant` de la Room activa puede solicitar la evaluación. El caller no necesita ser host ni admin, pero tampoco puede elegir sucesor.
+
+El cliente puede solicitar la evaluación cuando el host desaparece de Presence, cuando reconstruye lobby, al volver a foreground/reconectar o mediante un recheck lento inicial de 30 segundos mientras el host siga ausente. El backend revalida siempre antes de cambiar `host_player_id`.
+
+Si el host deja de estar disponible, el sistema:
+
+* observa una ausencia candidata desde cliente/Presence;
+* revalida server-side el host actual y su liveness;
+* aplica el threshold inicial de 90 segundos con reloj Postgres;
+* identifica participantes restantes con liveness active;
+* excluye al host actual y a participantes stale;
+* ordena por `joined_at ASC, player_id ASC`;
+* persiste el sucesor en `rooms.host_player_id` de forma autoritativa, consistente y resistente a carreras.
+
+`player_id` es únicamente desempate técnico determinístico y no criterio visible de producto.
+
+Si:
+
+```text
+Presence host = disconnected
+last_seen_at todavía active
+```
+
+no hay sucesión.
+
+Si el host está stale y no hay candidatos active, la operación es no-op: la Room sigue `lobby`, el host actual permanece persistido, `host_player_id` no queda `null` y la Room no se cierra automáticamente.
 
 Si el host original vuelve, vuelve como participante normal y no recupera automáticamente el rol.
+
+No existe recuperación automática, `previous_host`, historial de hosts, host manual ni cierre automático por ausencia.
+
+La implementación serializa la operación mediante locking de Room y revalidación de host/liveness dentro de la operación autoritativa. La validación cubrió dos callers simultáneos, B/C/D simultáneos, una sola transición efectiva, convergencia al mismo candidato determinístico, idempotencia posterior y revival vs sucesión según orden de serialización.
 
 El cambio de host se propaga por el modelo existente:
 
@@ -538,7 +574,7 @@ rooms.host_player_id cambia
 → todos observan el nuevo host
 ```
 
-Presence no se convierte en fuente de verdad del lobby persistente.
+No se agregó Broadcast. Presence no se convierte en fuente de verdad del lobby persistente y el retorno de la RPC no reemplaza la reconstrucción autoritativa del lobby.
 
 ---
 

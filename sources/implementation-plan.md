@@ -1328,7 +1328,7 @@ Validación cerrada:
 
 #### Incremento 5.3 — Sucesión autoritativa de host
 
-Estado: `PENDIENTE`.
+Estado: `CERRADO`.
 
 Objetivo:
 
@@ -1338,11 +1338,49 @@ reasignar host de forma consistente cuando el host esté stale
 
 Incluye:
 
+* RPC autoritativa `reassign_room_host_if_stale()`;
+* `SECURITY DEFINER` sin argumentos de ownership;
+* identidad derivada desde `auth.uid() -> Player -> active Room`;
 * threshold inicial de 90 segundos definido en 5.2;
-* selección del participante disponible restante con `joinedAt` más antiguo;
+* evaluación server-side del host actual y de su liveness;
+* selección server-side del participante disponible restante con `joinedAt` más antiguo;
+* desempate técnico determinístico por `player_id ASC`;
 * actualización autoritativa de `rooms.host_player_id`;
-* protección contra carreras si varios clientes intentan disparar la sucesión;
+* locking transaccional, revalidación, consistencia ante concurrencia e idempotencia;
+* trigger cliente acotado, recheck lento de 30 segundos y single-flight por instancia cliente;
+* propagación mediante `rooms UPDATE`, Postgres Changes, invalidación y `get_my_active_room()`;
+* feedback breve cuando cambia el host;
 * host original vuelve como participante normal.
+
+Regla implementada:
+
+```text
+si host actual está stale:
+  candidatos = RoomParticipants restantes
+  excluir host actual
+  excluir participantes stale
+  ordenar por joined_at ASC, player_id ASC
+  persistir exactamente un candidato como rooms.host_player_id
+```
+
+`player_id` es solo desempate técnico determinístico. No es criterio visible de producto.
+
+Si el host está fuera de Presence pero `last_seen_at` todavía está active, no hay sucesión. Presence puede disparar una solicitud de evaluación, pero no decide stale ni sucesor.
+
+Si el host está stale y no hay candidatos active, la operación es no-op: la Room sigue `lobby`, el host actual permanece persistido, `host_player_id` no queda `null` y la Room no se cierra automáticamente.
+
+Si el host original vuelve después de ser reemplazado, refresca liveness como participante normal y no recupera el rol automáticamente. No hay `previous_host`, historial de hosts ni prioridad especial del host original.
+
+Validación cerrada:
+
+* auditoría local, `npm test` completo, lint, build y `git diff --check`;
+* validadores 4.5, 5.1, 5.2 y 5.3;
+* concurrencia con dos callers y con B/C/D simultáneos;
+* una sola transición efectiva, convergencia al mismo candidato determinístico e idempotencia posterior;
+* revival vs sucesión según orden de serialización: si refresh gana no hay cambio; si sucesión gana, el host anterior vuelve como participante;
+* migration remota `20260823130000_host_succession_5_3.sql` aplicada y alineada;
+* commit productivo `5a68199 feat(impostor): add authoritative host succession`;
+* smoke productivo `SmokeHost53-mt6bcmij` PASS con cleanup completo y sin residuos.
 
 #### Incremento 5.4 — UX + hardening mobile/concurrencia
 
@@ -1356,17 +1394,16 @@ pulir experiencia y validar comportamiento en navegadores móviles
 
 Incluye:
 
-* conectado/desconectado discreto;
-* identificación del host actual;
-* feedback breve y no bloqueante cuando cambia el host;
-* pruebas de múltiples pestañas, background/foreground y carreras de sucesión.
+* validación mobile/background de los parámetros técnicos iniciales;
+* pruebas adicionales en dispositivos reales con múltiples pestañas, background/foreground y reconexión;
+* ajuste fino de UX si la experiencia real lo requiere;
+* observación de edge cases de concurrencia en entorno móvil real.
 
 No muestra heartbeat, `last_seen_at`, métricas técnicas ni controles de tolerancia.
 
 ### Decisiones técnicas restantes
 
-* dónde se ejecuta la reasignación autoritativa;
-* cómo se informa el cambio de host.
+La decisión principal de sucesión quedó cerrada en 5.3. Lo restante para 5.4 es hardening y validación mobile/concurrencia, no rediseño de autoridad ni gameplay.
 
 ### Tests / validación
 
@@ -1393,13 +1430,20 @@ No muestra heartbeat, `last_seen_at`, métricas técnicas ni controles de tolera
 * frontend: múltiples pestañas pueden refrescar la misma fila sin modelo por tab;
 * integración: pérdida de Presence no reasigna de inmediato ni modifica `rooms.host_player_id`.
 
-Para 5.3+ quedan pendientes:
+5.3 ya validó:
 
-* unit test de selección de nuevo host por `joinedAt`;
-* integración: host stale después del threshold dispara reasignación autoritativa;
-* integración/concurrencia: dos clientes intentando reasignar no generan dos hosts;
-* prueba manual con tres teléfonos;
-* validación mobile: bloquear pantalla o cambiar de app no rompe lobby de forma irreversible.
+* selección de nuevo host por `joinedAt ASC, player_id ASC`;
+* host stale después del threshold dispara reasignación autoritativa;
+* host fuera de Presence pero liveness active no dispara sucesión;
+* dos o más clientes intentando reasignar no generan dos hosts;
+* sin candidatos active produce no-op y conserva Room `lobby`;
+* host original que vuelve no recupera automáticamente el rol.
+
+Para 5.4 queda pendiente:
+
+* validación mobile amplia: bloquear pantalla o cambiar de app no rompe lobby de forma irreversible;
+* observar la cadencia 30s/90s/30s en dispositivos reales;
+* revisar si el feedback de host cambiado requiere pulido después de uso real.
 
 ### Riesgos
 
@@ -2320,7 +2364,9 @@ Se agregó Room + Lobby: creación de Room, join por código/enlace, reconstrucc
 
 5.2 cerró liveness autoritativo mínimo con `room_participants.last_seen_at`, RPC propia de refresh, heartbeat 30s, stale 90s, migration remota aplicada y smoke productivo específico.
 
-5.3 a 5.4 quedan para sucesión autoritativa de host y hardening mobile/concurrencia.
+5.3 cerró sucesión autoritativa de host con RPC sin ownership cliente, liveness server-side, locking/revalidación, idempotencia, propagación por Realtime existente y smoke productivo PASS.
+
+5.4 queda pendiente para hardening mobile/concurrencia y validación ampliada de la cadencia técnica 30s/90s/30s.
 
 ## Incrementos 6 a 12
 

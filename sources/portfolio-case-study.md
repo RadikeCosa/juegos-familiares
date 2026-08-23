@@ -65,13 +65,14 @@ Incremento 5.0 documental completado sobre Incremento 4 cerrado localmente
 * Room + Lobby completado localmente con creación, join por código/enlace, reconstrucción tras refresh, Realtime por invalidación y lifecycle mínimo leave/close.
 * Presence básica privada de lobby cerrada en 5.1, separando disponibilidad efímera, pertenencia persistida y host autoritativo.
 * liveness autoritativo mínimo cerrado en 5.2 con timestamp server-side, heartbeat proporcional y smoke productivo específico.
+* sucesión autoritativa de host cerrada en 5.3 con `reassign_room_host_if_stale()`, selección server-side, concurrencia consistente, feedback breve y smoke productivo multi-cliente.
 
 ## PENDIENTE
 
 * producto jugable;
 * playtesting real;
 * métricas;
-* sucesión automática del host;
+* hardening mobile/concurrencia de 5.4;
 * tests de dominio de juego;
 * UI final;
 * evidencia visual;
@@ -243,16 +244,23 @@ Completado:
   * liveness mínimo verificable para validar staleness;
   * hipótesis inicial de 60 segundos reemplazada en 5.2 por threshold técnico inicial de 90 segundos;
   * host original vuelve como participante normal si ya fue reemplazado.
+* sucesión autoritativa de host de Incremento 5.3:
+  * Presence no se usa como autoridad;
+  * `last_seen_at` tolera ausencias breves antes de considerar stale;
+  * trigger distribuido en cliente, decisión centralizada en autoridad;
+  * locking y revalidación resuelven callers concurrentes;
+  * host original no recupera rol automáticamente;
+  * smoke productivo multi-cliente confirmó la progresión completa y cleanup sin residuos.
 
 PENDIENTE:
 
 * gameplay de Impostor;
-* sucesión automática del host;
 * privacidad de palabra y rol;
 * votación, scoring e historial;
 * testing práctico;
 * diseño UI final;
-* validación en dispositivos reales;
+* hardening mobile/concurrencia de 5.4;
+* validación ampliada en dispositivos reales;
 * playtesting;
 * iteración sobre uso real.
 
@@ -751,7 +759,8 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 5.0 | Contrato documental de Presence y sucesión | COMPLETADO DOCUMENTAL | Separación RoomParticipant/Presence/liveness/host, hipótesis inicial de 60 segundos luego revisada para 5.2, sucesión autoritativa por `joinedAt` y límites frente a reconexión avanzada |
 | 5.1 | Presence básica del lobby | CERRADO | Presence privada por Room activa, autorización por RoomParticipant, connected/disconnected visible, separación estado efímero/persistente, validación productiva multi-cliente y mobile |
 | 5.2 | Liveness autoritativo mínimo | CERRADO | `room_participants.last_seen_at`, RPC autoritativa de refresh propio, heartbeat 30s, stale 90s, seguridad, smoke productivo y límites mobile/background |
-| 5.3-5.4 | Sucesión de host y hardening | PENDIENTE | Sucesión autoritativa por `joinedAt`, concurrencia, UX de cambio de host y validación mobile/concurrencia |
+| 5.3 | Sucesión autoritativa de host | CERRADO | RPC `reassign_room_host_if_stale()`, autoridad desde `auth.uid()`, host stale por liveness, sucesor por `joined_at ASC, player_id ASC`, concurrencia, revival, no-op sin candidatos, feedback breve y smoke productivo PASS |
+| 5.4 | Hardening mobile/concurrencia | PENDIENTE | Validación ampliada de mobile/background, múltiples pestañas, rechecks y pulido UX si el uso real lo requiere |
 | 6 | Iniciar tanda y preparar ronda privada | PENDIENTE | PENDIENTE |
 | 7 | Confirmación de rol y estado PLAYING | PENDIENTE | PENDIENTE |
 | 8 | Primera votación | PENDIENTE | PENDIENTE |
@@ -926,6 +935,8 @@ Para Presence, la decisión documental fue conservar ese mismo patrón: Presence
 Incremento 5.1 cerró la primera parte de esa decisión: Presence privada de lobby quedó implementada como disponibilidad efímera por Room activa, autorizada por `RoomParticipant` y validada en producción con múltiples sesiones. La prueba confirmó la separación clave: perder Presence muestra `desconectado`, pero no elimina pertenencia, no abandona la Room y no cambia el host persistido.
 
 Incremento 5.2 cerró liveness autoritativo mínimo: `room_participants.last_seen_at` representa actividad reciente verificable, se refresca mediante una RPC derivada desde `auth.uid()` y usa heartbeat inicial de 30 segundos con threshold de stale de 90 segundos. El aprendizaje fue introducir una señal server-side proporcional antes de permitir sucesión: Presence sigue siendo UX efímera, el timestamp usa reloj Postgres, y los 90 segundos dejan margen frente a mobile/background sin convertirlo en regla de juego. La sucesión real del host queda fuera de 5.2.
+
+Incremento 5.3 cerró la sucesión real: el cliente puede disparar una evaluación, pero la decisión queda centralizada en Postgres. La RPC no acepta ownership enviado por cliente, revalida host/liveness dentro de la operación protegida y elige un único sucesor por `joined_at ASC, player_id ASC`. El smoke productivo confirmó que Presence desconectada con liveness active no cambia host, que un host stale transfiere el rol, que el host original vuelve como participante normal y que sin candidatos active no se cierra la Room ni se borra el host persistido.
 
 ---
 
