@@ -435,7 +435,7 @@ Presence no se considera una capacidad obligatoria universal para todos los jueg
 
 ## Incremento 5.2
 
-5.2 debe introducir una señal backend verificable para determinar active/stale sin reasignar todavía el host.
+5.2 cerró una señal backend verificable para determinar active/stale sin reasignar todavía el host.
 
 La representación conceptual aprobada es:
 
@@ -454,9 +454,9 @@ No representa:
 * ready;
 * estado de juego.
 
-Una nueva participación debe comenzar con liveness reciente: `last_seen_at = now()`. La estrategia concreta de backfill para filas existentes se decide durante implementación, después de inspeccionar los datos actuales.
+Una nueva participación comienza con liveness reciente: `last_seen_at = now()`. La migration 5.2 aplica backfill acotado a Rooms en `lobby` y no fabrica liveness activo para Rooms cerradas.
 
-La escritura futura usa una RPC `SECURITY DEFINER` conceptualmente equivalente a:
+La escritura usa una RPC `SECURITY DEFINER`:
 
 ```text
 refresh_my_room_liveness()
@@ -514,7 +514,7 @@ El reloj autoritativo es server-side/Postgres. El threshold inicial de 90 segund
 
 Liveness es por Player-en-Room, no por conexión/tab. Dos pestañas pueden refrescar la misma fila.
 
-No se decide una RPC pública `is_player_stale()` para frontend. Si la implementación necesita una función SQL interna para encapsular el cálculo y facilitar tests o la futura sucesión, se evalúa entonces.
+No se expone una RPC pública `is_player_stale()` para frontend. La implementación encapsula el cálculo active/stale en una función SQL de soporte para tests y futura sucesión, sin alimentar UI.
 
 ## Pendiente para 5.3+
 

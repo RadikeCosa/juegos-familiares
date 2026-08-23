@@ -1246,6 +1246,8 @@ Varias conexiones del mismo Player, por ejemplo dos pestañas, representan un ú
 
 #### Incremento 5.0 — Contrato documental de Presence y sucesión
 
+Estado: `CERRADO`.
+
 Objetivo:
 
 ```text
@@ -1288,6 +1290,8 @@ No incluye `last_seen_at`, heartbeat persistido, threshold de stale, definición
 
 #### Incremento 5.2 — Liveness autoritativo mínimo
 
+Estado: `CERRADO`.
+
 Objetivo:
 
 ```text
@@ -1296,10 +1300,10 @@ introducir señal remota verificable para validar staleness
 
 Incluye:
 
-* `room_participants.last_seen_at` o representación física equivalente aprobada;
+* `room_participants.last_seen_at`;
 * inicialización de nueva participación con `last_seen_at = now()`;
-* estrategia de backfill decidida recién durante implementación, después de inspeccionar datos existentes;
-* RPC autoritativa conceptualmente equivalente a `refresh_my_room_liveness()`;
+* backfill acotado a Rooms en `lobby`, sin fabricar liveness activo para Rooms cerradas;
+* RPC autoritativa `refresh_my_room_liveness()`;
 * actualización acotada al participante autenticado, derivando `auth.uid() -> Player -> active Room -> RoomParticipant propio`;
 * rechazo o no-op si no hay Auth válida, no existe Player, no existe Room activa, el Player no pertenece a la Room o la Room no está en `lobby`;
 * timestamp server-side/Postgres, sin `player_id`, `room_id` ni timestamp enviados por cliente;
@@ -1312,7 +1316,19 @@ Incluye:
 
 No incluye elección de sucesor, modificación de `host_player_id`, RPC de sucesión, locks/concurrencia de sucesión, feedback visual de nuevo host, recuperación del host reemplazado, historial, auditoría ni infraestructura genérica de conexiones.
 
+Validación cerrada:
+
+* unit/frontend tests, lint, build y `git diff --check`;
+* validadores 4.5, 5.1 y 5.2;
+* migration remota `20260823120000_room_liveness_5_2.sql` aplicada y alineada con historial local;
+* smoke productivo específico de liveness con dos participantes;
+* comprobación de inicialización, refresh propio, throttle, heartbeat, active/stale, seguridad y Room cerrada;
+* comprobación de que `rooms.host_player_id` no cambia;
+* cleanup del dataset de smoke por IDs exactos.
+
 #### Incremento 5.3 — Sucesión autoritativa de host
+
+Estado: `PENDIENTE`.
 
 Objetivo:
 
@@ -1330,6 +1346,8 @@ Incluye:
 
 #### Incremento 5.4 — UX + hardening mobile/concurrencia
 
+Estado: `PENDIENTE`.
+
 Objetivo:
 
 ```text
@@ -1345,11 +1363,8 @@ Incluye:
 
 No muestra heartbeat, `last_seen_at`, métricas técnicas ni controles de tolerancia.
 
-### Decisiones técnicas a cerrar
+### Decisiones técnicas restantes
 
-* si la implementación física usa exactamente `room_participants.last_seen_at` o un equivalente compatible;
-* estrategia concreta de backfill de filas existentes;
-* si se encapsula el cálculo active/stale en una función SQL interna para tests y futura sucesión;
 * dónde se ejecuta la reasignación autoritativa;
 * cómo se informa el cambio de host.
 
@@ -1365,7 +1380,7 @@ No muestra heartbeat, `last_seen_at`, métricas técnicas ni controles de tolera
 * autorización negativa para no participantes, otro Group y sin Auth;
 * smoke manual productivo multi-cliente y revisión mobile.
 
-Para 5.2 quedan pendientes:
+5.2 ya validó:
 
 * DB: inicialización de `last_seen_at` al crear Room y al unirse;
 * DB/RPC: refresh propio autorizado y derivado desde `auth.uid()`;
@@ -1375,12 +1390,12 @@ Para 5.2 quedan pendientes:
 * DB: active/stale usa `now()` server-side y threshold de 90 segundos;
 * frontend: heartbeat cada 30 segundos solo con lobby activo;
 * frontend: refresh al reconstruir lobby, al establecer Presence y al volver a foreground;
-* frontend: múltiples pestañas pueden refrescar la misma fila sin modelo por tab.
+* frontend: múltiples pestañas pueden refrescar la misma fila sin modelo por tab;
+* integración: pérdida de Presence no reasigna de inmediato ni modifica `rooms.host_player_id`.
 
 Para 5.3+ quedan pendientes:
 
 * unit test de selección de nuevo host por `joinedAt`;
-* integración: pérdida de Presence no reasigna de inmediato;
 * integración: host stale después del threshold dispara reasignación autoritativa;
 * integración/concurrencia: dos clientes intentando reasignar no generan dos hosts;
 * prueba manual con tres teléfonos;
@@ -2299,11 +2314,11 @@ Se agregó Room + Lobby: creación de Room, join por código/enlace, reconstrucc
 
 ## Incremento 5
 
-5.0 cierra el contrato documental de Presence y sucesión.
+5.0 cerró el contrato documental de Presence y sucesión.
 
 5.1 cerró Presence básica de lobby con canal privado por Room, autorización por RoomParticipant y validación productiva multi-cliente.
 
-5.2 queda definido documentalmente como liveness autoritativo mínimo.
+5.2 cerró liveness autoritativo mínimo con `room_participants.last_seen_at`, RPC propia de refresh, heartbeat 30s, stale 90s, migration remota aplicada y smoke productivo específico.
 
 5.3 a 5.4 quedan para sucesión autoritativa de host y hardening mobile/concurrencia.
 

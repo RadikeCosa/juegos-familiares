@@ -493,7 +493,7 @@ rooms.host_player_id
 
 `connectionStatus`, `isOnline`, `presenceState`, `ready`, `score` y `sessionPlayerId` no forman parte de `RoomParticipant` en Incremento 4.
 
-Incremento 5.2 agrega conceptualmente `room_participants.last_seen_at` como señal remota verificable de liveness del Player dentro de esa Room, con alcance estricto:
+Incremento 5.2 agregó conceptualmente `room_participants.last_seen_at` como señal remota verificable de liveness del Player dentro de esa Room, con alcance estricto:
 
 * sirve solo para validar staleness;
 * no es el estado visual principal de Presence;
@@ -504,9 +504,9 @@ Incremento 5.2 agrega conceptualmente `room_participants.last_seen_at` como señ
 
 `last_seen_at` no representa Presence, conexión, abandono, host, ready ni estado de juego.
 
-Una nueva participación debe comenzar con `last_seen_at = now()`. La estrategia concreta de backfill para filas existentes no forma parte del modelo conceptual y se decide durante implementación.
+Una nueva participación comienza con `last_seen_at = now()`. El backfill físico de 5.2 queda fuera del modelo conceptual: fue acotado a Rooms en `lobby` y no convirtió Rooms cerradas en actividad reciente.
 
-La escritura futura se realiza para el RoomParticipant propio mediante autoridad backend: el cliente no suministra `player_id`, `room_id` ni timestamp. Liveness es por Player-en-Room, no por conexión ni pestaña.
+La escritura se realiza para el RoomParticipant propio mediante autoridad backend: el cliente no suministra `player_id`, `room_id` ni timestamp. Liveness es por Player-en-Room, no por conexión ni pestaña.
 
 La Presence debe estar acotada a la Room activa y usar internamente `roomId` como identificador preferido del canal. `joinCode` sigue siendo una representación compartible para entrar a la Room, no la clave conceptual de Presence.
 

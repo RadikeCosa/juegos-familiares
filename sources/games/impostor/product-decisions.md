@@ -265,11 +265,11 @@ Presence básica ya quedó validada como canal privado acotado por Room, autoriz
 
 ## Sucesión
 
-Pendiente para 5.3+: si el host deja de estar disponible, la sucesión requiere validación autoritativa de staleness. Incremento 5.2 no reasigna host: solamente introduce liveness autoritativo mínimo.
+Pendiente para 5.3+: si el host deja de estar disponible, la sucesión requiere validación autoritativa de staleness. Incremento 5.2 quedó cerrado sin reasignar host: solamente introduce liveness autoritativo mínimo.
 
-La decisión inicial de 5.2 es usar `room_participants.last_seen_at` como evidencia verificable de actividad reciente del Player dentro de esa Room. No representa Presence, conexión, abandono, host, ready ni estado de juego.
+La decisión inicial de 5.2 fue usar `room_participants.last_seen_at` como evidencia verificable de actividad reciente del Player dentro de esa Room. No representa Presence, conexión, abandono, host, ready ni estado de juego.
 
-Una nueva participación debe iniciar con liveness reciente. El cliente futuro refresca ese liveness mediante una intención autoritativa, sin enviar `player_id`, `room_id` ni timestamp.
+Una nueva participación inicia con liveness reciente. El cliente refresca ese liveness mediante una intención autoritativa, sin enviar `player_id`, `room_id` ni timestamp.
 
 El heartbeat inicial es 30 segundos mientras el lobby esté activo. Además se refresca al reconstruir lobby, al establecer Presence y al volver a foreground. No se refresca por cada interacción de usuario.
 

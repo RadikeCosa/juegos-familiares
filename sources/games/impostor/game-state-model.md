@@ -933,7 +933,7 @@ Esta Presence está acotada a la Room activa y representa disponibilidad actual.
 
 Presence no reemplaza `RoomParticipant`, no decide `host_player_id` y no equivale a abandono.
 
-Incremento 5.2 agrega liveness autoritativo mínimo:
+Incremento 5.2 agregó liveness autoritativo mínimo:
 
 ```text
 room_participants.last_seen_at

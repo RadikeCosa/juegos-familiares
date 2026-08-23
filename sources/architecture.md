@@ -672,11 +672,11 @@ La Presence debe estar acotada a la Room activa. El identificador interno prefer
 
 Solo un Player autenticado que sea `RoomParticipant` de esa Room puede participar u observar su Presence.
 
-Un evento de pérdida de Presence no equivale inmediatamente a abandono. La desconexión de un host no modifica `host_player_id` en 5.1.
+Un evento de pérdida de Presence no equivale inmediatamente a abandono. La desconexión de un host no modifica `host_player_id` en 5.1 ni en 5.2.
 
-Incremento 5.2 define `room_participants.last_seen_at` como señal mínima de liveness autoritativo. Ese timestamp representa evidencia verificable de actividad reciente del Player dentro de esa Room. No representa Presence, conexión, abandono, host, ready ni estado de juego.
+Incremento 5.2 cerró `room_participants.last_seen_at` como señal mínima de liveness autoritativo. Ese timestamp representa evidencia verificable de actividad reciente del Player dentro de esa Room. No representa Presence, conexión, abandono, host, ready ni estado de juego.
 
-La escritura futura ocurre mediante una RPC autoritativa conceptualmente equivalente a `refresh_my_room_liveness()`. El cliente no envía `player_id`, `room_id` ni timestamp. La autoridad deriva:
+La escritura ocurre mediante la RPC autoritativa `refresh_my_room_liveness()`. El cliente no envía `player_id`, `room_id` ni timestamp. La autoridad deriva:
 
 ```text
 auth.uid()
@@ -698,7 +698,7 @@ La RPC debe rechazar o no operar cuando no hay Auth válida, no existe Player, n
 * no implica auditoría de conexiones;
 * no debe convertirse en infraestructura genérica.
 
-Una nueva participación debe comenzar con liveness reciente: `last_seen_at = now()`. La estrategia concreta de backfill para filas existentes se decide durante implementación, después de inspeccionar los datos actuales.
+Una nueva participación comienza con liveness reciente: `last_seen_at = now()`. La migration 5.2 aplicó backfill acotado a Rooms en `lobby` y no fabricó liveness activo para Rooms cerradas.
 
 La cadencia inicial del heartbeat es 30 segundos mientras el lobby esté activo. El cliente refresca liveness al establecer o reconstruir correctamente el lobby, al establecer correctamente Presence, periódicamente mientras el lobby esté activo y al volver a foreground. No refresca por cada interacción de usuario.
 
