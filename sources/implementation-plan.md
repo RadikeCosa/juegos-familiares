@@ -912,7 +912,9 @@ El grupo tiene un banco persistente útil para jugar: cualquier integrante puede
 
 ## Incremento 4 — Room + Lobby
 
-El Incremento 4 queda dividido en slices verificables. Room pertenece al dominio de Impostor y no se promueve a Platform.
+Estado: cerrado.
+
+El Incremento 4 se cerró en slices verificables. Room pertenece al dominio de Impostor y no se promueve a Platform.
 
 ### Contrato cerrado
 
@@ -939,9 +941,15 @@ El Incremento 4 queda dividido en slices verificables. Room pertenece al dominio
 
 ### Incremento 4.0 — Contrato documental
 
+Estado: cerrado.
+
 #### Objetivo
 
 Dejar la documentación de Room + Lobby coherente y lista para implementar.
+
+#### Cierre
+
+El corpus quedó alineado sobre Group vs Room, host, lifecycle `lobby | closed`, join, refresh, sincronización, seguridad y límites de alcance.
 
 #### Resultado observable
 
@@ -957,9 +965,15 @@ Revisión cruzada del corpus, contradicciones documentadas y validación de form
 
 ### Incremento 4.1 — Crear Room + host
 
+Estado: cerrado.
+
 #### Objetivo
 
 Permitir que un Player válido cree una Room persistida.
+
+#### Cierre
+
+Se implementó `create_room()` sin argumentos de ownership, con creador como host y participante inicial, código único, estado `lobby` e idempotencia para recuperar la Room activa existente.
 
 #### Resultado observable
 
@@ -991,9 +1005,15 @@ Tests DB/integration de invariantes, código, aislamiento y doble create.
 
 ### Incremento 4.2 — Join autoritativo
 
+Estado: cerrado.
+
 #### Objetivo
 
 Permitir que otro Player del mismo Group entre por código o enlace.
+
+#### Cierre
+
+Se implementó `join_room_by_code(room_code)`, con Player y Group derivados desde `auth.uid()`, validación de mismo Group, rechazo de Room cerrada, join repetido idempotente y garantía técnica de una Room activa por Player.
 
 #### Resultado observable
 
@@ -1024,9 +1044,15 @@ Tests DB/integration de autorización, concurrencia, aislamiento y errores de pr
 
 ### Incremento 4.3 — Reconstrucción de Room + lobby
 
+Estado: cerrado.
+
 #### Objetivo
 
 Reconstruir la Room activa desde el contexto remoto después de refresh o apertura directa.
+
+#### Cierre
+
+Se implementó `get_my_active_room()` como lectura autoritativa sin parámetros, basada en el slot activo del Player y limitada a Rooms `lobby`.
 
 #### Resultado observable
 
@@ -1057,9 +1083,15 @@ Tests de lectura autorizada y smoke browser de refresh y apertura directa.
 
 ### Incremento 4.4 — Lobby sincronizado
 
+Estado: cerrado.
+
 #### Objetivo
 
 Propagar cambios persistidos de participantes sin refresh manual.
+
+#### Cierre
+
+Se implementó sincronización de lobby con Supabase Realtime/Postgres Changes como invalidación, manteniendo `get_my_active_room()` como única fuente de verdad del estado visible.
 
 #### Resultado observable
 
@@ -1087,9 +1119,15 @@ Tests de suscripción/RLS y smoke browser con dos clientes, reconexión y evento
 
 ### Incremento 4.5 — UX vertical + lifecycle mínimo + endurecimiento
 
+Estado: cerrado.
+
 #### Objetivo
 
 Completar el flujo usable de Room + Lobby en mobile.
+
+#### Cierre
+
+Se implementó el flujo vertical completo: crear/unirse, lobby, reconstrucción tras refresh, sincronización Realtime, salida de no-host, cierre por host, cierre cuando el host abandona, liberación de slots, aislamiento y concurrencia básica de join/leave/close.
 
 #### Resultado observable
 
@@ -2064,7 +2102,9 @@ Se agregaron `GroupWord`, autoría, cantidad total, listado propio, borrado prop
 
 ## Incremento 4
 
-Se agrega estado de sala y lobby compartido.
+Estado: cerrado.
+
+Se agregó Room + Lobby: creación de Room, join por código/enlace, reconstrucción autoritativa, sincronización Realtime por invalidación y lifecycle mínimo `lobby | closed` con salida/cierre.
 
 ## Incremento 5
 

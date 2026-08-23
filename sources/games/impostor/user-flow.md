@@ -212,7 +212,7 @@ Refrescar directamente `/impostor/grupo` debe recuperar el contexto mediante ses
 
 Si no hay sesión, la vista no crea Auth, no muestra un grupo ajeno y ofrece una salida clara hacia Impostor.
 
-Acciones futuras:
+Acciones disponibles desde el cierre del Incremento 4:
 
 ### Crear sala
 
@@ -296,6 +296,8 @@ La aplicación crea una Room persistida en estado `lobby`, convierte a ese jugad
 
 El host llega al lobby.
 
+Si el jugador ya pertenece a una Room activa, la aplicación recupera esa Room en lugar de crear otra.
+
 ---
 
 # Compartir sala
@@ -322,6 +324,10 @@ Si el Player ya participa, el join devuelve la misma participación sin duplicar
 
 Como su identidad ya está guardada, no debería volver a escribir su nick en cada partida.
 
+Visitar directamente un link de sala no equivale a intención de unirse. Si no hay Auth, la pantalla no crea una identidad por renderizar. Si hay Auth pero no Player, no auto-une al usuario a ningún Group.
+
+Si el Player ya pertenece a esa Room y abre `/impostor/sala/[code]`, la aplicación reconstruye el lobby autoritativamente desde el contexto remoto.
+
 ---
 
 # Lobby
@@ -343,6 +349,10 @@ El lobby muestra también el código/enlace para compartir y acciones de salida/
 Todavía no muestra `Iniciar partida`, mínimo de jugadores, `2 de 3`, Presence, roles, palabra, impostor ni marcador.
 
 Un participante no-host puede salir. El host puede cerrar la Room. Si el host abandona durante Incremento 4, la Room se cierra; no existe sucesión automática.
+
+Cuando un no-host elige `Salir de la sala`, deja de pertenecer a la Room y vuelve al contexto de Group. La Room sigue en `lobby` para el host y los demás participantes.
+
+Cuando el host elige `Cerrar sala`, la Room pasa a `closed`, deja de ser activa y los participantes que estén mirando el lobby vuelven al contexto de Group tras la sincronización autoritativa.
 
 ---
 

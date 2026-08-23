@@ -195,7 +195,7 @@ Efecto:
 
 Actor:
 
-`participante / sistema`
+`participante`
 
 Efecto:
 
@@ -216,6 +216,24 @@ lobby → closed
 ```
 
 Una Room cerrada deja de considerarse activa y no admite nuevos joins.
+
+## Transiciones implementadas de Room
+
+```text
+create_room()
+→ lobby
+
+close_room() por host
+→ closed
+
+leave_room() por host
+→ closed
+
+leave_room() por no-host
+→ lobby
+```
+
+El leave de un participante no-host elimina su pertenencia a la Room, pero no cambia el estado global de la Room ni el host.
 
 ### Iniciar tanda
 
@@ -899,7 +917,9 @@ No todo necesita convertirse en un estado global.
 
 ## Conexión
 
-Cada `RoomParticipant` puede tener conceptualmente:
+Estado futuro, fuera de Incremento 4.
+
+En Incremento 4, `RoomParticipant` representa membresía de la Room, no presencia ni conexión actual. Más adelante, la conexión podrá modelarse conceptualmente como:
 
 ```text
 connectionStatus =

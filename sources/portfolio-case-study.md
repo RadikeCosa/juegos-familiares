@@ -27,7 +27,7 @@ El case study futuro debe mostrar tanto el resultado como el razonamiento que ll
 
 ```text
 Estado:
-Incremento 3 cerrado local y remotamente
+Incremento 4 cerrado localmente
 ```
 
 ## Ya existe
@@ -61,14 +61,14 @@ Incremento 3 cerrado local y remotamente
 * smoke de producción aprobado en Vercel con dos identidades reales aisladas para Incremento 2;
 * banco persistente de palabras de Impostor validado local y remotamente con alta, cantidad total, listado propio y borrado propio;
 * privacidad del banco validada local y remotamente: los integrantes conocen la cantidad total y sólo ven sus propios aportes;
-* UI local del banco en `/impostor/grupo` y `/impostor/grupo/palabras`.
+* UI local del banco en `/impostor/grupo` y `/impostor/grupo/palabras`;
+* Room + Lobby completado localmente con creación, join por código/enlace, reconstrucción tras refresh, Realtime por invalidación y lifecycle mínimo leave/close.
 
 ## PENDIENTE
 
 * producto jugable;
 * playtesting real;
 * métricas;
-* Room + Lobby;
 * Presence y sucesión automática del host;
 * tests de dominio de juego;
 * UI final;
@@ -119,7 +119,7 @@ Retos asociados:
 
 Estado: `IMPLEMENTACIÓN PARCIAL`.
 
-La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. El juego jugable de Impostor todavía está pendiente: banco de palabras, sala, realtime, roles, votación, scoring e historial siguen en incrementos futuros.
+La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras y Room + Lobby local. El juego jugable todavía está pendiente: Presence, sucesión de host, roles, votación, scoring e historial siguen en incrementos futuros.
 
 ---
 
@@ -223,13 +223,20 @@ Completado:
   * `LocalIdentity` como cache local no autoritativa;
   * RLS, RPCs y pruebas negativas.
 * validación de producción del flujo completo en Vercel con dos identidades aisladas.
+* banco de palabras persistente de Impostor, con privacidad count/contenido y borrado propio.
+* Room + Lobby local:
+  * creación de Room desde Group;
+  * host temporal derivado del creador;
+  * join por código/enlace sólo para Players del mismo Group;
+  * reconstrucción autoritativa con `get_my_active_room()`;
+  * Realtime como invalidación;
+  * salida no-host, cierre por host y cierre si host abandona;
+  * aislamiento Group/Room y límite de una Room activa por Player.
 
 PENDIENTE:
 
 * gameplay de Impostor;
-* banco de palabras;
-* lobby/sala;
-* realtime/presence;
+* Presence y sucesión automática del host;
 * privacidad de palabra y rol;
 * votación, scoring e historial;
 * testing práctico;
@@ -258,6 +265,8 @@ PENDIENTE:
 | Dirección visual del Incremento 1 | COMPLETADA |
 | Portada y entrada a Impostor | COMPLETADA |
 | Identidad, grupo, jugador e invitación | COMPLETADA |
+| Banco de palabras de Impostor | COMPLETADA LOCAL |
+| Room + Lobby | COMPLETADA LOCAL |
 | Gameplay de Impostor | PENDIENTE |
 | Playtesting | PENDIENTE |
 | Iteración | PENDIENTE |
@@ -629,9 +638,9 @@ Estado: REGISTRADA.
 
 # 10. Arquitectura resumida
 
-La arquitectura está definida conceptualmente y la primera capa de plataforma ya está implementada para identidad, grupo, jugador, invitación y bootstrap.
+La arquitectura está definida conceptualmente. La primera capa de plataforma ya está implementada para identidad, grupo, jugador, invitación y bootstrap, y la capa específica de Impostor ya tiene banco de palabras y Room + Lobby local.
 
-La capa específica de juego todavía no comenzó: banco de palabras, salas, tandas, rondas, votos, marcador e historial permanecen en incrementos futuros.
+El juego jugable todavía no está cerrado: Presence, sucesión de host, tandas, rondas, votos, marcador e historial permanecen en incrementos futuros.
 
 Decisión preparada para el Incremento 3: el banco persistente se modelará como `GroupWord`, una entrada propia del grupo y distinta de la futura palabra seleccionada para una ronda. Esto permite alimentar el contenido entre partidas sin adelantar `Room`, `GameSession`, selección aleatoria ni registro de palabras usadas.
 
@@ -712,7 +721,7 @@ Pendiente para el juego:
 * RLS para banco de palabras, sala, rondas, votos y permisos específicos de Impostor;
 * separación real entre dominio e infraestructura.
 
-La parte resuelta todavía no implica que Impostor sea jugable. Sólo cierra la base transversal de identidad, grupo y jugador.
+La parte resuelta todavía no implica que Impostor sea jugable. Cierra la base transversal de identidad, grupo y jugador, más banco de palabras y Room + Lobby para preparar la partida.
 
 ---
 
@@ -726,7 +735,7 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 1 | Portada de plataforma y entrada a Impostor | COMPLETADO | Portada mobile-first, entrada a Impostor, manifest/metadatos e iconos base |
 | 2 | Identidad liviana, grupo y jugador | COMPLETADO | Auth anónima bajo intención, RPCs, RLS, invitaciones, bootstrap, LocalIdentity, vista de grupo, migrations remotas alineadas y smoke Vercel A/B aprobado |
 | 3 | Banco de palabras del grupo | COMPLETADO LOCAL | GroupWord persistente, validación/normalización, unicidad por grupo, privacidad count vs contenido, borrado propio, UI mobile-first y smoke browser local |
-| 4 | Crear y unirse a una sala | PENDIENTE | PENDIENTE |
+| 4 | Room + Lobby | COMPLETADO LOCAL | Room persistente, host temporal, join por código/link, reconstrucción tras refresh, Realtime por invalidación, leave/close, aislamiento Group/Room, concurrencia y smoke lifecycle multi-cliente |
 | 5 | Presencia básica y sucesión de host | PENDIENTE | PENDIENTE |
 | 6 | Iniciar tanda y preparar ronda privada | PENDIENTE | PENDIENTE |
 | 7 | Confirmación de rol y estado PLAYING | PENDIENTE | PENDIENTE |
@@ -853,6 +862,49 @@ El banco muestra una tensión útil del producto: alcanza con un total compartid
 * video: PENDIENTE.
 * test: Vitest, validadores DB y smoke CDP local ejecutados.
 * diagrama: PENDIENTE.
+
+---
+
+## Incremento 4 — Room + Lobby
+
+Estado: `COMPLETADO LOCAL`.
+
+### Problema
+
+Después del banco de palabras, Impostor necesitaba un contexto temporal para reunir a un subconjunto del grupo antes de iniciar una tanda, sin confundirlo con la pertenencia social persistente del Group.
+
+### Qué implementamos
+
+Se implementó Room como entidad temporal de Impostor: cualquier Player del Group puede crear una Room, el creador queda como host, otros Players del mismo Group pueden unirse por código o enlace, y el lobby se reconstruye autoritativamente después de refresh o apertura directa.
+
+El lobby sincroniza entrada, salida y cierre con Supabase Realtime como invalidación. Cada evento visible termina en `get_my_active_room()`, no en mutación local basada en payload.
+
+### Decisión relevante
+
+`Group` responde quiénes pertenecen socialmente. `Room` responde quiénes están reunidos ahora para jugar Impostor. `RoomParticipant` representa membresía de Room, no conexión. Presence, online/offline y sucesión de host quedan para Incremento 5.
+
+### Hardening
+
+El cierre del incremento incluyó lifecycle mínimo: no-host puede salir sin cerrar la Room; host puede cerrar la Room; si el host llama a leave, la Room se cierra. Los slots activos evitan que un Player quede en dos Rooms activas, y las carreras join/close y leave/close se validaron para no dejar slots huérfanos ni Rooms lobby sin host.
+
+### Cómo lo validamos
+
+El cierre local se validó con reset completo de Supabase, suite DB, tests unitarios/componentes, lint, TypeScript, build, revisión de diff y smoke Realtime lifecycle multi-cliente. El smoke cubrió B sale y A deja de verlo sin refresh, A cierra y B sale del lobby por refetch autoritativo, aislamiento de otro Group y reutilización posterior.
+
+```text
+npm run supabase:reset                         PASS
+npm run test:db                                PASS
+npm test -- --run                              PASS
+npm run lint                                   PASS
+npx tsc --noEmit                               PASS
+npm run build                                  PASS
+git diff --check                               PASS
+node supabase/tests/smoke-4-5-room-lifecycle-realtime.mjs PASS
+```
+
+### Qué aprendí
+
+Realtime funcionó mejor como señal de invalidación que como autoridad. El modelo también confirmó que host de Room y administrador del Group deben permanecer separados: uno conduce una reunión temporal, el otro administra pertenencia social.
 
 ---
 

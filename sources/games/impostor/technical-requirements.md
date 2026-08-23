@@ -133,6 +133,26 @@ Room, no debe recibir filas útiles aunque intente suscribirse manualmente.
 
 La sincronización de host por desconexión, fases, roles, votación, resultado y marcador pertenece a incrementos posteriores.
 
+## RPCs de Room vigentes
+
+Incremento 4 expone estas operaciones autoritativas:
+
+```text
+create_room()
+join_room_by_code(room_code)
+get_my_active_room()
+leave_room()
+close_room()
+```
+
+Salvo el código de join, las RPCs no reciben identificadores de ownership. La identidad, Player y Group se derivan desde `auth.uid()`.
+
+`create_room()` recupera la Room activa existente si el Player ya pertenece a una. `join_room_by_code(room_code)` valida que la Room exista, esté en `lobby` y pertenezca al mismo Group. `get_my_active_room()` reconstruye el lobby activo del Player. `leave_room()` elimina la membresía de un no-host y cierra la Room si quien sale es el host. `close_room()` solo puede ejecutarla el host de su Room activa.
+
+La garantía de una Room activa por Player se sostiene con una estructura técnica de slots activos. Esa estructura no es parte del dominio visible, pero evita que un Player quede en dos Rooms activas. El join bloquea la fila de Room antes de validar `lobby`, para que una carrera entre join y close no deje slots activos en una Room cerrada.
+
+Las mutaciones directas sobre `rooms`, `room_participants` y slots activos no son API de cliente. El cliente solicita intenciones mediante RPCs.
+
 ## No requiere sincronización continua
 
 No hace falta sincronizar digitalmente:
@@ -348,6 +368,9 @@ Debe contemplar acciones simultáneas de pocos dispositivos.
 
 Casos mínimos:
 
+* doble toque al crear o unirse a una Room;
+* join y cierre de Room ocurriendo al mismo tiempo;
+* salida de participante y cierre de Room ocurriendo al mismo tiempo;
 * varios votos llegando casi al mismo tiempo;
 * último voto disparando resolución;
 * doble toque del host en `Nueva ronda`;
@@ -366,6 +389,8 @@ No se diseña para escala masiva.
 
 El sistema debe evitar:
 
+* dos Rooms activas para el mismo Player;
+* slot activo en una Room cerrada;
 * voto duplicado;
 * creación de dos rondas por reintento;
 * iniciar dos veces la votación;

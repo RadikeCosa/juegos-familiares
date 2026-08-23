@@ -436,6 +436,8 @@ Room es temporal en el dominio, pero se persiste técnicamente para concurrencia
 
 Una Room cerrada no cuenta como activa.
 
+El cierre de una Room libera a sus participantes para crear o unirse a otra Room. La membresía puede conservarse técnicamente para saber quién participó, pero una Room `closed` no es lobby activo ni historial visible de producto.
+
 ## Visibilidad
 
 Compartida entre los participantes de la sala.
@@ -465,7 +467,9 @@ RoomParticipant
 - joinedAt
 ```
 
-Una fila significa exclusivamente:
+En la base física puede existir `group_id` en esta relación como dato técnico de integridad. No forma parte del modelo conceptual de producto: la pertenencia social persistente sigue estando en `Group` y `Player`.
+
+En una Room `lobby`, una fila significa:
 
 > este Player pertenece actualmente a esta Room.
 
@@ -476,6 +480,10 @@ La sucesión del host y la selección del participante conectado más antiguo pe
 ## Persistencia
 
 Temporal.
+
+## Slot activo
+
+`player_active_room_slots` es una estructura técnica de integridad, no una entidad de dominio. Su propósito es garantizar que un Player tenga como máximo una Room activa y liberar ese bloqueo al salir o cerrar la Room.
 
 ---
 

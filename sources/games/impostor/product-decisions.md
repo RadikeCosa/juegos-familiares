@@ -207,6 +207,8 @@ La persona que crea la sala actúa como host.
 
 El host puede ser cualquier integrante del grupo y no necesita ser administrador.
 
+El administrador del Group y el host de una Room son roles distintos. Ser administrador del Group no autoriza automáticamente a cerrar una Room creada por otro Player.
+
 ## Motivo
 
 La administración permanente del grupo y la conducción temporal de una partida son responsabilidades diferentes.
@@ -230,11 +232,28 @@ Una Room cerrada deja de considerarse activa.
 
 Un participante no-host puede abandonar el lobby. El host puede cerrar el lobby. Si el host quiere abandonar durante este incremento, la Room se cierra.
 
+El cierre explícito de una Room solo corresponde al host. Al cerrar, la Room pasa a `closed`, deja de ser activa y libera a sus participantes para crear o unirse a otra Room. Las filas de `RoomParticipant` pueden preservarse como rastro técnico de quién participó, pero eso no constituye una pantalla ni feature de historial.
+
 No existe expiración automática ni sucesión automática del host en este incremento. La sucesión, el host desconectado y el host original que vuelve pertenecen al Incremento 5.
 
 ## Persistencia
 
 Aunque Room es temporal en el dominio, se persiste técnicamente para refresh, concurrencia, reconstrucción y sincronización entre dispositivos.
+
+# Sincronización de lobby
+
+## Decisión
+
+En Incremento 4, Realtime usa Postgres Changes solo como señal de invalidación:
+
+```text
+INSERT room_participants
+DELETE room_participants
+UPDATE rooms
+→ get_my_active_room()
+```
+
+El payload de Realtime no es fuente de verdad. El lobby visible se reconstruye siempre desde la lectura autoritativa.
 
 # Rooms activas
 

@@ -502,19 +502,31 @@ UI
 → sincronización
 ```
 
-## Operaciones conceptuales de Room
+## Operaciones de Room
 
-Incremento 4 necesita conceptualmente estas intenciones, sin fijar todavía firmas físicas:
+Incremento 4 cerró estas RPCs dentro del módulo de Impostor:
 
-* crear Room sin argumentos de ownership; devuelve la Room activa existente si el Player ya pertenece a una;
-* unirse por código; deriva Player y Group desde `auth.uid()` y valida que la Room esté en `lobby`;
-* reconstruir la Room activa del Player sin recibir `player_id` ni `group_id`;
-* abandonar como participante no-host;
-* cerrar Room como host.
+```text
+create_room()
+join_room_by_code(room_code)
+get_my_active_room()
+leave_room()
+close_room()
+```
+
+Room no forma parte del bootstrap global de Platform ni de `LocalIdentity`. El bootstrap resuelve `AuthIdentity → Player → Group`; luego Impostor reconstruye o modifica Room desde ese contexto autoritativo.
+
+Las operaciones de Room derivan ownership desde `auth.uid()`. El cliente no envía `player_id`, `group_id`, `room_id` ni `host_player_id`.
+
+* `create_room()` crea Room sin argumentos de ownership o devuelve la Room activa existente si el Player ya pertenece a una;
+* `join_room_by_code(room_code)` deriva Player y Group desde `auth.uid()` y valida que la Room esté en `lobby`;
+* `get_my_active_room()` reconstruye la Room activa del Player sin recibir `player_id` ni `group_id`;
+* `leave_room()` permite abandonar como participante no-host y cierra la Room si quien sale es el host;
+* `close_room()` cierra la Room solo si quien llama es el host.
 
 La creación incluye atómicamente Room, host y participación inicial. El join es idempotente y no duplica `RoomParticipant`.
 
-Las lecturas del lobby deben devolver únicamente Room, estado, host y nicknames autorizados. No existe una lectura pública de todas las Rooms. Realtime solo avisa para repetir una lectura autorizada.
+Las lecturas del lobby devuelven únicamente Room, estado, host, nicknames y la marca necesaria para identificar al participante propio sin exponer UUIDs de Player. No existe una lectura pública de todas las Rooms. Supabase Realtime funciona como capa de invalidación: avisa `INSERT`/`DELETE` de participantes y `UPDATE` de Room para repetir una lectura autorizada. La autoridad sigue siendo Postgres + RPCs.
 
 ---
 
