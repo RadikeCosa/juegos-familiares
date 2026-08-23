@@ -72,7 +72,7 @@ Incremento 5.0 documental completado sobre Incremento 4 cerrado localmente
 * producto jugable;
 * playtesting real;
 * métricas;
-* hardening mobile/concurrencia de 5.4;
+* hardening mobile/concurrencia de 5.4, en suspenso hasta validación física;
 * tests de dominio de juego;
 * UI final;
 * evidencia visual;
@@ -259,7 +259,7 @@ PENDIENTE:
 * votación, scoring e historial;
 * testing práctico;
 * diseño UI final;
-* hardening mobile/concurrencia de 5.4;
+* hardening mobile/concurrencia de 5.4, en suspenso hasta validación física;
 * validación ampliada en dispositivos reales;
 * playtesting;
 * iteración sobre uso real.
@@ -760,7 +760,7 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 5.1 | Presence básica del lobby | CERRADO | Presence privada por Room activa, autorización por RoomParticipant, connected/disconnected visible, separación estado efímero/persistente, validación productiva multi-cliente y mobile |
 | 5.2 | Liveness autoritativo mínimo | CERRADO | `room_participants.last_seen_at`, RPC autoritativa de refresh propio, heartbeat 30s, stale 90s, seguridad, smoke productivo y límites mobile/background |
 | 5.3 | Sucesión autoritativa de host | CERRADO | RPC `reassign_room_host_if_stale()`, autoridad desde `auth.uid()`, host stale por liveness, sucesor por `joined_at ASC, player_id ASC`, concurrencia, revival, no-op sin candidatos, feedback breve y smoke productivo PASS |
-| 5.4 | Hardening mobile/concurrencia | PENDIENTE | Validación ampliada de mobile/background, múltiples pestañas, rechecks y pulido UX si el uso real lo requiere |
+| 5.4 | Hardening mobile/concurrencia | EN SUSPENSO / VALIDACIÓN PENDIENTE | La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios; falta validación física mobile/desktop de background, lock, reconnect, multiple connections y timings 30s/90s/30s antes del cierre final del MVP |
 | 6 | Iniciar tanda y preparar ronda privada | PENDIENTE | PENDIENTE |
 | 7 | Confirmación de rol y estado PLAYING | PENDIENTE | PENDIENTE |
 | 8 | Primera votación | PENDIENTE | PENDIENTE |

@@ -1390,13 +1390,27 @@ La implementación vigente de Presence/liveness/sucesión se mantiene sin cambio
 
 Las pruebas físicas mobile definidas para hardening no pudieron realizarse aún. No se observaron defectos funcionales que justifiquen bloquear el avance hacia gameplay.
 
+Los timings vigentes se aceptan provisionalmente hasta esa validación física:
+
+```text
+heartbeat liveness ~= 30s
+stale threshold = 90s
+succession recheck ~= 30s
+```
+
 5.4 deberá retomarse antes del cierre final del MVP para validar:
 
-* background/foreground;
-* lock;
-* reconnect;
-* timings 30s/90s/30s;
-* multiple connections.
+* background breve;
+* background 30-60s;
+* ausencia >90s;
+* sucesión real tras suspensión;
+* retorno del host original;
+* lock screen;
+* app switching;
+* microcorte/offline + reconnect;
+* refresh/reconstrucción;
+* multiple tabs/connections;
+* comportamiento final de 30s/90s/30s.
 
 Objetivo:
 
@@ -1416,6 +1430,8 @@ No muestra heartbeat, `last_seen_at`, métricas técnicas ni controles de tolera
 ### Decisiones técnicas restantes
 
 La decisión principal de sucesión quedó cerrada en 5.3. Lo restante para 5.4 es hardening y validación mobile/concurrencia, no rediseño de autoridad ni gameplay.
+
+5.4 en suspenso no bloquea el inicio del Incremento 6: 5.1-5.3 ya proveen la arquitectura funcional necesaria de Room, RoomParticipant, Presence, liveness y sucesión de host. 5.4 debe retomarse antes del cierre final del MVP, pero no representa una capacidad de dominio faltante para comenzar gameplay.
 
 ### Tests / validación
 
@@ -1453,8 +1469,10 @@ La decisión principal de sucesión quedó cerrada en 5.3. Lo restante para 5.4 
 
 Para 5.4 queda pendiente:
 
-* validación mobile amplia: bloquear pantalla o cambiar de app no rompe lobby de forma irreversible;
-* observar la cadencia 30s/90s/30s en dispositivos reales;
+* iOS Safari: background, lock screen, app switching, reconnect y retorno;
+* Android Chrome: background, lock screen, app switching, reconnect y retorno;
+* desktop: multiple tabs/connections, refresh y reconnect repetido;
+* observar la cadencia 30s/90s/30s en dispositivos reales sin presentarla todavía como validada ni defectuosa;
 * revisar si el feedback de host cambiado requiere pulido después de uso real.
 
 ### Riesgos
@@ -1467,6 +1485,7 @@ Para 5.4 queda pendiente:
 ### Fuera de alcance
 
 * recuperación completa en mitad de ronda;
+* experiencia PWA instalada completa, service worker, cache y update lifecycle;
 * tolerancias configurables;
 * auditoría histórica de conexión;
 * reglas complejas para abandono.
