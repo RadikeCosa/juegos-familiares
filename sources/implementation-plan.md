@@ -1384,7 +1384,19 @@ Validación cerrada:
 
 #### Incremento 5.4 — UX + hardening mobile/concurrencia
 
-Estado: `PENDIENTE`.
+Estado: `EN SUSPENSO`.
+
+La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios.
+
+Las pruebas físicas mobile definidas para hardening no pudieron realizarse aún. No se observaron defectos funcionales que justifiquen bloquear el avance hacia gameplay.
+
+5.4 deberá retomarse antes del cierre final del MVP para validar:
+
+* background/foreground;
+* lock;
+* reconnect;
+* timings 30s/90s/30s;
+* multiple connections.
 
 Objetivo:
 
@@ -2366,7 +2378,7 @@ Se agregó Room + Lobby: creación de Room, join por código/enlace, reconstrucc
 
 5.3 cerró sucesión autoritativa de host con RPC sin ownership cliente, liveness server-side, locking/revalidación, idempotencia, propagación por Realtime existente y smoke productivo PASS.
 
-5.4 queda pendiente para hardening mobile/concurrencia y validación ampliada de la cadencia técnica 30s/90s/30s.
+5.4 queda en suspenso para hardening mobile/concurrencia y validación ampliada de la cadencia técnica 30s/90s/30s antes del cierre final del MVP. La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios y no se observaron defectos funcionales que bloqueen el avance hacia gameplay.
 
 ## Incrementos 6 a 12
 
