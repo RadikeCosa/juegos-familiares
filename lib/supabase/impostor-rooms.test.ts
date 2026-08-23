@@ -9,6 +9,7 @@ import {
     clearRoomJoinIntent,
     closeRoom,
     createRoom,
+    getConnectedRoomParticipantIds,
     getMyActiveRoom,
     hasRoomCreationIntent,
     hasRoomJoinIntent,
@@ -17,6 +18,7 @@ import {
     normalizeRoomJoinCode,
     recordRoomCreationIntent,
     recordRoomJoinIntent,
+    subscribeToRoomPresence,
     subscribeToRoomChanges
 } from "./impostor-rooms";
 
@@ -24,6 +26,7 @@ const singleParticipantRow = {
     room_id: "11111111-1111-4111-8111-111111111111",
     room_join_code: "AB7KQ2M4",
     room_status: "lobby",
+    participant_player_id: "player-1",
     participant_nickname: "Ramiro",
     participant_is_host: true,
     participant_joined_at: "2026-08-19T12:00:00.000Z"
@@ -48,7 +51,7 @@ describe("createRoom", () => {
                 code: "AB7KQ2M4",
                 status: "lobby"
             },
-            participants: [{ nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
+            participants: [{ playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
         });
 
         expect(supabase.rpc).toHaveBeenCalledWith("create_room");
@@ -65,6 +68,7 @@ describe("createRoom", () => {
 
         const lobby = await createRoom(supabase);
 
+        expect(lobby.participants[0].playerId).toBe("player-1");
         expect(JSON.stringify(lobby)).not.toMatch(/player_id|group_id|auth_user_id|host_player_id/);
     });
 
@@ -277,7 +281,7 @@ describe("joinRoomByCode", () => {
                 code: "AB7KQ2M4",
                 status: "lobby"
             },
-            participants: [{ nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
+            participants: [{ playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
         });
 
         expect(supabase.rpc).toHaveBeenCalledWith("join_room_by_code", {
@@ -378,7 +382,7 @@ describe("getMyActiveRoom", () => {
                 code: "AB7KQ2M4",
                 status: "lobby"
             },
-            participants: [{ nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
+            participants: [{ playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
         });
 
         expect(supabase.rpc).toHaveBeenCalledWith("get_my_active_room");
@@ -722,8 +726,8 @@ describe("createLobbySyncController", () => {
         const readLobby = vi.fn(async () => ({
             room: { id: "11111111-1111-4111-8111-111111111111", code: "AB7KQ2M4", status: "lobby" },
             participants: [
-                { nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" },
-                { nickname: "Pedro", isHost: false, joinedAt: "2026-08-19T12:05:00.000Z" }
+                { playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" },
+                { playerId: "player-2", nickname: "Pedro", isHost: false, joinedAt: "2026-08-19T12:05:00.000Z" }
             ]
         }));
         const onSnapshot = vi.fn();
@@ -738,8 +742,8 @@ describe("createLobbySyncController", () => {
             lobby: {
                 room: { id: "11111111-1111-4111-8111-111111111111", code: "AB7KQ2M4", status: "lobby" },
                 participants: [
-                    { nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" },
-                    { nickname: "Pedro", isHost: false, joinedAt: "2026-08-19T12:05:00.000Z" }
+                    { playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" },
+                    { playerId: "player-2", nickname: "Pedro", isHost: false, joinedAt: "2026-08-19T12:05:00.000Z" }
                 ]
             }
         });
@@ -804,5 +808,161 @@ describe("createLobbySyncController", () => {
         await Promise.resolve();
 
         expect(onSnapshot).not.toHaveBeenCalled();
+    });
+});
+
+describe("getConnectedRoomParticipantIds", () => {
+    const participants = [
+        {
+            playerId: "player-1",
+            nickname: "Ramiro",
+            isHost: true,
+            joinedAt: "2026-08-19T12:00:00.000Z"
+        },
+        {
+            playerId: "player-2",
+            nickname: "Pedro",
+            isHost: false,
+            joinedAt: "2026-08-19T12:05:00.000Z"
+        }
+    ];
+
+    it("marks a RoomParticipant with Presence as connected", () => {
+        const connected = getConnectedRoomParticipantIds(participants, {
+            connectionA: [{ playerId: "player-1" }]
+        });
+
+        expect([...connected]).toEqual(["player-1"]);
+    });
+
+    it("leaves a RoomParticipant without Presence disconnected", () => {
+        const connected = getConnectedRoomParticipantIds(participants, {});
+
+        expect(connected.has("player-1")).toBe(false);
+        expect(connected.has("player-2")).toBe(false);
+    });
+
+    it("ignores Presence that does not match visible RoomParticipants", () => {
+        const connected = getConnectedRoomParticipantIds(participants, {
+            connectionA: [{ playerId: "player-404" }]
+        });
+
+        expect([...connected]).toEqual([]);
+    });
+
+    it("deduplicates multiple Presence entries for the same Player", () => {
+        const connected = getConnectedRoomParticipantIds(participants, {
+            tabA: [{ playerId: "player-2" }],
+            tabB: [{ playerId: "player-2" }]
+        });
+
+        expect([...connected]).toEqual(["player-2"]);
+    });
+});
+
+describe("subscribeToRoomPresence", () => {
+    it("uses a private Presence channel scoped by roomId and tracks only the current player id", async () => {
+        const callbacks: Array<() => void> = [];
+        const channel = {
+            on: vi.fn((_type: string, _filter: { event: string }, callback: () => void) => {
+                callbacks.push(callback);
+                return channel;
+            }),
+            presenceState: vi.fn(() => ({
+                tabA: [{ playerId: "player-1" }]
+            })),
+            subscribe: vi.fn((callback?: (status: "SUBSCRIBED") => void) => {
+                callback?.("SUBSCRIBED");
+                return channel;
+            }),
+            track: vi.fn(async () => "ok"),
+            untrack: vi.fn(async () => "ok")
+        };
+        const supabase = {
+            channel: vi.fn(() => channel),
+            removeChannel: vi.fn(async () => "ok")
+        };
+        const onSync = vi.fn();
+
+        const subscription = subscribeToRoomPresence(supabase, {
+            roomId: "11111111-1111-4111-8111-111111111111",
+            currentPlayerId: "player-1",
+            onSync
+        });
+
+        await vi.waitFor(() =>
+            expect(channel.track).toHaveBeenCalledWith({ playerId: "player-1" })
+        );
+
+        expect(supabase.channel).toHaveBeenCalledWith(
+            "impostor-room-presence:11111111-1111-4111-8111-111111111111",
+            {
+                config: {
+                    private: true,
+                    presence: {
+                        enabled: true,
+                        key: expect.stringMatching(/^player-1:/)
+                    }
+                }
+            }
+        );
+        expect(channel.on).toHaveBeenCalledWith(
+            "presence",
+            { event: "sync" },
+            expect.any(Function)
+        );
+        expect(channel.on).toHaveBeenCalledWith(
+            "presence",
+            { event: "join" },
+            expect.any(Function)
+        );
+        expect(channel.on).toHaveBeenCalledWith(
+            "presence",
+            { event: "leave" },
+            expect.any(Function)
+        );
+
+        callbacks[0]();
+
+        expect(onSync).toHaveBeenCalledWith({
+            tabA: [{ playerId: "player-1" }]
+        });
+
+        await subscription.unsubscribe();
+
+        expect(channel.untrack).toHaveBeenCalledTimes(1);
+        expect(supabase.removeChannel).toHaveBeenCalledWith(channel);
+    });
+
+    it("does not emit Presence updates after unsubscribe cleanup", async () => {
+        const callbacks: Array<() => void> = [];
+        const channel = {
+            on: vi.fn((_type: string, _filter: { event: string }, callback: () => void) => {
+                callbacks.push(callback);
+                return channel;
+            }),
+            presenceState: vi.fn(() => ({
+                tabA: [{ playerId: "player-1" }]
+            })),
+            subscribe: vi.fn(() => channel),
+            track: vi.fn(async () => "ok"),
+            untrack: vi.fn(async () => "ok")
+        };
+        const supabase = {
+            channel: vi.fn(() => channel),
+            removeChannel: vi.fn(async () => "ok")
+        };
+        const onSync = vi.fn();
+
+        const subscription = subscribeToRoomPresence(supabase, {
+            roomId: "11111111-1111-4111-8111-111111111111",
+            currentPlayerId: "player-1",
+            onSync
+        });
+
+        await subscription.unsubscribe();
+        callbacks[0]();
+
+        expect(onSync).not.toHaveBeenCalled();
     });
 });

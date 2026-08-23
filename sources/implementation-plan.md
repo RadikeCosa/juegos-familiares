@@ -1168,33 +1168,168 @@ Component tests, integration tests, browser smoke mobile, concurrencia, refresh,
 
 ### Objetivo
 
-Detectar conexión/desconexión básica en lobby y reasignar host si el host deja de estar disponible.
+Alinear e implementar Presence básica de lobby y sucesión autoritativa de host sin confundir pertenencia, conexión, liveness y host.
 
 ### Resultado observable
 
-Los jugadores ven quién está conectado.
+Los jugadores ven de forma discreta quién está conectado o desconectado en el lobby.
 
-Si el host se desconecta, el sistema asigna como nuevo host al participante conectado con `joinedAt` más antiguo.
+Si el host deja de estar disponible más allá de una tolerancia inicial, el sistema puede asignar como nuevo host al participante disponible restante con `joinedAt` más antiguo.
 
-Si el host original vuelve, vuelve como participante normal.
+Si el host original vuelve después de haber sido reemplazado, vuelve como participante normal y no recupera el host automáticamente.
+
+El cambio de host se observa por el modelo ya vigente:
+
+```text
+estado persistido cambia
+→ Realtime invalida
+→ get_my_active_room() vuelve a leer
+→ todos observan el nuevo host
+```
+
+Presence no se convierte en fuente de verdad del lobby persistente.
 
 ### Dominio involucrado
 
 Impostor:
 
-* `RoomParticipant.connectionStatus`;
 * `joinedAt`;
+* `RoomParticipant` como pertenencia persistida a una Room;
+* Presence efímera acotada a la Room activa;
+* liveness autoritativo mínimo para validar staleness;
+* `rooms.host_player_id` como host autoritativo persistido;
 * sucesión de host.
 
 ### Infraestructura necesaria
 
-* Supabase Presence o mecanismo equivalente dentro de Supabase;
-* persistencia mínima del host actual;
-* lógica autoritativa de reasignación.
+* Supabase Realtime Presence para disponibilidad efímera `connected | disconnected` en el lobby;
+* canal de Presence acotado internamente por `roomId`, no por `joinCode`;
+* verificación de que solo un Player autenticado y RoomParticipant de esa Room participe u observe su Presence;
+* señal remota verificable de liveness, conceptualmente `lastSeenAt` en `RoomParticipant` o equivalente técnico mínimo;
+* lógica autoritativa, atómica/consistente y resistente a carreras para reasignar host.
+
+### Contrato documental 5.0
+
+Antes de implementar, el corpus debe cerrar estas separaciones:
+
+```text
+RoomParticipant = pertenencia persistida
+Presence        = disponibilidad efímera
+lastSeenAt      = señal autoritativa mínima para validar staleness
+rooms.host_player_id = host autoritativo persistido
+```
+
+Presence sabe qué conexiones activas publica Supabase para una Room activa. No sabe por sí sola si alguien abandonó la Room, no decide el host y no reemplaza `RoomParticipant`.
+
+Postgres sabe quién pertenece a la Room, cuál es el host autoritativo y cuál fue la última señal remota verificable de liveness que la autoridad puede usar para decidir staleness.
+
+El cliente decide cómo mostrar el estado visual discreto y puede solicitar una intención de sucesión cuando observa una condición candidata. El cliente no decide por sí mismo `host_player_id`.
+
+La autoridad decide si el host está stale, quién es elegible y si corresponde actualizar `host_player_id`.
+
+La tolerancia inicial del MVP es de 60 segundos antes de considerar al host no disponible para sucesión. Es una hipótesis técnica/producto a validar en navegadores móviles, no una regla definitiva del juego ni una preferencia configurable.
+
+Un evento de pérdida de Presence no equivale inmediatamente a abandono y no reasigna host de forma directa.
+
+Varias conexiones del mismo Player, por ejemplo dos pestañas, representan un único Player lógico para `connected | disconnected`.
+
+`lastSeenAt` o su equivalente:
+
+* sirve solo para validar staleness;
+* no es el estado visual principal de Presence;
+* no es historial;
+* no se muestra al usuario;
+* no implica auditoría de conexiones;
+* no debe convertirse en infraestructura genérica.
+
+### Subincrementos previstos
+
+#### Incremento 5.0 — Contrato documental de Presence y sucesión
+
+Objetivo:
+
+```text
+cerrar corpus documental antes de implementar
+```
+
+Incluye:
+
+* separación pertenencia/conexión/liveness/host;
+* regla de no confiar en Presence como autoridad de host;
+* tolerancia inicial de 60 segundos como hipótesis a validar;
+* alcance estricto de lobby y Room activa;
+* límites explícitos frente a reconexión avanzada.
+
+#### Incremento 5.1 — Presence básica del lobby
+
+Objetivo:
+
+```text
+mostrar connected/disconnected discreto para participantes de la Room activa
+```
+
+Incluye:
+
+* canal interno acotado por `roomId`;
+* deduplicación lógica por Player ante varias pestañas;
+* autorización de observación/participación limitada a RoomParticipants;
+* estado visual no autoritativo.
+
+No incluye sucesión de host.
+
+#### Incremento 5.2 — Liveness autoritativo mínimo
+
+Objetivo:
+
+```text
+introducir señal remota verificable para validar staleness
+```
+
+Incluye:
+
+* `lastSeenAt` conceptual o equivalente técnico mínimo;
+* actualización acotada al participante autenticado;
+* uso interno para sucesión;
+* no mostrar métricas técnicas al usuario.
+
+No incluye historial, auditoría ni infraestructura genérica de conexiones.
+
+#### Incremento 5.3 — Sucesión autoritativa de host
+
+Objetivo:
+
+```text
+reasignar host de forma consistente cuando el host esté stale
+```
+
+Incluye:
+
+* tolerancia inicial de 60 segundos;
+* selección del participante disponible restante con `joinedAt` más antiguo;
+* actualización autoritativa de `rooms.host_player_id`;
+* protección contra carreras si varios clientes intentan disparar la sucesión;
+* host original vuelve como participante normal.
+
+#### Incremento 5.4 — UX + hardening mobile/concurrencia
+
+Objetivo:
+
+```text
+pulir experiencia y validar comportamiento en navegadores móviles
+```
+
+Incluye:
+
+* conectado/desconectado discreto;
+* identificación del host actual;
+* feedback breve y no bloqueante cuando cambia el host;
+* pruebas de múltiples pestañas, background/foreground y carreras de sucesión.
+
+No muestra heartbeat, `lastSeenAt`, métricas técnicas ni controles de tolerancia.
 
 ### Decisiones técnicas a cerrar
 
-* tolerancia inicial antes de considerar desconectado;
+* mecanismo mínimo para actualizar y validar `lastSeenAt` o equivalente;
 * qué eventos de navegador móvil se consideran señal de desconexión;
 * dónde se ejecuta la reasignación autoritativa;
 * cómo se informa el cambio de host.
@@ -1202,7 +1337,10 @@ Impostor:
 ### Tests / validación
 
 * unit test de selección de nuevo host por `joinedAt`;
-* integración: host desconectado dispara reasignación;
+* integración: pérdida de Presence no reasigna de inmediato;
+* integración: host stale después de la tolerancia dispara reasignación autoritativa;
+* integración/concurrencia: dos clientes intentando reasignar no generan dos hosts;
+* validación: varias pestañas del mismo Player cuentan como un único Player lógico;
 * prueba manual con tres teléfonos;
 * validación mobile: bloquear pantalla o cambiar de app no rompe lobby de forma irreversible.
 
@@ -1219,15 +1357,26 @@ Impostor:
 * tolerancias configurables;
 * auditoría histórica de conexión;
 * reglas complejas para abandono.
+* GameSession;
+* `START_SESSION`;
+* mínimo de 3 jugadores;
+* `availableWords` como guard de inicio;
+* roles, palabra secreta, ready, votación y scoring;
+* recovery en mitad de partida;
+* Presence histórica;
+* host manual;
+* expulsar jugadores;
+* expiración/cleanup automático de Rooms.
 
 ### Criterio de terminado
 
-El lobby puede sobrevivir a la desconexión del host manteniendo un único host consistente.
+El lobby puede distinguir disponibilidad efímera, conservar pertenencia persistida y sobrevivir a la indisponibilidad del host manteniendo un único host persistido y consistente.
 
 ### Conceptos a aprender
 
 * presencia efímera;
 * diferencia entre conexión y pertenencia;
+* diferencia entre Presence y liveness autoritativo;
 * eventos de navegador móvil;
 * consistencia de una elección autoritativa.
 
@@ -2108,7 +2257,9 @@ Se agregó Room + Lobby: creación de Room, join por código/enlace, reconstrucc
 
 ## Incremento 5
 
-Se agrega Presence o mecanismo equivalente para conexión y host.
+5.0 cierra el contrato documental de Presence y sucesión.
+
+5.1 a 5.4 agregan Presence básica de lobby, liveness autoritativo mínimo, sucesión autoritativa de host y hardening mobile/concurrencia.
 
 ## Incrementos 6 a 12
 

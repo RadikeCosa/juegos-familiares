@@ -919,13 +919,19 @@ No todo necesita convertirse en un estado global.
 
 Estado futuro, fuera de Incremento 4.
 
-En Incremento 4, `RoomParticipant` representa membresía de la Room, no presencia ni conexión actual. Más adelante, la conexión podrá modelarse conceptualmente como:
+En Incremento 4, `RoomParticipant` representa membresía de la Room, no presencia ni conexión actual.
+
+En Incremento 5, la conexión visual del lobby se modela con Presence efímera:
 
 ```text
-connectionStatus =
+presence =
 connected
 disconnected
 ```
+
+Esta Presence está acotada a la Room activa y representa disponibilidad actual. Varias conexiones del mismo Player, por ejemplo dos pestañas, cuentan como un único Player lógico.
+
+Presence no reemplaza `RoomParticipant`, no decide `host_player_id` y no equivale a abandono.
 
 ## Rol visto
 
@@ -960,7 +966,7 @@ Ejemplo:
 ```text
 PLAYING
 
-Pedro.connectionStatus:
+Pedro.presence:
 connected → disconnected
 ```
 
@@ -970,7 +976,9 @@ La partida puede continuar en:
 PLAYING
 ```
 
-La política completa para decidir cuánto esperar a un jugador desconectado queda fuera del MVP conceptual inicial.
+En el lobby de Incremento 5, una ausencia breve no elimina `RoomParticipant` ni dispara por sí sola sucesión de host. Presence es una señal efímera para UI y para detectar candidatos, no una decisión autoritativa.
+
+La política avanzada de recuperación de jugadores durante una tanda queda fuera de Incremento 5 y pertenece a reconexión posterior.
 
 ---
 
@@ -978,9 +986,12 @@ La política completa para decidir cuánto esperar a un jugador desconectado que
 
 Si el host deja de estar disponible:
 
-1. el sistema identifica participantes conectados restantes;
-2. los ordena según `joinedAt`;
-3. asigna como host al participante conectado más antiguo.
+1. se observa una ausencia candidata mediante Presence;
+2. la autoridad valida staleness con una señal remota verificable de liveness, conceptualmente `lastSeenAt` o equivalente mínimo;
+3. se aplica una tolerancia inicial de 60 segundos;
+4. se identifican participantes disponibles restantes;
+5. se ordenan según `joinedAt`;
+6. se asigna como host al participante disponible más antiguo mediante actualización autoritativa y consistente.
 
 Evento conceptual:
 
@@ -988,7 +999,9 @@ Evento conceptual:
 
 Actor:
 
-`system`
+`authority`
+
+Un cliente puede intentar disparar la intención de sucesión, pero no decide el nuevo host. La operación debe ser resistente a carreras si varios clientes la intentan simultáneamente.
 
 Esto no modifica necesariamente el estado global de la partida.
 
@@ -1012,6 +1025,8 @@ Camila = host
 ```
 
 El host anterior no recupera automáticamente el rol.
+
+La tolerancia de 60 segundos es una hipótesis técnica/producto del MVP a validar en navegadores móviles, no una regla definitiva del juego ni configuración de usuario.
 
 ---
 

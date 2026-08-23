@@ -37,6 +37,51 @@ export type ImpostorRoomChangesClient = {
     removeChannel: (channel: RealtimeChannel) => PromiseLike<unknown>;
 };
 
+type RealtimePresenceChannelStatus =
+    | "SUBSCRIBED"
+    | "TIMED_OUT"
+    | "CLOSED"
+    | "CHANNEL_ERROR";
+
+export type RoomPresencePayload = {
+    playerId?: string;
+};
+
+export type RoomPresenceState = Record<
+    string,
+    Array<RoomPresencePayload & { presence_ref?: string }>
+>;
+
+type RealtimePresenceChannel = {
+    on: (
+        type: "presence",
+        filter: { event: "sync" | "join" | "leave" },
+        callback: () => void
+    ) => RealtimePresenceChannel;
+    presenceState: () => RoomPresenceState;
+    subscribe: (
+        callback?: (status: RealtimePresenceChannelStatus, error?: unknown) => void
+    ) => RealtimePresenceChannel;
+    track: (payload: RoomPresencePayload) => PromiseLike<unknown>;
+    untrack: () => PromiseLike<unknown>;
+};
+
+export type ImpostorRoomPresenceClient = {
+    channel: (
+        name: string,
+        options: {
+            config: {
+                private: true;
+                presence: {
+                    enabled: true;
+                    key: string;
+                };
+            };
+        }
+    ) => RealtimePresenceChannel;
+    removeChannel: (channel: RealtimePresenceChannel) => PromiseLike<unknown>;
+};
+
 type SupabaseErrorLike = {
     code?: string;
 };
@@ -191,6 +236,7 @@ type RoomLobbyRow = {
     room_id?: string;
     room_join_code: string;
     room_status: string;
+    participant_player_id: string;
     participant_nickname: string;
     participant_is_host: boolean;
     participant_is_self?: boolean;
@@ -198,6 +244,7 @@ type RoomLobbyRow = {
 };
 
 export type RoomLobbyParticipant = {
+    playerId: string;
     nickname: string;
     isHost: boolean;
     isSelf?: boolean;
@@ -316,6 +363,7 @@ function isRoomLobbyRow(value: unknown): value is RoomLobbyRow {
     const row = value as Partial<RoomLobbyRow>;
 
     return (
+        typeof row.participant_player_id === "string" &&
         typeof row.room_join_code === "string" &&
         typeof row.room_status === "string" &&
         typeof row.participant_nickname === "string" &&
@@ -335,6 +383,7 @@ function toRoomLobby(rows: RoomLobbyRow[]): RoomLobby {
         },
         participants: rows.map((row) => {
             const participant: RoomLobbyParticipant = {
+                playerId: row.participant_player_id,
                 nickname: row.participant_nickname,
                 isHost: row.participant_is_host,
                 joinedAt: row.participant_joined_at
@@ -346,6 +395,107 @@ function toRoomLobby(rows: RoomLobbyRow[]): RoomLobby {
 
             return participant;
         })
+    };
+}
+
+export function getConnectedRoomParticipantIds(
+    participants: RoomLobbyParticipant[],
+    presenceState: RoomPresenceState
+) {
+    const participantIds = new Set(
+        participants.map((participant) => participant.playerId)
+    );
+    const connectedPlayerIds = new Set<string>();
+
+    for (const presences of Object.values(presenceState)) {
+        for (const presence of presences) {
+            if (
+                typeof presence.playerId === "string" &&
+                participantIds.has(presence.playerId)
+            ) {
+                connectedPlayerIds.add(presence.playerId);
+            }
+        }
+    }
+
+    return connectedPlayerIds;
+}
+
+function createRoomPresenceKey(playerId: string) {
+    const randomUUID = globalThis.crypto?.randomUUID?.();
+    const suffix = randomUUID ?? `${Date.now()}-${Math.random()}`;
+
+    return `${playerId}:${suffix}`;
+}
+
+export type RoomPresenceSubscription = {
+    unsubscribe: () => Promise<void>;
+};
+
+export function subscribeToRoomPresence(
+    supabase: ImpostorRoomPresenceClient,
+    options: {
+        roomId: string;
+        currentPlayerId: string;
+        onSync: (presenceState: RoomPresenceState) => void;
+        onError?: (error: unknown) => void;
+    }
+): RoomPresenceSubscription {
+    let isDisposed = false;
+    const channel = supabase
+        .channel(`impostor-room-presence:${options.roomId}`, {
+            config: {
+                private: true,
+                presence: {
+                    enabled: true,
+                    key: createRoomPresenceKey(options.currentPlayerId)
+                }
+            }
+        });
+
+    channel
+        .on("presence", { event: "sync" }, () => {
+            if (!isDisposed) {
+                options.onSync(channel.presenceState());
+            }
+        })
+        .on("presence", { event: "join" }, () => {
+            if (!isDisposed) {
+                options.onSync(channel.presenceState());
+            }
+        })
+        .on("presence", { event: "leave" }, () => {
+            if (!isDisposed) {
+                options.onSync(channel.presenceState());
+            }
+        });
+
+    channel.subscribe((status, error) => {
+        if (isDisposed) {
+            return;
+        }
+
+        if (status === "SUBSCRIBED") {
+            void Promise.resolve(
+                channel.track({ playerId: options.currentPlayerId })
+            ).catch((trackError) => options.onError?.(trackError));
+        }
+
+        if (status === "TIMED_OUT" || status === "CHANNEL_ERROR") {
+            options.onError?.(error ?? status);
+        }
+    });
+
+    return {
+        async unsubscribe() {
+            isDisposed = true;
+
+            try {
+                await channel.untrack();
+            } finally {
+                await supabase.removeChannel(channel);
+            }
+        }
     };
 }
 

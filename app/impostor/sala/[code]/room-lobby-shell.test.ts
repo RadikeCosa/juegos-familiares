@@ -31,14 +31,14 @@ const recognizedState: PlatformBootstrapState = {
 
 const singlePlayerLobby: RoomLobby = {
     room: { code: "AB7KQ2M4", status: "lobby" },
-    participants: [{ nickname: "Ramiro", isHost: true, isSelf: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
+    participants: [{ playerId: "player-1", nickname: "Ramiro", isHost: true, isSelf: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
 };
 
 const twoPlayerLobby: RoomLobby = {
     room: { code: "AB7KQ2M4", status: "lobby" },
     participants: [
-        { nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" },
-        { nickname: "Pedro", isHost: false, isSelf: true, joinedAt: "2026-08-19T12:05:00.000Z" }
+        { playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" },
+        { playerId: "player-2", nickname: "Pedro", isHost: false, isSelf: true, joinedAt: "2026-08-19T12:05:00.000Z" }
     ]
 };
 
@@ -117,7 +117,10 @@ describe("renderRoomLobbyContent", () => {
             renderRoomLobbyContent(
                 recognizedState,
                 { status: "success", lobby: twoPlayerLobby },
-                { roomCode: "AB7KQ2M4" }
+                {
+                    roomCode: "AB7KQ2M4",
+                    connectedPlayerIds: new Set(["player-1", "player-2"])
+                }
             )
         );
 
@@ -125,10 +128,66 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("Host");
         expect(markup).toContain("Pedro");
         expect(markup).toContain("Vos");
+        expect(markup).toContain("conectado");
         expect(markup).toContain("2 jugadores");
         expect(markup).toContain("Salir de la sala");
         expect(markup).not.toContain("Cerrar sala");
         expect(markup).not.toMatch(/player-\d|group-\d/);
+    });
+
+    it("shows disconnected participants without removing them from the lobby", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "success", lobby: twoPlayerLobby },
+                {
+                    roomCode: "AB7KQ2M4",
+                    connectedPlayerIds: new Set(["player-1"])
+                }
+            )
+        );
+
+        expect(markup).toContain("Ramiro");
+        expect(markup).toContain("Pedro");
+        expect(markup).toContain("conectado");
+        expect(markup).toContain("desconectado");
+        expect(markup).toContain("2 jugadores");
+    });
+
+    it("does not add unknown Presence entries as lobby participants", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "success", lobby: twoPlayerLobby },
+                {
+                    roomCode: "AB7KQ2M4",
+                    connectedPlayerIds: new Set(["player-1", "player-404"])
+                }
+            )
+        );
+
+        expect(markup).toContain("Ramiro");
+        expect(markup).toContain("Pedro");
+        expect(markup).not.toContain("player-404");
+        expect(markup).toContain("2 jugadores");
+    });
+
+    it("keeps a disconnected host as host during Presence-only 5.1", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "success", lobby: twoPlayerLobby },
+                {
+                    roomCode: "AB7KQ2M4",
+                    connectedPlayerIds: new Set(["player-2"])
+                }
+            )
+        );
+
+        expect(markup).toContain("Ramiro");
+        expect(markup).toContain("Host");
+        expect(markup).toContain("desconectado");
+        expect(markup).not.toMatch(/nuevo host|ahora es host|reasign/i);
     });
 
     it("disables the explicit host close action while it is in flight", () => {

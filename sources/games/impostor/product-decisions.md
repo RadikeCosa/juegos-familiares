@@ -240,6 +240,44 @@ No existe expiración automática ni sucesión automática del host en este incr
 
 Aunque Room es temporal en el dominio, se persiste técnicamente para refresh, concurrencia, reconstrucción y sincronización entre dispositivos.
 
+# Presence y sucesión de host
+
+## Decisión
+
+En Incremento 5 el lobby usará Supabase Realtime Presence para mostrar disponibilidad efímera `connected | disconnected` de los participantes de la Room activa.
+
+`RoomParticipant` sigue representando pertenencia persistida a una Room. No se convierte conceptualmente en una conexión.
+
+La separación de producto queda así:
+
+```text
+RoomParticipant = pertenece a la Room
+Presence = está disponible ahora de forma efímera
+rooms.host_player_id = host actual autoritativo
+```
+
+Varias conexiones del mismo Player, por ejemplo dos pestañas, cuentan como un único Player lógico.
+
+La pérdida de Presence no significa abandono inmediato y no reasigna por sí sola el host.
+
+## Sucesión
+
+Si el host deja de estar disponible, la sucesión requiere validación autoritativa de staleness. La hipótesis inicial del MVP es esperar 60 segundos antes de considerar al host no disponible para sucesión.
+
+Esa tolerancia de 60 segundos es una hipótesis técnica/producto a validar en navegadores móviles. No es una regla definitiva del juego ni una configuración para usuarios.
+
+El nuevo host es el participante disponible restante con `joinedAt` más antiguo.
+
+Si el host original vuelve después de haber sido reemplazado, vuelve como participante normal y no recupera el rol automáticamente.
+
+El cambio de host debe sentirse liviano: la interfaz identifica al host actual y muestra feedback breve, no bloqueante, cuando cambia. No debe mostrar métricas técnicas, heartbeat ni `lastSeenAt`.
+
+## Motivo
+
+Queremos que una ausencia breve, un bloqueo de pantalla o una transición background/foreground móvil no cierre ni desordene el lobby.
+
+También queremos evitar que un cliente pueda decidir el host solo porque observó una pérdida de Presence. El host es un rol persistido y debe cambiar mediante una decisión autoritativa.
+
 # Sincronización de lobby
 
 ## Decisión

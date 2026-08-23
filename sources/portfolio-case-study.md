@@ -27,7 +27,7 @@ El case study futuro debe mostrar tanto el resultado como el razonamiento que ll
 
 ```text
 Estado:
-Incremento 4 cerrado localmente
+Incremento 5.0 documental completado sobre Incremento 4 cerrado localmente
 ```
 
 ## Ya existe
@@ -63,13 +63,14 @@ Incremento 4 cerrado localmente
 * privacidad del banco validada local y remotamente: los integrantes conocen la cantidad total y sólo ven sus propios aportes;
 * UI local del banco en `/impostor/grupo` y `/impostor/grupo/palabras`;
 * Room + Lobby completado localmente con creación, join por código/enlace, reconstrucción tras refresh, Realtime por invalidación y lifecycle mínimo leave/close.
+* contrato documental de Presence y sucesión de host alineado para implementar Incremento 5 sin confundir pertenencia, conexión, liveness autoritativo y host.
 
 ## PENDIENTE
 
 * producto jugable;
 * playtesting real;
 * métricas;
-* Presence y sucesión automática del host;
+* implementación funcional de Presence y sucesión automática del host;
 * tests de dominio de juego;
 * UI final;
 * evidencia visual;
@@ -119,7 +120,7 @@ Retos asociados:
 
 Estado: `IMPLEMENTACIÓN PARCIAL`.
 
-La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras y Room + Lobby local. El juego jugable todavía está pendiente: Presence, sucesión de host, roles, votación, scoring e historial siguen en incrementos futuros.
+La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras y Room + Lobby local. El contrato documental para Presence y sucesión de host queda alineado como preparación del Incremento 5. El juego jugable todavía está pendiente: implementación de Presence, sucesión de host, roles, votación, scoring e historial siguen en incrementos futuros.
 
 ---
 
@@ -232,11 +233,18 @@ Completado:
   * Realtime como invalidación;
   * salida no-host, cierre por host y cierre si host abandona;
   * aislamiento Group/Room y límite de una Room activa por Player.
+* contrato documental de Incremento 5.0:
+  * `RoomParticipant` como pertenencia persistida, no conexión;
+  * Presence efímera acotada a Room activa;
+  * host autoritativo persistido en Room;
+  * liveness mínimo verificable para validar staleness;
+  * tolerancia inicial de 60 segundos como hipótesis a validar en navegadores móviles;
+  * host original vuelve como participante normal si ya fue reemplazado.
 
 PENDIENTE:
 
 * gameplay de Impostor;
-* Presence y sucesión automática del host;
+* implementación de Presence y sucesión automática del host;
 * privacidad de palabra y rol;
 * votación, scoring e historial;
 * testing práctico;
@@ -267,6 +275,7 @@ PENDIENTE:
 | Identidad, grupo, jugador e invitación | COMPLETADA |
 | Banco de palabras de Impostor | COMPLETADA LOCAL |
 | Room + Lobby | COMPLETADA LOCAL |
+| Contrato documental de Presence y sucesión | COMPLETADA DOCUMENTAL |
 | Gameplay de Impostor | PENDIENTE |
 | Playtesting | PENDIENTE |
 | Iteración | PENDIENTE |
@@ -640,7 +649,7 @@ Estado: REGISTRADA.
 
 La arquitectura está definida conceptualmente. La primera capa de plataforma ya está implementada para identidad, grupo, jugador, invitación y bootstrap, y la capa específica de Impostor ya tiene banco de palabras y Room + Lobby local.
 
-El juego jugable todavía no está cerrado: Presence, sucesión de host, tandas, rondas, votos, marcador e historial permanecen en incrementos futuros.
+El juego jugable todavía no está cerrado: implementación de Presence, sucesión de host, tandas, rondas, votos, marcador e historial permanecen en incrementos futuros.
 
 Decisión preparada para el Incremento 3: el banco persistente se modelará como `GroupWord`, una entrada propia del grupo y distinta de la futura palabra seleccionada para una ronda. Esto permite alimentar el contenido entre partidas sin adelantar `Room`, `GameSession`, selección aleatoria ni registro de palabras usadas.
 
@@ -736,7 +745,8 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 2 | Identidad liviana, grupo y jugador | COMPLETADO | Auth anónima bajo intención, RPCs, RLS, invitaciones, bootstrap, LocalIdentity, vista de grupo, migrations remotas alineadas y smoke Vercel A/B aprobado |
 | 3 | Banco de palabras del grupo | COMPLETADO LOCAL | GroupWord persistente, validación/normalización, unicidad por grupo, privacidad count vs contenido, borrado propio, UI mobile-first y smoke browser local |
 | 4 | Room + Lobby | COMPLETADO LOCAL | Room persistente, host temporal, join por código/link, reconstrucción tras refresh, Realtime por invalidación, leave/close, aislamiento Group/Room, concurrencia y smoke lifecycle multi-cliente |
-| 5 | Presencia básica y sucesión de host | PENDIENTE | PENDIENTE |
+| 5.0 | Contrato documental de Presence y sucesión | COMPLETADO DOCUMENTAL | Separación RoomParticipant/Presence/liveness/host, tolerancia inicial de 60 segundos como hipótesis, sucesión autoritativa por `joinedAt` y límites frente a reconexión avanzada |
+| 5.1-5.4 | Presencia básica y sucesión de host | PENDIENTE | Presence de lobby, liveness mínimo, sucesión autoritativa y hardening mobile/concurrencia |
 | 6 | Iniciar tanda y preparar ronda privada | PENDIENTE | PENDIENTE |
 | 7 | Confirmación de rol y estado PLAYING | PENDIENTE | PENDIENTE |
 | 8 | Primera votación | PENDIENTE | PENDIENTE |
@@ -881,7 +891,7 @@ El lobby sincroniza entrada, salida y cierre con Supabase Realtime como invalida
 
 ### Decisión relevante
 
-`Group` responde quiénes pertenecen socialmente. `Room` responde quiénes están reunidos ahora para jugar Impostor. `RoomParticipant` representa membresía de Room, no conexión. Presence, online/offline y sucesión de host quedan para Incremento 5.
+`Group` responde quiénes pertenecen socialmente. `Room` responde quiénes están reunidos ahora para jugar Impostor. `RoomParticipant` representa membresía de Room, no conexión. El contrato documental de Incremento 5 separa Presence efímera, liveness autoritativo mínimo y host persistido antes de implementar online/offline y sucesión.
 
 ### Hardening
 
@@ -905,6 +915,8 @@ node supabase/tests/smoke-4-5-room-lifecycle-realtime.mjs PASS
 ### Qué aprendí
 
 Realtime funcionó mejor como señal de invalidación que como autoridad. El modelo también confirmó que host de Room y administrador del Group deben permanecer separados: uno conduce una reunión temporal, el otro administra pertenencia social.
+
+Para Presence, la decisión documental fue conservar ese mismo patrón: Presence puede ayudar a detectar disponibilidad, pero el host cambia solo cuando una autoridad valida staleness y persiste el nuevo `host_player_id`.
 
 ---
 

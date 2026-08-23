@@ -473,9 +473,35 @@ En una Room `lobby`, una fila significa:
 
 > este Player pertenece actualmente a esta Room.
 
-No significa que el Player esté conectado ahora. `connectionStatus`, `isOnline`, `lastSeenAt`, `presenceState`, `ready`, `score` y `sessionPlayerId` quedan diferidos.
+No significa que el Player esté conectado ahora.
 
-La sucesión del host y la selección del participante conectado más antiguo pertenecen al Incremento 5.
+Para Incremento 5, la conexión visual no debe agregarse conceptualmente como una conversión de `RoomParticipant` en conexión. La separación es:
+
+```text
+RoomParticipant
+= pertenencia persistida
+
+Presence
+= disponibilidad efímera connected/disconnected
+
+rooms.host_player_id
+= host autoritativo persistido
+```
+
+`connectionStatus`, `isOnline`, `presenceState`, `ready`, `score` y `sessionPlayerId` no forman parte de `RoomParticipant` en Incremento 4.
+
+La sucesión del host pertenece al Incremento 5 y necesita una señal remota verificable de liveness. Conceptualmente puede agregarse `lastSeenAt` a `RoomParticipant`, o un equivalente técnico mínimo, con alcance estricto:
+
+* sirve solo para validar staleness;
+* no es el estado visual principal de Presence;
+* no es historial;
+* no se muestra al usuario;
+* no implica auditoría de conexiones;
+* no debe convertirse en infraestructura genérica.
+
+La Presence debe estar acotada a la Room activa y usar internamente `roomId` como identificador preferido del canal. `joinCode` sigue siendo una representación compartible para entrar a la Room, no la clave conceptual de Presence.
+
+Solo un Player autenticado que sea `RoomParticipant` de esa Room puede participar u observar la Presence de esa Room.
 
 ## Persistencia
 

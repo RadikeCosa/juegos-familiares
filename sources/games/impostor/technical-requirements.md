@@ -410,6 +410,21 @@ Incremento 4 no necesita Presence para distinguir membresía de conexión. Prese
 * conectado;
 * desconectado.
 
+Debe quedar separada de la pertenencia persistida:
+
+```text
+RoomParticipant = pertenencia a Room
+Presence = disponibilidad efímera
+```
+
+La Presence del lobby debe estar acotada a la Room activa. El identificador interno preferido del canal es `roomId`, no `joinCode`.
+
+Solo un Player autenticado que sea RoomParticipant de esa Room puede participar u observar su Presence.
+
+Varias conexiones del mismo Player, como dos pestañas, deben representar un único Player lógico para `connected | disconnected`.
+
+Presence no es autoridad suficiente para modificar `host_player_id` y un evento de pérdida de Presence no equivale inmediatamente a abandono.
+
 Presence no se considera una capacidad obligatoria universal para todos los juegos futuros.
 
 ---
@@ -420,11 +435,38 @@ Presence no se considera una capacidad obligatoria universal para todos los jueg
 
 Si el host deja de estar disponible, el sistema debe:
 
-* identificar participantes conectados restantes;
-* elegir al conectado con `joinedAt` más antiguo;
-* reasignar host de forma consistente.
+* observar una ausencia candidata;
+* validar staleness con una señal remota verificable de liveness que no dependa solamente de la afirmación de otro cliente;
+* aplicar una tolerancia inicial de 60 segundos;
+* identificar participantes disponibles restantes;
+* elegir al disponible con `joinedAt` más antiguo;
+* reasignar host de forma autoritativa, atómica/consistente y resistente a carreras.
+
+La señal mínima de liveness puede expresarse conceptualmente como `lastSeenAt` en `RoomParticipant` o un equivalente técnico acotado.
+
+`lastSeenAt`:
+
+* sirve solo para validar staleness;
+* no es el estado visual principal de Presence;
+* no es historial;
+* no se muestra al usuario;
+* no implica auditoría de conexiones;
+* no debe convertirse en infraestructura genérica.
+
+La tolerancia de 60 segundos es una hipótesis técnica/producto del MVP a validar en navegadores móviles. No es una regla definitiva del juego ni una configuración para usuarios.
 
 Si el host original vuelve, vuelve como participante normal y no recupera automáticamente el rol.
+
+El cambio de host se propaga por el modelo existente:
+
+```text
+rooms.host_player_id cambia
+→ Realtime invalida
+→ get_my_active_room() vuelve a leer
+→ todos observan el nuevo host
+```
+
+Presence no se convierte en fuente de verdad del lobby persistente.
 
 ---
 
@@ -577,13 +619,13 @@ Esto no elige todavía framework, proveedor ni infraestructura.
 8. Autorización conceptual para administrador, host, participante y autor de palabra.
 9. Vistas privadas por jugador, sin enviar secretos al dispositivo equivocado.
 10. Persistencia duradera de grupo, jugadores, banco de palabras e historial mínimo.
-11. Estado operativo temporal para salas, tandas, rondas, votos, conexión y marcador activo.
+11. Estado operativo temporal para salas, tandas, rondas, votos, disponibilidad efímera y marcador activo.
 12. Historial mínimo de tandas y rondas finalizadas para estadísticas futuras.
 13. Consistencia en operaciones compuestas como preparar ronda y resolver votación.
 14. Concurrencia básica para pocos dispositivos actuando al mismo tiempo.
 15. Prevención de duplicados en votos, rondas y transiciones críticas.
-16. Presencia básica conectado/desconectado.
-17. Reasignación consistente del host usando `joinedAt`.
+16. Presencia básica conectado/desconectado acotada a Room activa.
+17. Reasignación autoritativa del host usando liveness verificable, tolerancia inicial y `joinedAt`.
 18. Recuperación razonable ante refresh, reapertura, segundo plano y pérdida breve de red.
 19. Validación y privacidad del banco de palabras.
 20. Selección autoritativa y balanceada del impostor.
@@ -665,8 +707,10 @@ Esto no elige todavía framework, proveedor ni infraestructura.
 ## Presencia
 
 * ¿Permite distinguir conectado/desconectado de manera simple?
-* ¿Ayuda a resolver sucesión de host?
+* ¿Permite acotar Presence a una Room activa y autorizarla por RoomParticipant?
+* ¿Cómo deduplica varias conexiones del mismo Player?
 * ¿Qué tan confiable es en navegador móvil?
+* ¿Qué señal remota verificable de liveness permite validar staleness sin confiar en otro cliente?
 
 ## Reconexión
 

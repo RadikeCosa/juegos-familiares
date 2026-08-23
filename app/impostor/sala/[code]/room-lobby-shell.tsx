@@ -15,11 +15,15 @@ import {
   createLobbySyncController,
   clearRoomCreationIntent,
   clearRoomJoinIntent,
+  getConnectedRoomParticipantIds,
   getMyActiveRoom,
+  subscribeToRoomPresence,
   recordRoomJoinIntent,
   subscribeToRoomChanges,
   type ImpostorRoomChangesClient,
+  type ImpostorRoomPresenceClient,
   type ImpostorRoomsClient,
+  type RoomPresenceState,
   type RoomLobby,
 } from "../../../../lib/supabase/impostor-rooms";
 import {
@@ -58,6 +62,10 @@ function createImpostorRoomChangesClient(): ImpostorRoomChangesClient {
   return createBrowserSupabaseClient() as unknown as ImpostorRoomChangesClient;
 }
 
+function createImpostorRoomPresenceClient(): ImpostorRoomPresenceClient {
+  return createBrowserSupabaseClient() as unknown as ImpostorRoomPresenceClient;
+}
+
 function createAnonymousAuthClient() {
   return createBrowserSupabaseClient() as unknown as Parameters<
     typeof ensureAnonymousAuthIdentity
@@ -74,15 +82,27 @@ export function formatPlayerCount(count: number) {
 
 export function renderRoomParticipantsList(
   participants: RoomLobby["participants"],
+  connectedPlayerIds: Set<string> = new Set(),
 ) {
   return (
     <ul className="impostor-group-members">
       {participants.map((participant) => (
-        <li key={`${participant.nickname}-${participant.joinedAt}`}>
+        <li key={participant.playerId}>
           <span>{participant.nickname}</span>
           <span className="impostor-room-badges">
             {participant.isSelf ? <strong>Vos</strong> : null}
             {participant.isHost ? <strong>Host</strong> : null}
+            <span
+              className={
+                connectedPlayerIds.has(participant.playerId)
+                  ? "impostor-presence impostor-presence--connected"
+                  : "impostor-presence impostor-presence--disconnected"
+              }
+            >
+              {connectedPlayerIds.has(participant.playerId)
+                ? "conectado"
+                : "desconectado"}
+            </span>
           </span>
         </li>
       ))}
@@ -104,6 +124,7 @@ export function renderRoomLobbyContent(
     lifecycleActionState?: RoomLifecycleActionState;
     isStartingAuth?: boolean;
     startAuthError?: string;
+    connectedPlayerIds?: Set<string>;
   },
 ) {
   if (bootstrapState.status === "loading") {
@@ -278,7 +299,10 @@ export function renderRoomLobbyContent(
         aria-labelledby="impostor-room-participants-title"
       >
         <h2 id="impostor-room-participants-title">Jugadores</h2>
-        {renderRoomParticipantsList(lobby.participants)}
+        {renderRoomParticipantsList(
+          lobby.participants,
+          options.connectedPlayerIds,
+        )}
       </div>
 
       <p className="impostor-word-bank-count">
@@ -337,6 +361,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   const [startAuthError, setStartAuthError] = useState<string | undefined>();
   const [lifecycleActionState, setLifecycleActionState] =
     useState<RoomLifecycleActionState>({ status: "idle" });
+  const [roomPresenceSnapshot, setRoomPresenceSnapshot] = useState<{
+    roomId?: string;
+    state: RoomPresenceState;
+  }>({ state: {} });
   const joinRoomController = useState(() =>
     createJoinRoomByCodeController(),
   )[0];
@@ -345,6 +373,11 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   const activeRoomId =
     bootstrapState.status === "recognized" && dataState.status === "success"
       ? dataState.lobby.room.id
+      : undefined;
+  const currentRoomPlayerId =
+    dataState.status === "success"
+      ? dataState.lobby.participants.find((participant) => participant.isSelf)
+          ?.playerId
       : undefined;
 
   async function runBootstrap() {
@@ -538,6 +571,39 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     };
   }, [bootstrapState.status, activeRoomId, roomCode, router]);
 
+  useEffect(() => {
+    if (
+      bootstrapState.status !== "recognized" ||
+      !activeRoomId ||
+      !currentRoomPlayerId
+    ) {
+      return;
+    }
+
+    const subscription = subscribeToRoomPresence(
+      createImpostorRoomPresenceClient(),
+      {
+        roomId: activeRoomId,
+        currentPlayerId: currentRoomPlayerId,
+        onSync: (state) => setRoomPresenceSnapshot({ roomId: activeRoomId, state }),
+      },
+    );
+
+    return () => {
+      void subscription.unsubscribe();
+    };
+  }, [bootstrapState.status, activeRoomId, currentRoomPlayerId]);
+
+  const activePresenceState =
+    roomPresenceSnapshot.roomId === activeRoomId ? roomPresenceSnapshot.state : {};
+  const connectedPlayerIds =
+    dataState.status === "success"
+      ? getConnectedRoomParticipantIds(
+          dataState.lobby.participants,
+          activePresenceState,
+        )
+      : new Set<string>();
+
   return renderRoomLobbyContent(bootstrapState, dataState, {
     roomCode,
     onRetryBootstrap: () => void runBootstrap(),
@@ -549,5 +615,6 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     lifecycleActionState,
     isStartingAuth,
     startAuthError,
+    connectedPlayerIds,
   });
 }

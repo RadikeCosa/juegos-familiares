@@ -354,6 +354,34 @@ Cuando un no-host elige `Salir de la sala`, deja de pertenecer a la Room y vuelv
 
 Cuando el host elige `Cerrar sala`, la Room pasa a `closed`, deja de ser activa y los participantes que estén mirando el lobby vuelven al contexto de Group tras la sincronización autoritativa.
 
+## Lobby con Presence
+
+En Incremento 5, el lobby agrega estado discreto de conexión:
+
+```text
+Ramiro · Host · conectado
+Pedro · conectado
+Victoria · desconectada
+```
+
+Este estado visual viene de Presence y representa disponibilidad efímera. No cambia por sí solo la pertenencia a la Room.
+
+Si una persona bloquea el teléfono, cambia de app o pierde conexión brevemente, puede aparecer como desconectada sin abandonar la sala.
+
+La interfaz no muestra heartbeat, `lastSeenAt`, tiempos técnicos ni métricas de conexión.
+
+Si el host deja de estar disponible durante la tolerancia inicial, el lobby puede indicar el estado de forma no bloqueante, pero no reasigna host inmediatamente.
+
+Si después de validar staleness la autoridad cambia el host, todos observan el cambio al releer el lobby:
+
+```text
+Camila ahora es host
+```
+
+El aviso debe ser breve y no bloquear el uso del lobby.
+
+Si el host original vuelve después de haber sido reemplazado, aparece como participante normal.
+
 ---
 
 # Inicio de tanda

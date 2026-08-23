@@ -639,21 +639,60 @@ La sincronización de tanda, rondas, votos, resultados y marcador se definirá j
 
 # 20. Presence
 
-Presence queda fuera de Incremento 4. En Incremento 5 podrá usarse para información efímera como:
+Presence quedó fuera de Incremento 4.
 
-* conectado;
-* desconectado;
+En Incremento 5 se utiliza Supabase Realtime Presence para representar disponibilidad efímera de los `RoomParticipant` de una Room activa:
+
 * conectado;
 * desconectado;
 * disponibilidad para sucesión de host.
 
-Presence no reemplaza `Player`.
+Presence funciona como señal inmediata de disponibilidad. No reemplaza `RoomParticipant`, no reemplaza `Player` y no constituye autoridad para `hostPlayerId`.
 
-Presence no reemplaza membresía de grupo.
+Varias conexiones de un mismo Player se reducen a un único Player lógico.
 
-Presence no debería ser por sí sola la autoridad final de `hostPlayerId`.
+La separación conceptual del Incremento 5 es:
 
-La reasignación de host debe quedar registrada en el estado autoritativo cuando se implemente en Incremento 5.
+```text
+RoomParticipant
+= pertenencia persistida a una Room
+
+Presence
+= disponibilidad efímera connected/disconnected
+
+rooms.host_player_id
+= host autoritativo persistido
+```
+
+La Presence debe estar acotada a la Room activa. El identificador interno preferido del canal es `roomId`, no `joinCode`, porque el código pertenece al ingreso compartible y no debería funcionar como clave conceptual del canal.
+
+Solo un Player autenticado que sea `RoomParticipant` de esa Room puede participar u observar su Presence.
+
+Un evento de pérdida de Presence no equivale inmediatamente a abandono. La sucesión requiere validación autoritativa adicional antes de modificar `host_player_id`.
+
+Para sucesión de host se necesita una señal remota verificable de liveness que no dependa solamente de la afirmación de otro cliente. Conceptualmente puede expresarse como `lastSeenAt` en `RoomParticipant` o un equivalente técnico mínimo.
+
+Ese dato:
+
+* sirve solo para validar staleness;
+* no es el estado visual principal de Presence;
+* no es historial;
+* no se muestra al usuario;
+* no implica auditoría de conexiones;
+* no debe convertirse en infraestructura genérica.
+
+La tolerancia inicial del MVP antes de considerar al host no disponible para sucesión es 60 segundos. Es una hipótesis técnica/producto a validar en navegadores móviles, no una regla definitiva del juego ni configuración de usuario.
+
+La reasignación de host debe quedar registrada en el estado autoritativo. El flujo sigue siendo:
+
+```text
+estado persistido cambia
+→ Realtime invalida
+→ get_my_active_room() vuelve a leer
+→ todos observan el nuevo host
+```
+
+Presence no se convierte en fuente de verdad del lobby persistente.
 
 ---
 
@@ -731,11 +770,13 @@ Comportamiento actual de Impostor:
 
 Si el host deja de estar disponible:
 
-1. detectar participantes conectados;
-2. excluir host no disponible;
-3. ordenar restantes por `joinedAt`;
-4. elegir el más antiguo;
-5. registrar nuevo `hostPlayerId` autoritativamente.
+1. observar ausencia candidata mediante Presence;
+2. validar staleness con una señal remota verificable de liveness;
+3. aplicar la tolerancia inicial de 60 segundos;
+4. excluir al host no disponible;
+5. ordenar participantes disponibles restantes por `joinedAt`;
+6. elegir el más antiguo;
+7. registrar el nuevo `host_player_id` autoritativamente y de forma resistente a carreras.
 
 Si el host original vuelve:
 
