@@ -356,7 +356,7 @@ Cuando el host elige `Cerrar sala`, la Room pasa a `closed`, deja de ser activa 
 
 ## Lobby con Presence
 
-En Incremento 5, el lobby agrega estado discreto de conexión:
+En Incremento 5.1, el lobby agrega estado discreto de conexión:
 
 ```text
 Ramiro · Host · conectado
@@ -368,11 +368,13 @@ Este estado visual viene de Presence y representa disponibilidad efímera. No ca
 
 Si una persona bloquea el teléfono, cambia de app o pierde conexión brevemente, puede aparecer como desconectada sin abandonar la sala.
 
-La interfaz no muestra heartbeat, `lastSeenAt`, tiempos técnicos ni métricas de conexión.
+La interfaz no muestra heartbeat, `last_seen_at`, tiempos técnicos ni métricas de conexión.
 
-Si el host deja de estar disponible durante la tolerancia inicial, el lobby puede indicar el estado de forma no bloqueante, pero no reasigna host inmediatamente.
+En 5.1 y 5.2, si el host deja de estar disponible, el lobby puede indicarlo de forma no bloqueante, pero no reasigna host.
 
-Si después de validar staleness la autoridad cambia el host, todos observan el cambio al releer el lobby:
+5.2 agrega liveness autoritativo mínimo sin mostrarlo en la interfaz. El cliente mantiene esa señal con heartbeat cada 30 segundos mientras el lobby está activo y con refresh al volver a foreground. Un teléfono en background, bloqueado o con timers suspendidos no se considera abandono por ese solo hecho.
+
+Pendiente para 5.3+: si después de validar staleness la autoridad cambia el host, todos observan el cambio al releer el lobby:
 
 ```text
 Camila ahora es host

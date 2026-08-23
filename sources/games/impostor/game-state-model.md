@@ -176,7 +176,7 @@ La sala existe y los jugadores pueden entrar antes de comenzar la tanda.
 * cantidad de jugadores;
 * código/enlace de Room.
 
-La pertenencia persistida no equivale a conexión. Presence y estado online/offline pertenecen al Incremento 5.
+La pertenencia persistida no equivale a conexión. Presence básica de lobby pertenece al Incremento 5.1; liveness autoritativo, sucesión y recuperación avanzada quedan para 5.2+.
 
 ## Acciones posibles
 
@@ -917,11 +917,11 @@ No todo necesita convertirse en un estado global.
 
 ## Conexión
 
-Estado futuro, fuera de Incremento 4.
+Estado fuera de Incremento 4 y cerrado en Incremento 5.1 para lobby.
 
 En Incremento 4, `RoomParticipant` representa membresía de la Room, no presencia ni conexión actual.
 
-En Incremento 5, la conexión visual del lobby se modela con Presence efímera:
+En Incremento 5.1, la conexión visual del lobby se modela con Presence efímera:
 
 ```text
 presence =
@@ -932,6 +932,15 @@ disconnected
 Esta Presence está acotada a la Room activa y representa disponibilidad actual. Varias conexiones del mismo Player, por ejemplo dos pestañas, cuentan como un único Player lógico.
 
 Presence no reemplaza `RoomParticipant`, no decide `host_player_id` y no equivale a abandono.
+
+Incremento 5.2 agrega liveness autoritativo mínimo:
+
+```text
+room_participants.last_seen_at
+= evidencia verificable de actividad reciente
+```
+
+`last_seen_at` no representa Presence, conexión, abandono, host, ready ni estado de juego. Se actualiza por autoridad backend para el RoomParticipant propio y con reloj server-side/Postgres.
 
 ## Rol visto
 
@@ -984,11 +993,13 @@ La política avanzada de recuperación de jugadores durante una tanda queda fuer
 
 # Desconexión del host
 
+La reasignación automática queda pendiente para 5.3+. En 5.1 y 5.2, un host desconectado conserva `rooms.host_player_id` y sigue marcado Host.
+
 Si el host deja de estar disponible:
 
 1. se observa una ausencia candidata mediante Presence;
-2. la autoridad valida staleness con una señal remota verificable de liveness, conceptualmente `lastSeenAt` o equivalente mínimo;
-3. se aplica una tolerancia inicial de 60 segundos;
+2. la autoridad valida staleness con `room_participants.last_seen_at` o representación física equivalente;
+3. se aplica un threshold inicial de 90 segundos;
 4. se identifican participantes disponibles restantes;
 5. se ordenan según `joinedAt`;
 6. se asigna como host al participante disponible más antiguo mediante actualización autoritativa y consistente.
@@ -1001,7 +1012,7 @@ Actor:
 
 `authority`
 
-Un cliente puede intentar disparar la intención de sucesión, pero no decide el nuevo host. La operación debe ser resistente a carreras si varios clientes la intentan simultáneamente.
+Un cliente puede intentar disparar la intención de sucesión en 5.3+, pero no decide el nuevo host. La operación debe ser resistente a carreras si varios clientes la intentan simultáneamente.
 
 Esto no modifica necesariamente el estado global de la partida.
 
@@ -1026,7 +1037,17 @@ Camila = host
 
 El host anterior no recupera automáticamente el rol.
 
-La tolerancia de 60 segundos es una hipótesis técnica/producto del MVP a validar en navegadores móviles, no una regla definitiva del juego ni configuración de usuario.
+El threshold de 90 segundos reemplaza la hipótesis previa de 60 segundos para la implementación inicial. Busca dar margen frente a heartbeat de 30 segundos, throttling, red y suspensión de timers móviles. No es una regla definitiva del juego ni configuración de usuario.
+
+Presence y liveness pueden discrepar temporalmente sin que sea un bug:
+
+```text
+Presence = disconnected
+last_seen_at = hace 10 segundos
+
+→ desconectado para UX
+→ todavía no stale autoritativamente
+```
 
 ---
 

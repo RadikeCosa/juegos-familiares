@@ -17,8 +17,10 @@ import {
   clearRoomJoinIntent,
   getConnectedRoomParticipantIds,
   getMyActiveRoom,
+  refreshMyRoomLiveness,
   subscribeToRoomPresence,
   recordRoomJoinIntent,
+  startRoomLivenessHeartbeat,
   subscribeToRoomChanges,
   type ImpostorRoomChangesClient,
   type ImpostorRoomPresenceClient,
@@ -49,6 +51,7 @@ type RoomLifecycleActionState =
 const GENERIC_ROOM_LOBBY_ERROR = "No pudimos cargar la sala. Intentá de nuevo.";
 const GENERIC_START_AUTH_ERROR =
   "No pudimos empezar. Revisá tu conexión e intentá de nuevo.";
+const ROOM_LIVENESS_LOG_MESSAGE = "No pudimos refrescar liveness de sala.";
 
 function createPlatformBootstrapClient(): PlatformBootstrapClient {
   return createBrowserSupabaseClient() as unknown as PlatformBootstrapClient;
@@ -74,6 +77,10 @@ function createAnonymousAuthClient() {
 
 function getFriendlyError(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+function logRoomLivenessError(error: unknown) {
+  console.warn(ROOM_LIVENESS_LOG_MESSAGE, error);
 }
 
 export function formatPlayerCount(count: number) {
@@ -586,11 +593,36 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
         roomId: activeRoomId,
         currentPlayerId: currentRoomPlayerId,
         onSync: (state) => setRoomPresenceSnapshot({ roomId: activeRoomId, state }),
+        onSubscribed: () => {
+          void refreshMyRoomLiveness(createImpostorRoomsClient()).catch(
+            logRoomLivenessError,
+          );
+        },
+        onError: logRoomLivenessError,
       },
     );
 
     return () => {
       void subscription.unsubscribe();
+    };
+  }, [bootstrapState.status, activeRoomId, currentRoomPlayerId]);
+
+  useEffect(() => {
+    if (
+      bootstrapState.status !== "recognized" ||
+      !activeRoomId ||
+      !currentRoomPlayerId
+    ) {
+      return;
+    }
+
+    const heartbeat = startRoomLivenessHeartbeat({
+      refresh: () => refreshMyRoomLiveness(createImpostorRoomsClient()),
+      onError: logRoomLivenessError,
+    });
+
+    return () => {
+      heartbeat.dispose();
     };
   }, [bootstrapState.status, activeRoomId, currentRoomPlayerId]);
 

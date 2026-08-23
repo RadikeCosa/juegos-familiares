@@ -5,7 +5,13 @@ type SupabaseRpcResult<TData> = {
 
 export type ImpostorRoomsClient = {
     rpc: (
-        fn: "create_room" | "join_room_by_code" | "get_my_active_room" | "leave_room" | "close_room",
+        fn:
+            | "create_room"
+            | "join_room_by_code"
+            | "get_my_active_room"
+            | "leave_room"
+            | "close_room"
+            | "refresh_my_room_liveness",
         params?: { room_code: string }
     ) => PromiseLike<SupabaseRpcResult<unknown>>;
 };
@@ -231,6 +237,14 @@ const NO_ACTIVE_ROOM_TO_CLOSE_ERROR = "Ya no tenés una sala activa para cerrar.
 const NOT_ROOM_HOST_ERROR = "Solo el host puede cerrar la sala.";
 const GENERIC_CLOSE_ROOM_ERROR =
     "No pudimos cerrar la sala. Intentá de nuevo.";
+const UNAUTHENTICATED_LIVENESS_ERROR =
+    "Necesitás entrar a tu grupo antes de mantener activa la sala.";
+const MISSING_PLAYER_LIVENESS_ERROR =
+    "No pudimos reconocer tu jugador para mantener activa la sala.";
+const GENERIC_LIVENESS_ERROR =
+    "No pudimos mantener activa la sala. Intentá de nuevo.";
+
+export const ROOM_LIVENESS_HEARTBEAT_MS = 30_000;
 
 type RoomLobbyRow = {
     room_id?: string;
@@ -359,6 +373,20 @@ function getCloseRoomErrorMessage(error: unknown) {
     return GENERIC_CLOSE_ROOM_ERROR;
 }
 
+function getLivenessErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "28000" || error.code === "42501") {
+            return UNAUTHENTICATED_LIVENESS_ERROR;
+        }
+
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_LIVENESS_ERROR;
+        }
+    }
+
+    return GENERIC_LIVENESS_ERROR;
+}
+
 function isRoomLobbyRow(value: unknown): value is RoomLobbyRow {
     const row = value as Partial<RoomLobbyRow>;
 
@@ -438,6 +466,7 @@ export function subscribeToRoomPresence(
         roomId: string;
         currentPlayerId: string;
         onSync: (presenceState: RoomPresenceState) => void;
+        onSubscribed?: () => void;
         onError?: (error: unknown) => void;
     }
 ): RoomPresenceSubscription {
@@ -478,7 +507,13 @@ export function subscribeToRoomPresence(
         if (status === "SUBSCRIBED") {
             void Promise.resolve(
                 channel.track({ playerId: options.currentPlayerId })
-            ).catch((trackError) => options.onError?.(trackError));
+            )
+                .then(() => {
+                    if (!isDisposed) {
+                        options.onSubscribed?.();
+                    }
+                })
+                .catch((trackError) => options.onError?.(trackError));
         }
 
         if (status === "TIMED_OUT" || status === "CHANNEL_ERROR") {
@@ -495,6 +530,87 @@ export function subscribeToRoomPresence(
             } finally {
                 await supabase.removeChannel(channel);
             }
+        }
+    };
+}
+
+export async function refreshMyRoomLiveness(
+    supabase: ImpostorRoomsClient
+): Promise<void> {
+    const result = await supabase.rpc("refresh_my_room_liveness");
+
+    if (result.error) {
+        throw new Error(getLivenessErrorMessage(result.error));
+    }
+}
+
+type LivenessDocument = {
+    visibilityState?: DocumentVisibilityState;
+    addEventListener?: (
+        type: "visibilitychange",
+        listener: () => void
+    ) => void;
+    removeEventListener?: (
+        type: "visibilitychange",
+        listener: () => void
+    ) => void;
+};
+
+type RoomLivenessHeartbeatOptions = {
+    refresh: () => PromiseLike<void>;
+    onError?: (error: unknown) => void;
+    intervalMs?: number;
+    document?: LivenessDocument | null;
+    setIntervalFn?: typeof setInterval;
+    clearIntervalFn?: typeof clearInterval;
+};
+
+export type RoomLivenessHeartbeat = {
+    refreshNow: () => void;
+    dispose: () => void;
+};
+
+export function startRoomLivenessHeartbeat(
+    options: RoomLivenessHeartbeatOptions
+): RoomLivenessHeartbeat {
+    let isDisposed = false;
+    const intervalMs = options.intervalMs ?? ROOM_LIVENESS_HEARTBEAT_MS;
+    const setIntervalFn = options.setIntervalFn ?? globalThis.setInterval;
+    const clearIntervalFn = options.clearIntervalFn ?? globalThis.clearInterval;
+    const targetDocument =
+        options.document ?? (typeof document === "undefined" ? null : document);
+
+    function refreshNow() {
+        if (isDisposed) {
+            return;
+        }
+
+        void Promise.resolve(options.refresh()).catch((error) => {
+            if (!isDisposed) {
+                options.onError?.(error);
+            }
+        });
+    }
+
+    function handleVisibilityChange() {
+        if (targetDocument?.visibilityState === "visible") {
+            refreshNow();
+        }
+    }
+
+    const intervalId = setIntervalFn(refreshNow, intervalMs);
+    targetDocument?.addEventListener?.("visibilitychange", handleVisibilityChange);
+    refreshNow();
+
+    return {
+        refreshNow,
+        dispose() {
+            isDisposed = true;
+            clearIntervalFn(intervalId);
+            targetDocument?.removeEventListener?.(
+                "visibilitychange",
+                handleVisibilityChange
+            );
         }
     };
 }

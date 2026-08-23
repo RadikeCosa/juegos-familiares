@@ -188,7 +188,7 @@ Introducción progresiva esperada:
 3. RLS para permisos de grupo, integrante y autor de palabra.
 4. Estado operativo de sala y tanda cuando haya lobby real.
 5. Realtime para propagación de cambios compartidos.
-6. Presence para conexión/desconexión y sucesión de host.
+6. Presence para conexión/desconexión; liveness autoritativo separado para sucesión de host.
 
 Realtime no debe aplicarse a todo por defecto.
 
@@ -1205,7 +1205,7 @@ Impostor:
 * Supabase Realtime Presence para disponibilidad efímera `connected | disconnected` en el lobby;
 * canal de Presence acotado internamente por `roomId`, no por `joinCode`;
 * verificación de que solo un Player autenticado y RoomParticipant de esa Room participe u observe su Presence;
-* señal remota verificable de liveness, conceptualmente `lastSeenAt` en `RoomParticipant` o equivalente técnico mínimo;
+* señal remota verificable de liveness, conceptualmente `room_participants.last_seen_at` o equivalente técnico mínimo;
 * lógica autoritativa, atómica/consistente y resistente a carreras para reasignar host.
 
 ### Contrato documental 5.0
@@ -1215,7 +1215,7 @@ Antes de implementar, el corpus debe cerrar estas separaciones:
 ```text
 RoomParticipant = pertenencia persistida
 Presence        = disponibilidad efímera
-lastSeenAt      = señal autoritativa mínima para validar staleness
+room_participants.last_seen_at = señal autoritativa mínima para validar staleness
 rooms.host_player_id = host autoritativo persistido
 ```
 
@@ -1227,13 +1227,13 @@ El cliente decide cómo mostrar el estado visual discreto y puede solicitar una 
 
 La autoridad decide si el host está stale, quién es elegible y si corresponde actualizar `host_player_id`.
 
-La tolerancia inicial del MVP es de 60 segundos antes de considerar al host no disponible para sucesión. Es una hipótesis técnica/producto a validar en navegadores móviles, no una regla definitiva del juego ni una preferencia configurable.
+La hipótesis documental previa de 60 segundos queda reemplazada para la implementación inicial por un threshold técnico de 90 segundos, sujeto a validación mobile/background. No es una regla definitiva del juego ni una preferencia configurable.
 
 Un evento de pérdida de Presence no equivale inmediatamente a abandono y no reasigna host de forma directa.
 
 Varias conexiones del mismo Player, por ejemplo dos pestañas, representan un único Player lógico para `connected | disconnected`.
 
-`lastSeenAt` o su equivalente:
+`last_seen_at` o su equivalente:
 
 * sirve solo para validar staleness;
 * no es el estado visual principal de Presence;
@@ -1256,11 +1256,13 @@ Incluye:
 
 * separación pertenencia/conexión/liveness/host;
 * regla de no confiar en Presence como autoridad de host;
-* tolerancia inicial de 60 segundos como hipótesis a validar;
+* registro de la hipótesis documental inicial de 60 segundos, reemplazada en 5.2 por 90 segundos para la implementación inicial;
 * alcance estricto de lobby y Room activa;
 * límites explícitos frente a reconexión avanzada.
 
 #### Incremento 5.1 — Presence básica del lobby
+
+Estado: `CERRADO`.
 
 Objetivo:
 
@@ -1275,7 +1277,14 @@ Incluye:
 * autorización de observación/participación limitada a RoomParticipants;
 * estado visual no autoritativo.
 
-No incluye sucesión de host.
+Validación cerrada:
+
+* tests y validadores automáticos de lógica/autorización relevante;
+* Presence privada por Room activa con `Allow public access` deshabilitado;
+* smoke manual productivo multi-sesión;
+* desconexión, reconexión, refresh, lifecycle y mobile revisados.
+
+No incluye `last_seen_at`, heartbeat persistido, threshold de stale, definición autoritativa de stale ni sucesión de host.
 
 #### Incremento 5.2 — Liveness autoritativo mínimo
 
@@ -1287,12 +1296,21 @@ introducir señal remota verificable para validar staleness
 
 Incluye:
 
-* `lastSeenAt` conceptual o equivalente técnico mínimo;
-* actualización acotada al participante autenticado;
-* uso interno para sucesión;
+* `room_participants.last_seen_at` o representación física equivalente aprobada;
+* inicialización de nueva participación con `last_seen_at = now()`;
+* estrategia de backfill decidida recién durante implementación, después de inspeccionar datos existentes;
+* RPC autoritativa conceptualmente equivalente a `refresh_my_room_liveness()`;
+* actualización acotada al participante autenticado, derivando `auth.uid() -> Player -> active Room -> RoomParticipant propio`;
+* rechazo o no-op si no hay Auth válida, no existe Player, no existe Room activa, el Player no pertenece a la Room o la Room no está en `lobby`;
+* timestamp server-side/Postgres, sin `player_id`, `room_id` ni timestamp enviados por cliente;
+* heartbeat inicial cada 30 segundos mientras el lobby esté activo;
+* refresh al establecer/reconstruir lobby, al establecer Presence y al volver a foreground;
+* throttling técnico aproximado de 10 segundos para evitar escrituras redundantes;
+* definición backend de active/stale con threshold inicial de 90 segundos;
+* liveness por Player-en-Room, no por tab/conexión;
 * no mostrar métricas técnicas al usuario.
 
-No incluye historial, auditoría ni infraestructura genérica de conexiones.
+No incluye elección de sucesor, modificación de `host_player_id`, RPC de sucesión, locks/concurrencia de sucesión, feedback visual de nuevo host, recuperación del host reemplazado, historial, auditoría ni infraestructura genérica de conexiones.
 
 #### Incremento 5.3 — Sucesión autoritativa de host
 
@@ -1304,7 +1322,7 @@ reasignar host de forma consistente cuando el host esté stale
 
 Incluye:
 
-* tolerancia inicial de 60 segundos;
+* threshold inicial de 90 segundos definido en 5.2;
 * selección del participante disponible restante con `joinedAt` más antiguo;
 * actualización autoritativa de `rooms.host_player_id`;
 * protección contra carreras si varios clientes intentan disparar la sucesión;
@@ -1325,22 +1343,46 @@ Incluye:
 * feedback breve y no bloqueante cuando cambia el host;
 * pruebas de múltiples pestañas, background/foreground y carreras de sucesión.
 
-No muestra heartbeat, `lastSeenAt`, métricas técnicas ni controles de tolerancia.
+No muestra heartbeat, `last_seen_at`, métricas técnicas ni controles de tolerancia.
 
 ### Decisiones técnicas a cerrar
 
-* mecanismo mínimo para actualizar y validar `lastSeenAt` o equivalente;
-* qué eventos de navegador móvil se consideran señal de desconexión;
+* si la implementación física usa exactamente `room_participants.last_seen_at` o un equivalente compatible;
+* estrategia concreta de backfill de filas existentes;
+* si se encapsula el cálculo active/stale en una función SQL interna para tests y futura sucesión;
 * dónde se ejecuta la reasignación autoritativa;
 * cómo se informa el cambio de host.
 
 ### Tests / validación
 
+5.1 ya validó:
+
+* Presence básica privada para participantes de una Room activa;
+* connected/disconnected visible y accesible en lobby;
+* múltiples conexiones del mismo Player como un único Player lógico;
+* pérdida de Presence sin abandono ni cambio de host;
+* refresh y lifecycle existentes sin regresión;
+* autorización negativa para no participantes, otro Group y sin Auth;
+* smoke manual productivo multi-cliente y revisión mobile.
+
+Para 5.2 quedan pendientes:
+
+* DB: inicialización de `last_seen_at` al crear Room y al unirse;
+* DB/RPC: refresh propio autorizado y derivado desde `auth.uid()`;
+* DB/RPC: rechazo/no-op sin Auth, sin Player, sin Room activa, sin pertenencia o con Room cerrada;
+* DB/RPC: cliente no controla `player_id`, `room_id` ni timestamp;
+* DB: `last_seen_at null` se considera stale;
+* DB: active/stale usa `now()` server-side y threshold de 90 segundos;
+* frontend: heartbeat cada 30 segundos solo con lobby activo;
+* frontend: refresh al reconstruir lobby, al establecer Presence y al volver a foreground;
+* frontend: múltiples pestañas pueden refrescar la misma fila sin modelo por tab.
+
+Para 5.3+ quedan pendientes:
+
 * unit test de selección de nuevo host por `joinedAt`;
 * integración: pérdida de Presence no reasigna de inmediato;
-* integración: host stale después de la tolerancia dispara reasignación autoritativa;
+* integración: host stale después del threshold dispara reasignación autoritativa;
 * integración/concurrencia: dos clientes intentando reasignar no generan dos hosts;
-* validación: varias pestañas del mismo Player cuentan como un único Player lógico;
 * prueba manual con tres teléfonos;
 * validación mobile: bloquear pantalla o cambiar de app no rompe lobby de forma irreversible.
 
@@ -2259,7 +2301,11 @@ Se agregó Room + Lobby: creación de Room, join por código/enlace, reconstrucc
 
 5.0 cierra el contrato documental de Presence y sucesión.
 
-5.1 a 5.4 agregan Presence básica de lobby, liveness autoritativo mínimo, sucesión autoritativa de host y hardening mobile/concurrencia.
+5.1 cerró Presence básica de lobby con canal privado por Room, autorización por RoomParticipant y validación productiva multi-cliente.
+
+5.2 queda definido documentalmente como liveness autoritativo mínimo.
+
+5.3 a 5.4 quedan para sucesión autoritativa de host y hardening mobile/concurrencia.
 
 ## Incrementos 6 a 12
 

@@ -307,7 +307,7 @@ Supabase constituye infraestructura común, pero no todas sus capacidades son ob
 * operaciones sincronizadas;
 * requerimientos específicos de privacidad.
 
-Incremento 4 requiere Realtime para avisar cambios persistidos del lobby. Presence queda fuera de Room + Lobby y se introduce recién en Incremento 5 para conexión, desconexión y sucesión del host.
+Incremento 4 requiere Realtime para avisar cambios persistidos del lobby. Presence queda fuera de Room + Lobby y se introduce en Incremento 5.1 para conexión/desconexión. Liveness y sucesión de host quedan separados para 5.2+.
 
 Un futuro juego podría no necesitarlos.
 
@@ -641,15 +641,16 @@ La sincronización de tanda, rondas, votos, resultados y marcador se definirá j
 
 Presence quedó fuera de Incremento 4.
 
-En Incremento 5 se utiliza Supabase Realtime Presence para representar disponibilidad efímera de los `RoomParticipant` de una Room activa:
+Incremento 5.1 quedó cerrado con Supabase Realtime Presence para representar disponibilidad efímera de los `RoomParticipant` de una Room activa:
 
 * conectado;
-* desconectado;
-* disponibilidad para sucesión de host.
+* desconectado.
 
 Presence funciona como señal inmediata de disponibilidad. No reemplaza `RoomParticipant`, no reemplaza `Player` y no constituye autoridad para `hostPlayerId`.
 
 Varias conexiones de un mismo Player se reducen a un único Player lógico.
+
+El canal de Presence es privado, está identificado internamente por `roomId` y se autoriza contra `RoomParticipants` persistidos.
 
 La separación conceptual del Incremento 5 es:
 
@@ -660,6 +661,9 @@ RoomParticipant
 Presence
 = disponibilidad efímera connected/disconnected
 
+room_participants.last_seen_at
+= evidencia autoritativa de actividad reciente
+
 rooms.host_player_id
 = host autoritativo persistido
 ```
@@ -668,11 +672,24 @@ La Presence debe estar acotada a la Room activa. El identificador interno prefer
 
 Solo un Player autenticado que sea `RoomParticipant` de esa Room puede participar u observar su Presence.
 
-Un evento de pérdida de Presence no equivale inmediatamente a abandono. La sucesión requiere validación autoritativa adicional antes de modificar `host_player_id`.
+Un evento de pérdida de Presence no equivale inmediatamente a abandono. La desconexión de un host no modifica `host_player_id` en 5.1.
 
-Para sucesión de host se necesita una señal remota verificable de liveness que no dependa solamente de la afirmación de otro cliente. Conceptualmente puede expresarse como `lastSeenAt` en `RoomParticipant` o un equivalente técnico mínimo.
+Incremento 5.2 define `room_participants.last_seen_at` como señal mínima de liveness autoritativo. Ese timestamp representa evidencia verificable de actividad reciente del Player dentro de esa Room. No representa Presence, conexión, abandono, host, ready ni estado de juego.
 
-Ese dato:
+La escritura futura ocurre mediante una RPC autoritativa conceptualmente equivalente a `refresh_my_room_liveness()`. El cliente no envía `player_id`, `room_id` ni timestamp. La autoridad deriva:
+
+```text
+auth.uid()
+→ Player
+→ active Room
+→ RoomParticipant propio
+```
+
+y escribe tiempo server-side de Postgres.
+
+La RPC debe rechazar o no operar cuando no hay Auth válida, no existe Player, no existe Room activa, el Player no pertenece a la Room o la Room no está en `lobby`.
+
+`last_seen_at`:
 
 * sirve solo para validar staleness;
 * no es el estado visual principal de Presence;
@@ -681,7 +698,35 @@ Ese dato:
 * no implica auditoría de conexiones;
 * no debe convertirse en infraestructura genérica.
 
-La tolerancia inicial del MVP antes de considerar al host no disponible para sucesión es 60 segundos. Es una hipótesis técnica/producto a validar en navegadores móviles, no una regla definitiva del juego ni configuración de usuario.
+Una nueva participación debe comenzar con liveness reciente: `last_seen_at = now()`. La estrategia concreta de backfill para filas existentes se decide durante implementación, después de inspeccionar los datos actuales.
+
+La cadencia inicial del heartbeat es 30 segundos mientras el lobby esté activo. El cliente refresca liveness al establecer o reconstruir correctamente el lobby, al establecer correctamente Presence, periódicamente mientras el lobby esté activo y al volver a foreground. No refresca por cada interacción de usuario.
+
+La implementación puede evitar escrituras si `last_seen_at` fue actualizado hace menos de aproximadamente 10 segundos. Ese throttling es protección técnica, no regla de producto.
+
+El threshold inicial de stale es 90 segundos:
+
+```text
+active = last_seen_at no es null
+         and now() - last_seen_at <= 90s
+
+stale  = last_seen_at es null
+         or now() - last_seen_at > 90s
+```
+
+El reloj autoritativo es server-side/Postgres. Los 90 segundos reemplazan la hipótesis previa de 60 segundos para la implementación inicial, porque dan más margen frente a heartbeat de 30 segundos, throttling, red y suspensión de timers móviles. Sigue siendo un parámetro técnico a validar, no una regla del juego ni una preferencia configurable.
+
+Liveness es por Player-en-Room, no por conexión ni pestaña. Dos pestañas pueden refrescar la misma fila. Mientras alguna conexión válida del Player mantenga el heartbeat, el Player conserva liveness reciente.
+
+Presence y liveness pueden discrepar temporalmente sin que sea un bug. Por ejemplo:
+
+```text
+Presence = disconnected
+last_seen_at = hace 10 segundos
+
+→ desconectado para UX
+→ todavía no stale autoritativamente
+```
 
 La reasignación de host debe quedar registrada en el estado autoritativo. El flujo sigue siendo:
 
@@ -766,13 +811,13 @@ No definimos todavía implementación transaccional exacta.
 
 # 24. Host disconnect
 
-Comportamiento actual de Impostor:
+Comportamiento pendiente para 5.3+:
 
 Si el host deja de estar disponible:
 
 1. observar ausencia candidata mediante Presence;
 2. validar staleness con una señal remota verificable de liveness;
-3. aplicar la tolerancia inicial de 60 segundos;
+3. aplicar el threshold inicial de 90 segundos;
 4. excluir al host no disponible;
 5. ordenar participantes disponibles restantes por `joinedAt`;
 6. elegir el más antiguo;

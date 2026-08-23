@@ -405,7 +405,7 @@ Las transiciones críticas deben poder tolerar reintentos o dobles acciones del 
 
 ## Fuera de Incremento 4
 
-Incremento 4 no necesita Presence para distinguir membresía de conexión. Presence se incorpora en Incremento 5 para:
+Incremento 4 no necesita Presence para distinguir membresía de conexión. Incremento 5.1 cerró Presence básica para:
 
 * conectado;
 * desconectado.
@@ -425,35 +425,107 @@ Varias conexiones del mismo Player, como dos pestañas, deben representar un ún
 
 Presence no es autoridad suficiente para modificar `host_player_id` y un evento de pérdida de Presence no equivale inmediatamente a abandono.
 
+5.1 validó esta Presence como canal privado de Room, autorizado por `RoomParticipant` y visible en lobby. No agregó heartbeat persistido, `last_seen_at`, threshold de stale ni sucesión.
+
 Presence no se considera una capacidad obligatoria universal para todos los juegos futuros.
 
 ---
 
-# 16. Reasignación del host
+# 16. Liveness autoritativo y reasignación del host
 
-## Incremento 5
+## Incremento 5.2
+
+5.2 debe introducir una señal backend verificable para determinar active/stale sin reasignar todavía el host.
+
+La representación conceptual aprobada es:
+
+```text
+room_participants.last_seen_at
+```
+
+`last_seen_at` representa evidencia autoritativa de actividad reciente del Player dentro de esa Room.
+
+No representa:
+
+* Presence;
+* conexión;
+* abandono;
+* host;
+* ready;
+* estado de juego.
+
+Una nueva participación debe comenzar con liveness reciente: `last_seen_at = now()`. La estrategia concreta de backfill para filas existentes se decide durante implementación, después de inspeccionar los datos actuales.
+
+La escritura futura usa una RPC `SECURITY DEFINER` conceptualmente equivalente a:
+
+```text
+refresh_my_room_liveness()
+```
+
+El cliente no suministra:
+
+* `player_id`;
+* `room_id`;
+* timestamp.
+
+La RPC deriva:
+
+```text
+auth.uid()
+→ Player
+→ active Room
+→ RoomParticipant propio
+```
+
+y utiliza tiempo server-side/Postgres.
+
+Debe rechazar o no operar cuando:
+
+* no hay Auth válida;
+* no existe Player;
+* no existe Room activa;
+* el Player no pertenece a la Room;
+* la Room no está en `lobby`.
+
+El cliente refresca liveness como mínimo:
+
+* al establecer o reconstruir correctamente el lobby;
+* al establecer correctamente Presence;
+* periódicamente cada 30 segundos mientras el lobby esté activo;
+* al volver a foreground.
+
+No debe refrescar por cada interacción de usuario.
+
+La implementación puede evitar escrituras si `last_seen_at` fue actualizado hace menos de aproximadamente 10 segundos. Esto es protección técnica, no regla de producto.
+
+La definición inicial es:
+
+```text
+active =
+  last_seen_at no es null
+  and now() - last_seen_at <= 90s
+
+stale =
+  last_seen_at es null
+  or now() - last_seen_at > 90s
+```
+
+El reloj autoritativo es server-side/Postgres. El threshold inicial de 90 segundos reemplaza la hipótesis previa de 60 segundos por el margen necesario frente a heartbeat de 30 segundos, throttling, red y suspensión de timers móviles. No es una regla configurable ni una regla del juego.
+
+Liveness es por Player-en-Room, no por conexión/tab. Dos pestañas pueden refrescar la misma fila.
+
+No se decide una RPC pública `is_player_stale()` para frontend. Si la implementación necesita una función SQL interna para encapsular el cálculo y facilitar tests o la futura sucesión, se evalúa entonces.
+
+## Pendiente para 5.3+
 
 Si el host deja de estar disponible, el sistema debe:
 
 * observar una ausencia candidata;
 * validar staleness con una señal remota verificable de liveness que no dependa solamente de la afirmación de otro cliente;
-* aplicar una tolerancia inicial de 60 segundos;
+* aplicar el threshold inicial de 90 segundos;
 * identificar participantes disponibles restantes;
 * elegir al disponible con `joinedAt` más antiguo;
 * reasignar host de forma autoritativa, atómica/consistente y resistente a carreras.
-
-La señal mínima de liveness puede expresarse conceptualmente como `lastSeenAt` en `RoomParticipant` o un equivalente técnico acotado.
-
-`lastSeenAt`:
-
-* sirve solo para validar staleness;
-* no es el estado visual principal de Presence;
-* no es historial;
-* no se muestra al usuario;
-* no implica auditoría de conexiones;
-* no debe convertirse en infraestructura genérica.
-
-La tolerancia de 60 segundos es una hipótesis técnica/producto del MVP a validar en navegadores móviles. No es una regla definitiva del juego ni una configuración para usuarios.
 
 Si el host original vuelve, vuelve como participante normal y no recupera automáticamente el rol.
 
@@ -625,7 +697,7 @@ Esto no elige todavía framework, proveedor ni infraestructura.
 14. Concurrencia básica para pocos dispositivos actuando al mismo tiempo.
 15. Prevención de duplicados en votos, rondas y transiciones críticas.
 16. Presencia básica conectado/desconectado acotada a Room activa.
-17. Reasignación autoritativa del host usando liveness verificable, tolerancia inicial y `joinedAt`.
+17. Reasignación autoritativa del host usando liveness verificable, threshold inicial y `joinedAt`.
 18. Recuperación razonable ante refresh, reapertura, segundo plano y pérdida breve de red.
 19. Validación y privacidad del banco de palabras.
 20. Selección autoritativa y balanceada del impostor.

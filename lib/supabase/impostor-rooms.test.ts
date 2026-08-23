@@ -18,6 +18,9 @@ import {
     normalizeRoomJoinCode,
     recordRoomCreationIntent,
     recordRoomJoinIntent,
+    refreshMyRoomLiveness,
+    ROOM_LIVENESS_HEARTBEAT_MS,
+    startRoomLivenessHeartbeat,
     subscribeToRoomPresence,
     subscribeToRoomChanges
 } from "./impostor-rooms";
@@ -679,6 +682,128 @@ describe("closeRoom", () => {
     });
 });
 
+describe("refreshMyRoomLiveness", () => {
+    it("calls the authoritative RPC without room, player or timestamp arguments", async () => {
+        const supabase = {
+            rpc: vi.fn(async (_fn: string) => {
+                void _fn;
+
+                return { data: null, error: null };
+            })
+        };
+
+        await expect(refreshMyRoomLiveness(supabase)).resolves.toBeUndefined();
+
+        expect(supabase.rpc).toHaveBeenCalledWith("refresh_my_room_liveness");
+        expect(supabase.rpc.mock.calls[0]).toHaveLength(1);
+    });
+
+    it("maps missing Player context to product-level feedback", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0002" } }))
+        };
+
+        await expect(refreshMyRoomLiveness(supabase)).rejects.toThrow(
+            "No pudimos reconocer tu jugador para mantener activa la sala."
+        );
+    });
+
+    it("keeps unexpected liveness failures generic", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: null, error: new Error("network") }))
+        };
+
+        await expect(refreshMyRoomLiveness(supabase)).rejects.toThrow(
+            "No pudimos mantener activa la sala. Intentá de nuevo."
+        );
+    });
+});
+
+describe("startRoomLivenessHeartbeat", () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it("refreshes immediately and then every 30 seconds", async () => {
+        vi.useFakeTimers();
+        const refresh = vi.fn(async () => undefined);
+
+        const heartbeat = startRoomLivenessHeartbeat({ refresh });
+
+        await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+        expect(ROOM_LIVENESS_HEARTBEAT_MS).toBe(30_000);
+
+        await vi.advanceTimersByTimeAsync(ROOM_LIVENESS_HEARTBEAT_MS);
+        expect(refresh).toHaveBeenCalledTimes(2);
+
+        heartbeat.dispose();
+    });
+
+    it("cleans up the interval on disposal", async () => {
+        vi.useFakeTimers();
+        const refresh = vi.fn(async () => undefined);
+        const heartbeat = startRoomLivenessHeartbeat({ refresh });
+
+        await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+        heartbeat.dispose();
+
+        await vi.advanceTimersByTimeAsync(ROOM_LIVENESS_HEARTBEAT_MS);
+
+        expect(refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it("refreshes when the document returns to foreground but not when hidden", async () => {
+        vi.useFakeTimers();
+        let visibilityListener: (() => void) | undefined;
+        const targetDocument = {
+            visibilityState: "hidden" as DocumentVisibilityState,
+            addEventListener: vi.fn((_type: "visibilitychange", listener: () => void) => {
+                visibilityListener = listener;
+            }),
+            removeEventListener: vi.fn()
+        };
+        const refresh = vi.fn(async () => undefined);
+
+        const heartbeat = startRoomLivenessHeartbeat({
+            refresh,
+            document: targetDocument
+        });
+
+        await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+
+        visibilityListener?.();
+        expect(refresh).toHaveBeenCalledTimes(1);
+
+        targetDocument.visibilityState = "visible";
+        visibilityListener?.();
+        await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
+
+        heartbeat.dispose();
+        expect(targetDocument.removeEventListener).toHaveBeenCalledWith(
+            "visibilitychange",
+            visibilityListener
+        );
+    });
+
+    it("reports a transient failure without stopping future heartbeats", async () => {
+        vi.useFakeTimers();
+        const refresh = vi
+            .fn()
+            .mockRejectedValueOnce(new Error("offline"))
+            .mockResolvedValue(undefined);
+        const onError = vi.fn();
+
+        const heartbeat = startRoomLivenessHeartbeat({ refresh, onError });
+
+        await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+
+        await vi.advanceTimersByTimeAsync(ROOM_LIVENESS_HEARTBEAT_MS);
+        await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
+
+        heartbeat.dispose();
+    });
+});
+
 describe("room lifecycle controllers", () => {
     it("collapses concurrent leave submissions into a single in-flight RPC call", async () => {
         let resolveRpc: (value: { data: unknown; error: unknown }) => void = () => { };
@@ -932,6 +1057,34 @@ describe("subscribeToRoomPresence", () => {
 
         expect(channel.untrack).toHaveBeenCalledTimes(1);
         expect(supabase.removeChannel).toHaveBeenCalledWith(channel);
+    });
+
+    it("notifies when Presence is successfully established so liveness can refresh", async () => {
+        const channel = {
+            on: vi.fn(() => channel),
+            presenceState: vi.fn(() => ({})),
+            subscribe: vi.fn((callback?: (status: "SUBSCRIBED") => void) => {
+                callback?.("SUBSCRIBED");
+                return channel;
+            }),
+            track: vi.fn(async () => "ok"),
+            untrack: vi.fn(async () => "ok")
+        };
+        const supabase = {
+            channel: vi.fn(() => channel),
+            removeChannel: vi.fn(async () => "ok")
+        };
+        const onSubscribed = vi.fn();
+
+        subscribeToRoomPresence(supabase, {
+            roomId: "11111111-1111-4111-8111-111111111111",
+            currentPlayerId: "player-1",
+            onSync: vi.fn(),
+            onSubscribed
+        });
+
+        await vi.waitFor(() => expect(onSubscribed).toHaveBeenCalledTimes(1));
+        expect(channel.track).toHaveBeenCalledWith({ playerId: "player-1" });
     });
 
     it("does not emit Presence updates after unsubscribe cleanup", async () => {

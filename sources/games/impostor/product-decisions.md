@@ -234,7 +234,7 @@ Un participante no-host puede abandonar el lobby. El host puede cerrar el lobby.
 
 El cierre explícito de una Room solo corresponde al host. Al cerrar, la Room pasa a `closed`, deja de ser activa y libera a sus participantes para crear o unirse a otra Room. Las filas de `RoomParticipant` pueden preservarse como rastro técnico de quién participó, pero eso no constituye una pantalla ni feature de historial.
 
-No existe expiración automática ni sucesión automática del host en este incremento. La sucesión, el host desconectado y el host original que vuelve pertenecen al Incremento 5.
+No existe expiración automática ni sucesión automática del host en este incremento. Liveness autoritativo pertenece a 5.2; la sucesión, el host desconectado como disparador de reasignación y el host original que vuelve después de ser reemplazado pertenecen a 5.3+.
 
 ## Persistencia
 
@@ -244,7 +244,7 @@ Aunque Room es temporal en el dominio, se persiste técnicamente para refresh, c
 
 ## Decisión
 
-En Incremento 5 el lobby usará Supabase Realtime Presence para mostrar disponibilidad efímera `connected | disconnected` de los participantes de la Room activa.
+Incremento 5.1 cerró el uso de Supabase Realtime Presence para mostrar disponibilidad efímera `connected | disconnected` de los participantes de la Room activa.
 
 `RoomParticipant` sigue representando pertenencia persistida a una Room. No se convierte conceptualmente en una conexión.
 
@@ -253,6 +253,7 @@ La separación de producto queda así:
 ```text
 RoomParticipant = pertenece a la Room
 Presence = está disponible ahora de forma efímera
+last_seen_at = evidencia autoritativa de actividad reciente
 rooms.host_player_id = host actual autoritativo
 ```
 
@@ -260,17 +261,32 @@ Varias conexiones del mismo Player, por ejemplo dos pestañas, cuentan como un �
 
 La pérdida de Presence no significa abandono inmediato y no reasigna por sí sola el host.
 
+Presence básica ya quedó validada como canal privado acotado por Room, autorizado contra `RoomParticipant` y visible en el lobby como `conectado/desconectado`.
+
 ## Sucesión
 
-Si el host deja de estar disponible, la sucesión requiere validación autoritativa de staleness. La hipótesis inicial del MVP es esperar 60 segundos antes de considerar al host no disponible para sucesión.
+Pendiente para 5.3+: si el host deja de estar disponible, la sucesión requiere validación autoritativa de staleness. Incremento 5.2 no reasigna host: solamente introduce liveness autoritativo mínimo.
 
-Esa tolerancia de 60 segundos es una hipótesis técnica/producto a validar en navegadores móviles. No es una regla definitiva del juego ni una configuración para usuarios.
+La decisión inicial de 5.2 es usar `room_participants.last_seen_at` como evidencia verificable de actividad reciente del Player dentro de esa Room. No representa Presence, conexión, abandono, host, ready ni estado de juego.
+
+Una nueva participación debe iniciar con liveness reciente. El cliente futuro refresca ese liveness mediante una intención autoritativa, sin enviar `player_id`, `room_id` ni timestamp.
+
+El heartbeat inicial es 30 segundos mientras el lobby esté activo. Además se refresca al reconstruir lobby, al establecer Presence y al volver a foreground. No se refresca por cada interacción de usuario.
+
+El threshold inicial de stale es 90 segundos:
+
+```text
+active = last_seen_at existe y now() - last_seen_at <= 90s
+stale  = last_seen_at es null o now() - last_seen_at > 90s
+```
+
+Los 90 segundos reemplazan la hipótesis previa de 60 segundos por el margen necesario frente a heartbeat de 30 segundos, throttling técnico, red y suspensión de timers móviles. Sigue siendo un parámetro técnico a validar, no una regla definitiva del juego ni una configuración para usuarios.
 
 El nuevo host es el participante disponible restante con `joinedAt` más antiguo.
 
 Si el host original vuelve después de haber sido reemplazado, vuelve como participante normal y no recupera el rol automáticamente.
 
-El cambio de host debe sentirse liviano: la interfaz identifica al host actual y muestra feedback breve, no bloqueante, cuando cambia. No debe mostrar métricas técnicas, heartbeat ni `lastSeenAt`.
+El cambio de host debe sentirse liviano: la interfaz identifica al host actual y muestra feedback breve, no bloqueante, cuando cambia. No debe mostrar métricas técnicas, heartbeat ni `last_seen_at`.
 
 ## Motivo
 

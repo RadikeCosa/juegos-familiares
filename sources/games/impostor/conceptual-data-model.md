@@ -475,7 +475,7 @@ En una Room `lobby`, una fila significa:
 
 No significa que el Player esté conectado ahora.
 
-Para Incremento 5, la conexión visual no debe agregarse conceptualmente como una conversión de `RoomParticipant` en conexión. La separación es:
+Para Incremento 5.1, la conexión visual ya cerrada no debe agregarse conceptualmente como una conversión de `RoomParticipant` en conexión. La separación es:
 
 ```text
 RoomParticipant
@@ -484,13 +484,16 @@ RoomParticipant
 Presence
 = disponibilidad efímera connected/disconnected
 
+room_participants.last_seen_at
+= evidencia autoritativa de actividad reciente
+
 rooms.host_player_id
 = host autoritativo persistido
 ```
 
 `connectionStatus`, `isOnline`, `presenceState`, `ready`, `score` y `sessionPlayerId` no forman parte de `RoomParticipant` en Incremento 4.
 
-La sucesión del host pertenece al Incremento 5 y necesita una señal remota verificable de liveness. Conceptualmente puede agregarse `lastSeenAt` a `RoomParticipant`, o un equivalente técnico mínimo, con alcance estricto:
+Incremento 5.2 agrega conceptualmente `room_participants.last_seen_at` como señal remota verificable de liveness del Player dentro de esa Room, con alcance estricto:
 
 * sirve solo para validar staleness;
 * no es el estado visual principal de Presence;
@@ -498,6 +501,12 @@ La sucesión del host pertenece al Incremento 5 y necesita una señal remota ver
 * no se muestra al usuario;
 * no implica auditoría de conexiones;
 * no debe convertirse en infraestructura genérica.
+
+`last_seen_at` no representa Presence, conexión, abandono, host, ready ni estado de juego.
+
+Una nueva participación debe comenzar con `last_seen_at = now()`. La estrategia concreta de backfill para filas existentes no forma parte del modelo conceptual y se decide durante implementación.
+
+La escritura futura se realiza para el RoomParticipant propio mediante autoridad backend: el cliente no suministra `player_id`, `room_id` ni timestamp. Liveness es por Player-en-Room, no por conexión ni pestaña.
 
 La Presence debe estar acotada a la Room activa y usar internamente `roomId` como identificador preferido del canal. `joinCode` sigue siendo una representación compartible para entrar a la Room, no la clave conceptual de Presence.
 

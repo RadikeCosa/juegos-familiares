@@ -321,4 +321,30 @@ describe("renderRoomLobbyContent", () => {
         expect(source).toContain("if (snapshot.status === \"absent\")");
         expect(source).toContain("router.replace(\"/impostor/grupo\")");
     });
+
+    it("starts liveness heartbeat only when the active Room and current participant are known", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("startRoomLivenessHeartbeat({");
+        expect(source).toContain("refresh: () => refreshMyRoomLiveness(createImpostorRoomsClient())");
+        expect(source).toContain("heartbeat.dispose()");
+        expect(source).toContain("!activeRoomId");
+        expect(source).toContain("!currentRoomPlayerId");
+    });
+
+    it("refreshes liveness after Presence is established without changing connected/disconnected UX", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("onSubscribed: () =>");
+        expect(source).toContain("refreshMyRoomLiveness(createImpostorRoomsClient())");
+        expect(source).toContain("onError: logRoomLivenessError");
+        expect(source).toContain("getConnectedRoomParticipantIds(");
+        expect(source).not.toMatch(/last_seen_at|stale/i);
+    });
 });
