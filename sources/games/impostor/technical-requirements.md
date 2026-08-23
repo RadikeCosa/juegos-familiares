@@ -111,20 +111,27 @@ Los teléfonos no deben decidir independientemente en qué etapa está la partid
 
 ## Requisito MVP
 
-Para Impostor, algunos cambios deben propagarse con poca demora entre dispositivos:
+En Incremento 4, la entrada, salida y cierre del lobby deben propagarse con poca demora entre dispositivos mediante:
 
-* entrada y salida del lobby;
-* cambios de conexión relevantes;
-* cambio de host;
-* inicio de tanda;
-* cambio de fase;
-* confirmación de roles;
-* inicio de votación;
-* votos completados;
-* resultado;
-* marcador;
-* nueva ronda;
-* fin de tanda.
+```text
+Postgres Changes
+→ aviso de cambio persistido
+→ refetch autoritativo del lobby
+```
+
+El payload de Realtime no es fuente de verdad. Ante reconexión o eventos perdidos se ejecuta un refetch completo.
+
+Para el lobby de Incremento 4.4:
+
+* `room_participants INSERT` invalida y relee el lobby autoritativo;
+* `rooms UPDATE` invalida y relee para cubrir el lifecycle persistido `lobby|closed`;
+* `room_participants DELETE` se difiere hasta implementar salida/cierre funcional.
+
+La autorización de Postgres Changes debe depender de RLS: un participante puede leer únicamente la
+Room y membresías de su Room activa; otro Group, o un Player del mismo Group que no participa en esa
+Room, no debe recibir filas útiles aunque intente suscribirse manualmente.
+
+La sincronización de host por desconexión, fases, roles, votación, resultado y marcador pertenece a incrementos posteriores.
 
 ## No requiere sincronización continua
 
@@ -134,8 +141,6 @@ No hace falta sincronizar digitalmente:
 * quién está hablando;
 * contenido de pistas;
 * duración exacta de intervenciones.
-
-No se asume todavía un mecanismo realtime específico.
 
 Realtime no se considera una capacidad obligatoria universal para todos los juegos futuros de Juegos Familiares.
 
@@ -267,17 +272,17 @@ Estos datos sobreviven entre partidas.
 
 # 10. Estado operativo temporal
 
-## Requisito MVP
+## Requisito de Incremento 4
 
-Debe existir estado operativo para coordinar una partida activa:
+Debe existir estado operativo persistible para coordinar:
 
-* sala activa;
-* participación en sala;
-* tanda activa;
-* ronda activa;
-* votos operativos;
-* estado de conexión;
-* marcador mientras se juega.
+* Room activa;
+* Room cerrada;
+* participación actual en Room;
+* host inicial;
+* lobby compartido.
+
+Tanda, ronda, votos, estado de conexión y marcador pertenecen a incrementos posteriores.
 
 Aunque una implementación futura pudiera persistir técnicamente parte de este estado, conceptualmente debe distinguirse del historial permanente.
 
@@ -373,21 +378,12 @@ Las transiciones críticas deben poder tolerar reintentos o dobles acciones del 
 
 # 15. Presencia
 
-## Requisito MVP
+## Fuera de Incremento 4
 
-Impostor necesita presencia básica para distinguir:
+Incremento 4 no necesita Presence para distinguir membresía de conexión. Presence se incorpora en Incremento 5 para:
 
 * conectado;
 * desconectado.
-
-La presencia importa especialmente para:
-
-* lobby;
-* mínimo de jugadores;
-* sucesión de host;
-* recuperación razonable de sesión.
-
-No se requiere presencia sofisticada.
 
 Presence no se considera una capacidad obligatoria universal para todos los juegos futuros.
 
@@ -395,7 +391,7 @@ Presence no se considera una capacidad obligatoria universal para todos los jueg
 
 # 16. Reasignación del host
 
-## Requisito MVP
+## Incremento 5
 
 Si el host deja de estar disponible, el sistema debe:
 
@@ -409,7 +405,7 @@ Si el host original vuelve, vuelve como participante normal y no recupera autom�
 
 # 17. Reconexión
 
-## Requisito MVP
+## Incremento 4: reconstrucción
 
 La PWA debe poder recuperarse razonablemente de:
 
@@ -424,10 +420,12 @@ Debe poder reconstruir:
 * identidad;
 * grupo;
 * sala activa, si corresponde;
-* estado actual;
-* información privada que todavía corresponda.
+* Room activa;
+* host;
+* participantes;
+* estado de lobby.
 
-No se diseña reconexión avanzada todavía.
+La reconexión de Presence, estado online/offline, background móvil y fases de una partida queda fuera de Incremento 4.
 
 ---
 

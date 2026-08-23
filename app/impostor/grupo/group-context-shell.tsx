@@ -1,25 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState, type FormEvent } from "react";
 import { AdminInvitationSection } from "../admin-invitation-panel";
 import { createBrowserSupabaseClient } from "../../../lib/supabase/browser-client";
 import {
   getMyGroupWordCount,
   listMyGroupWords,
   type ImpostorGroupWordsClient,
-  type MyGroupWord
+  type MyGroupWord,
 } from "../../../lib/supabase/impostor-group-words";
+import {
+  createCreateRoomController,
+  createJoinRoomByCodeController,
+  normalizeRoomJoinCode,
+  recordRoomCreationIntent,
+  recordRoomJoinIntent,
+  type ImpostorRoomsClient,
+} from "../../../lib/supabase/impostor-rooms";
 import {
   bootstrapPlatformContext,
   type PlatformBootstrapClient,
   type PlatformBootstrapState,
-  type RecognizedPlatformContext
+  type RecognizedPlatformContext,
 } from "../../../lib/supabase/platform-bootstrap";
 import {
   listGroupPlayers,
   type GroupPlayer,
-  type PlatformPlayersClient
+  type PlatformPlayersClient,
 } from "../../../lib/supabase/platform-players";
 
 type GroupPlayersState =
@@ -34,6 +43,17 @@ type GroupWordsSummaryState =
   | { status: "success"; totalCount: number; ownWords: MyGroupWord[] }
   | { status: "error"; message: string };
 
+export type RoomCreationState =
+  | { status: "idle" }
+  | { status: "creating" }
+  | { status: "error"; message: string };
+
+export type RoomJoinState =
+  | { status: "idle" }
+  | { status: "form" }
+  | { status: "joining" }
+  | { status: "error"; message: string };
+
 function createPlatformBootstrapClient(): PlatformBootstrapClient {
   return createBrowserSupabaseClient() as unknown as PlatformBootstrapClient;
 }
@@ -44,6 +64,10 @@ function createPlatformPlayersClient(): PlatformPlayersClient {
 
 function createImpostorGroupWordsClient(): ImpostorGroupWordsClient {
   return createBrowserSupabaseClient() as unknown as ImpostorGroupWordsClient;
+}
+
+function createImpostorRoomsClient(): ImpostorRoomsClient {
+  return createBrowserSupabaseClient() as unknown as ImpostorRoomsClient;
 }
 
 export function formatAvailableWords(count: number) {
@@ -66,7 +90,7 @@ function sortPlayersForGroup(players: GroupPlayer[], adminPlayerId: string) {
 
 export function renderGroupMembersList(
   players: GroupPlayer[],
-  adminPlayerId: string
+  adminPlayerId: string,
 ) {
   const orderedPlayers = sortPlayersForGroup(players, adminPlayerId);
 
@@ -91,10 +115,15 @@ export function renderImpostorGroupContext(
   playersState: GroupPlayersState,
   options: {
     groupWordsState?: GroupWordsSummaryState;
+    roomCreationState?: RoomCreationState;
+    roomJoinState?: RoomJoinState;
     onRetryBootstrap?: () => void;
     onRetryPlayers?: () => void;
     onRetryGroupWords?: () => void;
-  } = {}
+    onCreateRoom?: () => void;
+    onShowJoinRoomForm?: () => void;
+    onJoinRoomSubmit?: (event: FormEvent<HTMLFormElement>) => void;
+  } = {},
 ) {
   if (bootstrapState.status === "loading") {
     return (
@@ -109,9 +138,7 @@ export function renderImpostorGroupContext(
       <section className="impostor-group-card" aria-live="polite">
         <p className="impostor-kicker">Grupo</p>
         <h1>Todavía no tenés un grupo en este dispositivo.</h1>
-        <p>
-          Volvé a Impostor para crear un grupo o unirte con una invitación.
-        </p>
+        <p>Volvé a Impostor para crear un grupo o unirte con una invitación.</p>
         <Link
           className="impostor-action impostor-action--primary"
           href="/impostor"
@@ -160,6 +187,8 @@ export function renderImpostorGroupContext(
   const { group, player } = bootstrapState;
   const isAdmin = group.adminPlayerId === player.id;
   const groupWordsState = options.groupWordsState ?? { status: "idle" };
+  const roomCreationState = options.roomCreationState ?? { status: "idle" };
+  const roomJoinState = options.roomJoinState ?? { status: "idle" };
 
   return (
     <section
@@ -195,6 +224,76 @@ export function renderImpostorGroupContext(
                 Reintentar
               </button>
             ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      <div
+        className="impostor-group-section impostor-play-section"
+        aria-labelledby="impostor-play-title"
+      >
+        <h2 id="impostor-play-title">Jugar</h2>
+
+        <button
+          className="impostor-action impostor-action--primary"
+          type="button"
+          disabled={roomCreationState.status === "creating"}
+          onClick={options.onCreateRoom}
+        >
+          {roomCreationState.status === "creating"
+            ? "Creando sala..."
+            : "Crear sala"}
+        </button>
+
+        {roomCreationState.status === "error" ? (
+          <div className="impostor-group-error" aria-live="polite">
+            <p>{roomCreationState.message}</p>
+          </div>
+        ) : null}
+
+        <button
+          className="impostor-action"
+          type="button"
+          disabled={roomJoinState.status === "joining"}
+          onClick={options.onShowJoinRoomForm}
+        >
+          Unirme a una sala
+        </button>
+
+        {roomJoinState.status === "form" ||
+        roomJoinState.status === "joining" ? (
+          <form
+            className="impostor-create-group"
+            aria-labelledby="impostor-join-room-title"
+            onSubmit={options.onJoinRoomSubmit}
+          >
+            <h3 id="impostor-join-room-title">Unirme a una sala</h3>
+            <label className="impostor-field">
+              <span>Código de sala</span>
+              <input
+                name="roomCode"
+                type="text"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                maxLength={8}
+                required
+                disabled={roomJoinState.status === "joining"}
+              />
+            </label>
+            <button
+              className="impostor-action impostor-action--primary"
+              type="submit"
+              disabled={roomJoinState.status === "joining"}
+            >
+              {roomJoinState.status === "joining" ? "Uniéndote..." : "Unirme"}
+            </button>
+          </form>
+        ) : null}
+
+        {roomJoinState.status === "error" ? (
+          <div className="impostor-group-error" aria-live="polite">
+            <p>{roomJoinState.message}</p>
           </div>
         ) : null}
       </div>
@@ -252,15 +351,29 @@ export function renderImpostorGroupContext(
 }
 
 export function ImpostorGroupContextShell() {
+  const router = useRouter();
   const [bootstrapState, setBootstrapState] = useState<PlatformBootstrapState>({
-    status: "loading"
+    status: "loading",
   });
   const [playersState, setPlayersState] = useState<GroupPlayersState>({
-    status: "idle"
+    status: "idle",
   });
-  const [groupWordsState, setGroupWordsState] = useState<GroupWordsSummaryState>({
-    status: "idle"
+  const [groupWordsState, setGroupWordsState] =
+    useState<GroupWordsSummaryState>({
+      status: "idle",
+    });
+  const [roomCreationState, setRoomCreationState] = useState<RoomCreationState>(
+    {
+      status: "idle",
+    },
+  );
+  const [roomJoinState, setRoomJoinState] = useState<RoomJoinState>({
+    status: "idle",
   });
+  const createRoomController = useState(() => createCreateRoomController())[0];
+  const joinRoomController = useState(() =>
+    createJoinRoomByCodeController(),
+  )[0];
 
   async function runBootstrap(showLoading: boolean) {
     if (showLoading) {
@@ -269,7 +382,9 @@ export function ImpostorGroupContextShell() {
       setGroupWordsState({ status: "idle" });
     }
 
-    setBootstrapState(await bootstrapPlatformContext(createPlatformBootstrapClient()));
+    setBootstrapState(
+      await bootstrapPlatformContext(createPlatformBootstrapClient()),
+    );
   }
 
   async function loadPlayers(context: RecognizedPlatformContext) {
@@ -278,7 +393,7 @@ export function ImpostorGroupContextShell() {
     try {
       const players = await listGroupPlayers(
         createPlatformPlayersClient(),
-        context.group.id
+        context.group.id,
       );
 
       setPlayersState({ status: "success", players });
@@ -299,7 +414,7 @@ export function ImpostorGroupContextShell() {
       const client = createImpostorGroupWordsClient();
       const [totalCount, ownWords] = await Promise.all([
         getMyGroupWordCount(client),
-        listMyGroupWords(client)
+        listMyGroupWords(client),
       ]);
 
       setGroupWordsState({ status: "success", totalCount, ownWords });
@@ -313,6 +428,70 @@ export function ImpostorGroupContextShell() {
     }
   }
 
+  async function handleCreateRoom() {
+    if (roomCreationState.status === "creating") {
+      return;
+    }
+
+    setRoomCreationState({ status: "creating" });
+
+    try {
+      const lobby = await createRoomController.submit(
+        createImpostorRoomsClient(),
+      );
+
+      recordRoomCreationIntent(lobby.room.code);
+      router.push(`/impostor/sala/${encodeURIComponent(lobby.room.code)}`);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No pudimos crear la sala. Intentá de nuevo.";
+
+      setRoomCreationState({ status: "error", message });
+    }
+  }
+
+  function handleShowJoinRoomForm() {
+    if (roomJoinState.status === "joining") {
+      return;
+    }
+
+    setRoomJoinState({ status: "form" });
+  }
+
+  async function handleJoinRoomSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (roomJoinState.status === "joining") {
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
+    const roomCode = normalizeRoomJoinCode(
+      String(formData.get("roomCode") ?? ""),
+    );
+
+    setRoomJoinState({ status: "joining" });
+
+    try {
+      const lobby = await joinRoomController.submit(
+        createImpostorRoomsClient(),
+        roomCode,
+      );
+
+      recordRoomJoinIntent(lobby.room.code);
+      router.push(`/impostor/sala/${encodeURIComponent(lobby.room.code)}`);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No pudimos unir a la sala. Intentá de nuevo.";
+
+      setRoomJoinState({ status: "error", message });
+    }
+  }
+
   useEffect(() => {
     let isActive = true;
 
@@ -321,7 +500,7 @@ export function ImpostorGroupContextShell() {
         if (isActive) {
           setBootstrapState(nextBootstrapState);
         }
-      }
+      },
     );
 
     return () => {
@@ -342,7 +521,10 @@ export function ImpostorGroupContextShell() {
           setPlayersState({ status: "loading" });
         }
 
-        return listGroupPlayers(createPlatformPlayersClient(), bootstrapState.group.id);
+        return listGroupPlayers(
+          createPlatformPlayersClient(),
+          bootstrapState.group.id,
+        );
       })
       .then((players) => {
         if (isActive) {
@@ -382,7 +564,7 @@ export function ImpostorGroupContextShell() {
 
         return Promise.all([
           getMyGroupWordCount(client),
-          listMyGroupWords(client)
+          listMyGroupWords(client),
         ]);
       })
       .then(([totalCount, ownWords]) => {
@@ -408,6 +590,8 @@ export function ImpostorGroupContextShell() {
 
   return renderImpostorGroupContext(bootstrapState, playersState, {
     groupWordsState,
+    roomCreationState,
+    roomJoinState,
     onRetryBootstrap: () => void runBootstrap(true),
     onRetryPlayers:
       bootstrapState.status === "recognized"
@@ -416,6 +600,9 @@ export function ImpostorGroupContextShell() {
     onRetryGroupWords:
       bootstrapState.status === "recognized"
         ? () => void loadGroupWordsSummary()
-        : undefined
+        : undefined,
+    onCreateRoom: () => void handleCreateRoom(),
+    onShowJoinRoomForm: () => handleShowJoinRoomForm(),
+    onJoinRoomSubmit: (event) => void handleJoinRoomSubmit(event),
   });
 }

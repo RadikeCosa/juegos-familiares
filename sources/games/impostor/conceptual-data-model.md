@@ -409,34 +409,32 @@ Victoria
 
 Camila puede pertenecer al grupo y no formar parte de esa sala.
 
-## Información mínima
+## Información mínima para Incremento 4
 
 ```text
 Room
 - id
 - groupId
+- joinCode
 - hostPlayerId
 - status
 - createdAt
 ```
 
-## Status
-
-Conceptualmente puede tener estados como:
+`status` solo admite conceptualmente:
 
 ```text
 lobby
-playing
-finished
+closed
 ```
 
-La definición completa aparecerá posteriormente en el modelo de estados.
+`playing` y `finished` pertenecen al lifecycle posterior de `GameSession`.
 
 ## Persistencia
 
-Temporal.
+Room es temporal en el dominio, pero se persiste técnicamente para concurrencia, refresh, reconstrucción y sincronización.
 
-Puede desaparecer después de finalizar la tanda.
+Una Room cerrada no cuenta como activa.
 
 ## Visibilidad
 
@@ -458,32 +456,22 @@ Room.players = [...]
 
 porque en el futuro podemos necesitar información sobre esa participación.
 
-## Información conceptual
+## Información conceptual para Incremento 4
 
 ```text
 RoomParticipant
 - roomId
 - playerId
 - joinedAt
-- connectionStatus
 ```
 
-## ConnectionStatus
+Una fila significa exclusivamente:
 
-Podría distinguir:
+> este Player pertenece actualmente a esta Room.
 
-```text
-connected
-disconnected
-```
+No significa que el Player esté conectado ahora. `connectionStatus`, `isOnline`, `lastSeenAt`, `presenceState`, `ready`, `score` y `sessionPlayerId` quedan diferidos.
 
-No necesitamos definir todavía toda la lógica de reconexión.
-
-## Sucesión del host
-
-Para el MVP, `joinedAt` puede utilizarse para seleccionar de forma determinística al participante conectado más antiguo cuando sea necesario reasignar el host.
-
-No define todavía un algoritmo técnico de presencia o reconexión.
+La sucesión del host y la selección del participante conectado más antiguo pertenecen al Incremento 5.
 
 ## Persistencia
 

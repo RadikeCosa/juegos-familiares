@@ -1,0 +1,504 @@
+type SupabaseRpcResult<TData> = {
+    data: TData | null;
+    error: unknown;
+};
+
+export type ImpostorRoomsClient = {
+    rpc: (
+        fn: "create_room" | "join_room_by_code" | "get_my_active_room",
+        params?: { room_code: string }
+    ) => PromiseLike<SupabaseRpcResult<unknown>>;
+};
+
+type RealtimeChannelStatus =
+    | "SUBSCRIBED"
+    | "TIMED_OUT"
+    | "CLOSED"
+    | "CHANNEL_ERROR";
+
+type RealtimeChannel = {
+    on: (
+        type: "postgres_changes",
+        filter: {
+            event: "INSERT" | "UPDATE";
+            schema: "public";
+            table: "room_participants" | "rooms";
+            filter: string;
+        },
+        callback: (payload: unknown) => void
+    ) => RealtimeChannel;
+    subscribe: (
+        callback?: (status: RealtimeChannelStatus, error?: unknown) => void
+    ) => RealtimeChannel;
+};
+
+export type ImpostorRoomChangesClient = {
+    channel: (name: string) => RealtimeChannel;
+    removeChannel: (channel: RealtimeChannel) => PromiseLike<unknown>;
+};
+
+type SupabaseErrorLike = {
+    code?: string;
+};
+
+const ROOM_CREATION_INTENT_KEY = "juegos-familia.room-creation-intent";
+
+function getBrowserSessionStorage(): Storage | null {
+    if (typeof window === "undefined") {
+        return null;
+    }
+
+    try {
+        return window.sessionStorage;
+    } catch {
+        return null;
+    }
+}
+
+// Marks that this device just asked to create the given Room, so the room
+// page can distinguish "just created it" from an unrelated direct visit.
+export function recordRoomCreationIntent(code: string) {
+    const storage = getBrowserSessionStorage();
+
+    if (!storage) {
+        return;
+    }
+
+    try {
+        storage.setItem(ROOM_CREATION_INTENT_KEY, code);
+    } catch {
+        // Ignore storage failures; the room page will treat it as no intent.
+    }
+}
+
+export function hasRoomCreationIntent(code: string) {
+    const storage = getBrowserSessionStorage();
+
+    if (!storage) {
+        return false;
+    }
+
+    try {
+        return storage.getItem(ROOM_CREATION_INTENT_KEY) === code;
+    } catch {
+        return false;
+    }
+}
+
+export function clearRoomCreationIntent(code: string) {
+    const storage = getBrowserSessionStorage();
+
+    if (!storage) {
+        return;
+    }
+
+    try {
+        if (storage.getItem(ROOM_CREATION_INTENT_KEY) === code) {
+            storage.removeItem(ROOM_CREATION_INTENT_KEY);
+        }
+    } catch {
+        // Ignore storage failures; the intent is only a navigation hint.
+    }
+}
+
+const ROOM_JOIN_INTENT_KEY = "juegos-familia.room-join-intent";
+
+// Marks that this device just asked to join the given Room, so the room page
+// can reuse the RPC result instead of asking again for an explicit tap.
+export function recordRoomJoinIntent(code: string) {
+    const storage = getBrowserSessionStorage();
+
+    if (!storage) {
+        return;
+    }
+
+    try {
+        storage.setItem(ROOM_JOIN_INTENT_KEY, code);
+    } catch {
+        // Ignore storage failures; the room page will ask for an explicit tap.
+    }
+}
+
+export function hasRoomJoinIntent(code: string) {
+    const storage = getBrowserSessionStorage();
+
+    if (!storage) {
+        return false;
+    }
+
+    try {
+        return storage.getItem(ROOM_JOIN_INTENT_KEY) === code;
+    } catch {
+        return false;
+    }
+}
+
+export function clearRoomJoinIntent(code: string) {
+    const storage = getBrowserSessionStorage();
+
+    if (!storage) {
+        return;
+    }
+
+    try {
+        if (storage.getItem(ROOM_JOIN_INTENT_KEY) === code) {
+            storage.removeItem(ROOM_JOIN_INTENT_KEY);
+        }
+    } catch {
+        // Ignore storage failures; the intent is only a navigation hint.
+    }
+}
+
+const UNAUTHENTICATED_ROOM_ERROR =
+    "Necesitás entrar a tu grupo antes de crear una sala.";
+const MISSING_PLAYER_ROOM_ERROR =
+    "No pudimos reconocer tu jugador para crear la sala.";
+const GENERIC_CREATE_ROOM_ERROR =
+    "No pudimos crear la sala. Intentá de nuevo.";
+
+const UNAUTHENTICATED_JOIN_ROOM_ERROR =
+    "Necesitás entrar a tu grupo antes de unirte a una sala.";
+const MISSING_PLAYER_JOIN_ROOM_ERROR =
+    "No pudimos reconocer tu jugador para unirte a la sala.";
+const ROOM_NOT_FOUND_ERROR =
+    "No encontramos esa sala. Revisá el código e intentá de nuevo.";
+const ROOM_CLOSED_ERROR = "Esta sala ya no está disponible.";
+const ALREADY_IN_ANOTHER_ROOM_ERROR = "Ya estás en otra sala.";
+const GENERIC_JOIN_ROOM_ERROR =
+    "No pudimos unirte a la sala. Intentá de nuevo.";
+const MISSING_PLAYER_ACTIVE_ROOM_ERROR =
+    "No pudimos reconocer tu jugador para recuperar la sala.";
+const INCONSISTENT_ACTIVE_ROOM_ERROR =
+    "No pudimos reconstruir tu sala activa. Volvé a intentar más tarde.";
+const GENERIC_ACTIVE_ROOM_ERROR =
+    "No pudimos recuperar tu sala activa. Intentá de nuevo.";
+
+type RoomLobbyRow = {
+    room_id?: string;
+    room_join_code: string;
+    room_status: string;
+    participant_nickname: string;
+    participant_is_host: boolean;
+    participant_joined_at: string;
+};
+
+export type RoomLobbyParticipant = {
+    nickname: string;
+    isHost: boolean;
+    joinedAt: string;
+};
+
+export type RoomLobby = {
+    room: {
+        id?: string;
+        code: string;
+        status: string;
+    };
+    participants: RoomLobbyParticipant[];
+};
+
+function isSupabaseErrorLike(error: unknown): error is SupabaseErrorLike {
+    return typeof error === "object" && error !== null;
+}
+
+function getCreateRoomErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "28000" || error.code === "42501") {
+            return UNAUTHENTICATED_ROOM_ERROR;
+        }
+
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_ROOM_ERROR;
+        }
+    }
+
+    return GENERIC_CREATE_ROOM_ERROR;
+}
+
+function getJoinRoomErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "28000" || error.code === "42501") {
+            return UNAUTHENTICATED_JOIN_ROOM_ERROR;
+        }
+
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_JOIN_ROOM_ERROR;
+        }
+
+        if (error.code === "P0010") {
+            return ROOM_NOT_FOUND_ERROR;
+        }
+
+        if (error.code === "P0011") {
+            return ROOM_CLOSED_ERROR;
+        }
+
+        if (error.code === "P0012") {
+            return ALREADY_IN_ANOTHER_ROOM_ERROR;
+        }
+    }
+
+    return GENERIC_JOIN_ROOM_ERROR;
+}
+
+// 8 opaque chars, but forgiving of stray whitespace/case from manual typing.
+export function normalizeRoomJoinCode(rawCode: string) {
+    return rawCode.trim().toUpperCase();
+}
+
+function getActiveRoomErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_ACTIVE_ROOM_ERROR;
+        }
+
+        if (error.code === "P0014") {
+            return INCONSISTENT_ACTIVE_ROOM_ERROR;
+        }
+    }
+
+    return GENERIC_ACTIVE_ROOM_ERROR;
+}
+
+function isRoomLobbyRow(value: unknown): value is RoomLobbyRow {
+    const row = value as Partial<RoomLobbyRow>;
+
+    return (
+        typeof row.room_join_code === "string" &&
+        typeof row.room_status === "string" &&
+        typeof row.participant_nickname === "string" &&
+        typeof row.participant_is_host === "boolean" &&
+        typeof row.participant_joined_at === "string"
+    );
+}
+
+function toRoomLobby(rows: RoomLobbyRow[]): RoomLobby {
+    const [firstRow] = rows;
+
+    return {
+        room: {
+            id: firstRow.room_id,
+            code: firstRow.room_join_code,
+            status: firstRow.room_status
+        },
+        participants: rows.map((row) => ({
+            nickname: row.participant_nickname,
+            isHost: row.participant_is_host,
+            joinedAt: row.participant_joined_at
+        }))
+    };
+}
+
+export async function createRoom(
+    supabase: ImpostorRoomsClient
+): Promise<RoomLobby> {
+    const result = await supabase.rpc("create_room");
+
+    if (result.error) {
+        throw new Error(getCreateRoomErrorMessage(result.error));
+    }
+
+    const rows = Array.isArray(result.data) ? result.data : [];
+
+    if (rows.length === 0 || !rows.every(isRoomLobbyRow)) {
+        throw new Error("No pudimos confirmar que la sala fue creada.");
+    }
+
+    return toRoomLobby(rows);
+}
+
+export function createCreateRoomController() {
+    let activeRequest: Promise<RoomLobby> | null = null;
+
+    return {
+        submit(supabase: ImpostorRoomsClient): Promise<RoomLobby> {
+            if (activeRequest) {
+                return activeRequest;
+            }
+
+            activeRequest = createRoom(supabase);
+
+            void activeRequest.finally(() => {
+                activeRequest = null;
+            });
+
+            return activeRequest;
+        }
+    };
+}
+
+export async function joinRoomByCode(
+    supabase: ImpostorRoomsClient,
+    roomCode: string
+): Promise<RoomLobby> {
+    const result = await supabase.rpc("join_room_by_code", {
+        room_code: normalizeRoomJoinCode(roomCode)
+    });
+
+    if (result.error) {
+        throw new Error(getJoinRoomErrorMessage(result.error));
+    }
+
+    const rows = Array.isArray(result.data) ? result.data : [];
+
+    if (rows.length === 0 || !rows.every(isRoomLobbyRow)) {
+        throw new Error("No pudimos confirmar que te uniste a la sala.");
+    }
+
+    return toRoomLobby(rows);
+}
+
+export async function getMyActiveRoom(
+    supabase: ImpostorRoomsClient
+): Promise<RoomLobby | null> {
+    const result = await supabase.rpc("get_my_active_room");
+
+    if (result.error) {
+        throw new Error(getActiveRoomErrorMessage(result.error));
+    }
+
+    const rows = Array.isArray(result.data) ? result.data : [];
+
+    if (rows.length === 0) {
+        return null;
+    }
+
+    if (!rows.every(isRoomLobbyRow)) {
+        throw new Error("No pudimos confirmar tu sala activa.");
+    }
+
+    return toRoomLobby(rows);
+}
+
+export function createJoinRoomByCodeController() {
+    let activeRequest: Promise<RoomLobby> | null = null;
+
+    return {
+        submit(supabase: ImpostorRoomsClient, roomCode: string): Promise<RoomLobby> {
+            if (activeRequest) {
+                return activeRequest;
+            }
+
+            activeRequest = joinRoomByCode(supabase, roomCode);
+
+            void activeRequest.finally(() => {
+                activeRequest = null;
+            });
+
+            return activeRequest;
+        }
+    };
+}
+
+export type RoomChangesSubscription = {
+    unsubscribe: () => Promise<void>;
+};
+
+export function subscribeToRoomChanges(
+    supabase: ImpostorRoomChangesClient,
+    roomId: string,
+    onInvalidate: () => void
+): RoomChangesSubscription {
+    let lastStatus: RealtimeChannelStatus | null = null;
+    const encodedRoomId = roomId.replaceAll(",", "%2C");
+    const channel = supabase
+        .channel(`impostor-room:${roomId}`)
+        .on(
+            "postgres_changes",
+            {
+                event: "INSERT",
+                schema: "public",
+                table: "room_participants",
+                filter: `room_id=eq.${encodedRoomId}`
+            },
+            () => onInvalidate()
+        )
+        .on(
+            "postgres_changes",
+            {
+                event: "UPDATE",
+                schema: "public",
+                table: "rooms",
+                filter: `id=eq.${encodedRoomId}`
+            },
+            () => onInvalidate()
+        )
+        .subscribe((status) => {
+            if (status === "SUBSCRIBED" && lastStatus && lastStatus !== "SUBSCRIBED") {
+                onInvalidate();
+            }
+
+            lastStatus = status;
+        });
+
+    return {
+        async unsubscribe() {
+            await supabase.removeChannel(channel);
+        }
+    };
+}
+
+export type LobbySyncSnapshot =
+    | { status: "success"; lobby: RoomLobby }
+    | { status: "absent" }
+    | { status: "error"; message: string };
+
+export function createLobbySyncController(options: {
+    readLobby: () => Promise<RoomLobby | null>;
+    onSnapshot: (snapshot: LobbySyncSnapshot) => void;
+    onError?: (message: string) => void;
+}) {
+    let isDisposed = false;
+    let activeRequest: Promise<void> | null = null;
+    let hasPendingInvalidation = false;
+
+    async function runRefetch() {
+        try {
+            const lobby = await options.readLobby();
+
+            if (isDisposed) {
+                return;
+            }
+
+            options.onSnapshot(lobby ? { status: "success", lobby } : { status: "absent" });
+        } catch (error) {
+            if (isDisposed) {
+                return;
+            }
+
+            const message = error instanceof Error ? error.message : GENERIC_ACTIVE_ROOM_ERROR;
+            options.onError?.(message);
+            options.onSnapshot({ status: "error", message });
+        }
+    }
+
+    function drain() {
+        activeRequest = runRefetch().finally(() => {
+            activeRequest = null;
+
+            if (hasPendingInvalidation && !isDisposed) {
+                hasPendingInvalidation = false;
+                drain();
+            }
+        });
+    }
+
+    return {
+        invalidate() {
+            if (isDisposed) {
+                return;
+            }
+
+            if (activeRequest) {
+                hasPendingInvalidation = true;
+                return;
+            }
+
+            drain();
+        },
+        dispose() {
+            isDisposed = true;
+            hasPendingInvalidation = false;
+        }
+    };
+}
