@@ -216,11 +216,11 @@ Acciones futuras:
 
 ### Crear sala
 
-Comienza una nueva sesión de juego.
+Crea una Room en estado `lobby`. Cualquier integrante puede hacerlo; no requiere ser administrador. Si ya pertenece a una Room activa, recupera esa Room.
 
 ### Unirse a sala
 
-Permite entrar a una sala creada por otro integrante.
+Permite entrar a una Room `lobby` del mismo Group mediante código o enlace.
 
 ### Agregar palabras
 
@@ -292,7 +292,7 @@ Un jugador selecciona:
 
 `Crear sala`
 
-La aplicación crea una sala temporal y convierte a ese jugador en host.
+La aplicación crea una Room persistida en estado `lobby`, convierte a ese jugador en host y lo agrega como RoomParticipant. La creación es idempotente si ya existe una Room activa para ese Player.
 
 El host llega al lobby.
 
@@ -300,11 +300,13 @@ El host llega al lobby.
 
 # Compartir sala
 
-El lobby debe ofrecer una forma sencilla para que otros integrantes entren.
+El lobby muestra un código opaco de 8 caracteres y permite compartir el enlace equivalente:
 
-La mecánica exacta —código, enlace, QR o combinación— se decidirá durante el diseño técnico y UX.
+```text
+/impostor/sala/[code]
+```
 
-El objetivo es que incorporarse requiera pocos pasos.
+QR queda fuera de Incremento 4.
 
 ---
 
@@ -314,7 +316,9 @@ Un jugador selecciona:
 
 `Unirse a sala`
 
-Identifica la sala y entra al lobby.
+Identifica la Room mediante código o enlace. El backend valida que el Player y la Room pertenecen al mismo Group. Conocer el código no reemplaza autorización.
+
+Si el Player ya participa, el join devuelve la misma participación sin duplicarla.
 
 Como su identidad ya está guardada, no debería volver a escribir su nick en cada partida.
 
@@ -322,24 +326,23 @@ Como su identidad ya está guardada, no debería volver a escribir su nick en ca
 
 # Lobby
 
-Todos los participantes ven quién está presente.
+Todos los participantes ven el estado persistido del lobby, no la conexión actual del dispositivo.
 
 Ejemplo:
 
 > Sala
 
-* Ramiro ✓
-* Pedro ✓
-* Camila ✓
-* Victoria ✓
+* Ramiro · Host
+* Pedro
+* Victoria
 
-> 64 palabras disponibles
+> 3 jugadores
 
-El host dispone de:
+El lobby muestra también el código/enlace para compartir y acciones de salida/cierre según el participante.
 
-`Iniciar partida`
+Todavía no muestra `Iniciar partida`, mínimo de jugadores, `2 de 3`, Presence, roles, palabra, impostor ni marcador.
 
-Los demás jugadores ven un estado de espera.
+Un participante no-host puede salir. El host puede cerrar la Room. Si el host abandona durante Incremento 4, la Room se cierra; no existe sucesión automática.
 
 ---
 

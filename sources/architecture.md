@@ -33,7 +33,7 @@ Para el MVP, la decisión actual es utilizar:
 * Postgres como persistencia;
 * Row Level Security para autorización;
 * Supabase Realtime cuando el producto necesite sincronización;
-* Presence para presencia efímera cuando corresponda.
+* Presence para presencia efímera cuando corresponda, fuera del lobby inicial.
 
 No reabrimos en este documento la comparación con Firebase, backend propio u otras alternativas.
 
@@ -285,7 +285,7 @@ Un juego futuro podría usar:
 
 No se diseñan todavía componentes, layouts ni estética.
 
-`/impostor/grupo` pertenece a plataforma aplicada al primer juego: muestra `Group` y `Player`, no una `Room` de Impostor.
+`/impostor/grupo` pertenece a plataforma aplicada al primer juego: muestra `Group` y `Player` y ofrece entradas a Room, pero no es un lobby ni contiene el estado de una Room.
 
 ---
 
@@ -307,7 +307,7 @@ Supabase constituye infraestructura común, pero no todas sus capacidades son ob
 * operaciones sincronizadas;
 * requerimientos específicos de privacidad.
 
-Impostor requiere Realtime y Presence por su flujo actual.
+Incremento 4 requiere Realtime para avisar cambios persistidos del lobby. Presence queda fuera de Room + Lobby y se introduce recién en Incremento 5 para conexión, desconexión y sucesión del host.
 
 Un futuro juego podría no necesitarlos.
 
@@ -379,6 +379,33 @@ Operativo no significa necesariamente solo en memoria.
 
 Puede persistirse técnicamente para facilitar consistencia y recuperación.
 
+## Room + Lobby en Incremento 4
+
+`Room` pertenece exclusivamente al dominio de Impostor.
+
+```text
+Group = quiénes somos
+Room  = quiénes estamos jugando ahora
+```
+
+Una Room es temporal en el dominio, pero se persiste técnicamente para soportar concurrencia, refresh, reconstrucción y sincronización entre teléfonos.
+
+El lifecycle mínimo de Incremento 4 es:
+
+```text
+lobby → closed
+```
+
+No se usan todavía `playing` ni `finished`; esos estados dependen de `GameSession` y pertenecen a incrementos posteriores.
+
+Un Player puede pertenecer a una sola Room activa de Impostor. Un Group puede tener varias Rooms activas. El creador de una Room es su host inicial y también su participante. El host no recibe capacidades de gameplay en este incremento.
+
+Un participante no-host puede salir del lobby. El host puede cerrar el lobby. Si el host quiere abandonarlo, la Room se cierra. No existe sucesión automática del host ni expiración automática en Incremento 4.
+
+El cliente no envía como autoridad `player_id`, `group_id`, `host_player_id` ni `auth_user_id`. El backend deriva esos datos desde `auth.uid()`, `Player` y `Group`.
+
+El lobby toma como fuente de verdad las filas persistidas de `Room` y `RoomParticipant`. Postgres Changes funciona como aviso para volver a leer el lobby; no es autoridad y no sustituye el refetch después de reconexión o eventos perdidos.
+
 ---
 
 # 13. RLS y autorización
@@ -429,15 +456,7 @@ En el Incremento 3 no puede explorar el banco completo de Impostor por ser admin
 
 Rol temporal dentro de una sala de Impostor.
 
-Puede:
-
-* iniciar tanda;
-* iniciar votación;
-* iniciar segunda votación;
-* revelar palabra;
-* registrar resultado del intento;
-* iniciar ronda;
-* terminar tanda.
+En Incremento 4 solo se representa visualmente. Las capacidades de gameplay se habilitan cuando exista `GameSession`.
 
 Host no implica admin.
 
@@ -482,6 +501,20 @@ UI
 → cambio de estado
 → sincronización
 ```
+
+## Operaciones conceptuales de Room
+
+Incremento 4 necesita conceptualmente estas intenciones, sin fijar todavía firmas físicas:
+
+* crear Room sin argumentos de ownership; devuelve la Room activa existente si el Player ya pertenece a una;
+* unirse por código; deriva Player y Group desde `auth.uid()` y valida que la Room esté en `lobby`;
+* reconstruir la Room activa del Player sin recibir `player_id` ni `group_id`;
+* abandonar como participante no-host;
+* cerrar Room como host.
+
+La creación incluye atómicamente Room, host y participación inicial. El join es idempotente y no duplica `RoomParticipant`.
+
+Las lecturas del lobby deben devolver únicamente Room, estado, host y nicknames autorizados. No existe una lectura pública de todas las Rooms. Realtime solo avisa para repetir una lectura autorizada.
 
 ---
 
@@ -569,38 +602,37 @@ No mantener historial individual de votos después de la tanda en el MVP.
 
 # 19. Realtime específico de Impostor
 
-Cambios que requieren sincronización rápida:
+En Incremento 4, el único caso cerrado es el lobby:
 
-* participantes en sala;
-* host;
-* comienzo de tanda;
-* cambio de fase;
-* confirmación de roles;
-* comienzo de votación;
-* fin de votación;
-* empate;
-* resultado;
-* marcador;
-* siguiente ronda;
-* fin de tanda.
+```text
+Postgres Changes
+→ aviso de cambio persistido
+→ refetch autoritativo de Room + RoomParticipant
+```
 
-No decidimos todavía qué caso utiliza:
+La suscripción queda acotada por `room_id` de la Room activa reconstruida por `get_my_active_room()`.
+Ese id es metadato técnico para filtrar el canal, no una autoridad de producto ni contenido visible
+del lobby.
 
-* Postgres Changes;
-* Broadcast;
-* otro mecanismo Realtime de Supabase.
+El payload no es fuente final de verdad. Ante `INSERT room_participants` o `UPDATE rooms`, el cliente
+invalida el lobby y llama nuevamente a `get_my_active_room()`. Ante reconexión exitosa también relee
+completo, porque Realtime no garantiza que todos los eventos intermedios hayan sido observados.
 
-Esa granularidad se decidirá durante implementación.
+`DELETE room_participants` queda fuera mientras no exista salida de sala en producto. No se habilita
+`REPLICA IDENTITY FULL` solo como preparación especulativa.
+
+La sincronización de tanda, rondas, votos, resultados y marcador se definirá junto con `GameSession`.
 
 ---
 
 # 20. Presence
 
-Presence se usa para información efímera como:
+Presence queda fuera de Incremento 4. En Incremento 5 podrá usarse para información efímera como:
 
 * conectado;
 * desconectado;
-* lobby;
+* conectado;
+* desconectado;
 * disponibilidad para sucesión de host.
 
 Presence no reemplaza `Player`.
@@ -609,7 +641,7 @@ Presence no reemplaza membresía de grupo.
 
 Presence no debería ser por sí sola la autoridad final de `hostPlayerId`.
 
-La reasignación de host debe quedar registrada en el estado autoritativo.
+La reasignación de host debe quedar registrada en el estado autoritativo cuando se implemente en Incremento 5.
 
 ---
 

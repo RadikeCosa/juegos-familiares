@@ -910,77 +910,219 @@ El grupo tiene un banco persistente útil para jugar: cualquier integrante puede
 
 ---
 
-## Incremento 4 — Crear y unirse a una sala
+## Incremento 4 — Room + Lobby
 
-### Objetivo
+El Incremento 4 queda dividido en slices verificables. Room pertenece al dominio de Impostor y no se promueve a Platform.
 
-Permitir que varios jugadores del mismo grupo se reúnan en una sala temporal de Impostor.
+### Contrato cerrado
 
-### Resultado observable
+`Group` representa pertenencia social persistente. `Room` representa una reunión temporal de un subconjunto del Group.
 
-Un jugador crea una sala y se convierte en host.
+* cualquier Player válido del Group puede crear una Room;
+* el creador es host inicial y también RoomParticipant;
+* una Room tiene estado `lobby` o `closed`;
+* una Room cerrada deja de ser activa;
+* un Player puede pertenecer a una sola Room activa de Impostor;
+* un Group puede tener varias Rooms activas;
+* crear de nuevo devuelve la Room activa existente del Player;
+* código y enlace son dos representaciones de la misma Room;
+* el código tiene 8 caracteres, es opaco y no secuencial;
+* el join valida autoritativamente que Room y Player pertenecen al mismo Group;
+* `RoomParticipant` representa pertenencia actual, no conexión;
+* un participante puede abandonar un lobby;
+* el host puede cerrar el lobby;
+* si el host quiere abandonar, se cierra la Room;
+* no existe sucesión automática de host en este incremento;
+* el lobby se reconstruye después de refresh mediante el módulo de Impostor;
+* Postgres Changes avisa de cambios y el cliente vuelve a leer el lobby autoritativamente;
+* Presence queda diferida al Incremento 5.
 
-Otros jugadores entran desde sus teléfonos y todos ven la lista de participantes del lobby.
+### Incremento 4.0 — Contrato documental
 
-### Dominio involucrado
+#### Objetivo
 
-Impostor:
+Dejar la documentación de Room + Lobby coherente y lista para implementar.
 
-* `Room`;
-* `RoomParticipant`;
-* lobby;
-* host temporal.
+#### Resultado observable
 
-Plataforma:
+El corpus define entidades, invariantes, lifecycle, join, refresh, sincronización, seguridad y límites sin requerir decisiones relevantes silenciosas en 4.1.
 
-* pertenencia al grupo.
+#### Fuera de alcance
 
-### Infraestructura necesaria
+Código, SQL, migrations, RPCs, RLS, Realtime y componentes.
 
-* estado remoto para sala y participantes;
-* autorización para que solo integrantes del grupo entren;
-* sincronización básica de lobby.
+#### Validación
 
-### Decisiones técnicas a cerrar
+Revisión cruzada del corpus, contradicciones documentadas y validación de formato del diff.
 
-* mecanismo concreto para compartir sala: código, enlace, QR o combinación;
-* vida útil inicial de una sala;
-* si la actualización del lobby usa Postgres Changes, Broadcast, polling inicial o una combinación simple;
-* si un jugador puede estar en más de una sala activa.
+### Incremento 4.1 — Crear Room + host
 
-### Tests / validación
+#### Objetivo
 
-* integración: crear sala asigna host;
-* integración: un integrante entra a sala del grupo;
-* integración/RLS: no se entra a salas de otro grupo;
-* prueba manual con dos teléfonos;
-* validación de que el lobby actualiza participantes sin recargar, si se incorpora realtime en este punto.
+Permitir que un Player válido cree una Room persistida.
 
-### Riesgos
+#### Resultado observable
 
-* hacer complejo el mecanismo de invitación;
-* mezclar administrador de grupo con host de sala;
-* diseñar salas públicas o matchmaking;
-* introducir realtime más amplio que el necesario.
+```text
+Player válido
+→ Crear sala
+→ Room persistida en lobby
+→ creador = host
+→ creador = RoomParticipant
+→ lobby mínimo
+```
 
-### Fuera de alcance
+#### Incluye
 
-* iniciar tanda;
-* presence sofisticada;
-* reconexión;
-* expulsar participantes;
-* configuración avanzada de sala.
+* creación coherente de Room y participante inicial;
+* host perteneciente al Group;
+* código único;
+* una Room activa por Player;
+* creación idempotente ante doble toque o reintento;
+* estado `lobby`.
 
-### Criterio de terminado
+#### No incluye
 
-Una sala real puede formarse con varios teléfonos del mismo grupo y un host visible.
+Join de terceros, Realtime, Presence, sucesión de host, GameSession y gameplay.
 
-### Conceptos a aprender
+#### Validación
 
-* estado temporal remoto;
-* lobby compartido;
-* host como rol derivado del estado;
-* opciones de sincronización simple.
+Tests DB/integration de invariantes, código, aislamiento y doble create.
+
+### Incremento 4.2 — Join autoritativo
+
+#### Objetivo
+
+Permitir que otro Player del mismo Group entre por código o enlace.
+
+#### Resultado observable
+
+```text
+Segundo Player del mismo Group
+→ código o enlace
+→ RoomParticipant
+→ acceso al lobby
+```
+
+#### Incluye
+
+* código válido y Room en `lobby`;
+* validación del mismo Group;
+* rechazo de otro Group;
+* join repetido idempotente;
+* joins simultáneos;
+* sin Auth;
+* Auth sin Player.
+
+#### No incluye
+
+Sincronización automática entre pantallas, Presence, GameSession y sucesión de host.
+
+#### Validación
+
+Tests DB/integration de autorización, concurrencia, aislamiento y errores de producto.
+
+### Incremento 4.3 — Reconstrucción de Room + lobby
+
+#### Objetivo
+
+Reconstruir la Room activa desde el contexto remoto después de refresh o apertura directa.
+
+#### Resultado observable
+
+```text
+refresh
+→ Auth
+→ Player
+→ Group
+→ Room activa
+→ host + participantes
+→ mismo lobby
+```
+
+#### Incluye
+
+* `get_my_active_room()` conceptual;
+* Room cerrada fuera de la reconstrucción activa;
+* apertura directa de `/impostor/sala/[code]`;
+* estados de no Auth, Auth sin Player y sin Room.
+
+#### No incluye
+
+Realtime, Presence, conexión online/offline y GameSession.
+
+#### Validación
+
+Tests de lectura autorizada y smoke browser de refresh y apertura directa.
+
+### Incremento 4.4 — Lobby sincronizado
+
+#### Objetivo
+
+Propagar cambios persistidos de participantes sin refresh manual.
+
+#### Resultado observable
+
+```text
+A tiene el lobby abierto
+B entra
+A ve a B sin refrescar
+```
+
+#### Incluye
+
+* Supabase Realtime Postgres Changes;
+* evento como invalidación;
+* refetch autoritativo del lobby;
+* reconexión del canal;
+* refetch completo ante reconexión o evento perdido.
+
+#### No incluye
+
+Presence, Broadcast como autoridad, online/offline, heartbeats y sucesión de host.
+
+#### Validación
+
+Tests de suscripción/RLS y smoke browser con dos clientes, reconexión y evento perdido simulado.
+
+### Incremento 4.5 — UX vertical + lifecycle mínimo + endurecimiento
+
+#### Objetivo
+
+Completar el flujo usable de Room + Lobby en mobile.
+
+#### Resultado observable
+
+```text
+crear
+→ compartir
+→ entrar
+→ ver participantes
+→ refresh
+→ sincronización
+→ salir / cerrar
+```
+
+#### Incluye
+
+* sección secundaria de juego en `/impostor/grupo`;
+* código, enlace y clipboard;
+* lobby mobile-first;
+* salida de participante no-host;
+* cierre por host;
+* cierre si el host quiere abandonar;
+* errores de producto;
+* aislamiento entre Groups;
+* accesibilidad y viewport de 360 px;
+* no exposición de IDs técnicos.
+
+#### No incluye
+
+Mínimo de jugadores, inicio de tanda, GameSession, Presence, sucesión de host, expiración automática, QR y offline multijugador.
+
+#### Validación
+
+Component tests, integration tests, browser smoke mobile, concurrencia, refresh, sincronización y lifecycle `lobby | closed`.
 
 ---
 
@@ -1916,9 +2058,9 @@ Quedó explícitamente fuera de este cierre: banco de palabras, sala, realtime, 
 
 ## Incremento 3
 
-Estado: completado localmente.
+Estado: cerrado.
 
-Se agregaron `GroupWord`, autoría, cantidad total, listado propio, borrado propio y visibilidad parcial sin exploración completa del banco. Quedó pendiente para un paso posterior la alineación remota y el smoke de producción.
+Se agregaron `GroupWord`, autoría, cantidad total, listado propio, borrado propio y visibilidad parcial sin exploración completa del banco. La validación local y de producción documentada confirma el cierre del incremento.
 
 ## Incremento 4
 
@@ -2025,8 +2167,8 @@ Si una skill no está disponible en una sesión concreta, se usa como referencia
 Estas decisiones no bloquean el Incremento 0.
 
 * mecanismo exacto de invitación al grupo;
-* mecanismo exacto para compartir sala;
-* estrategia final de Postgres Changes vs Broadcast para cada caso realtime;
+* comportamiento de conexión, reconexión avanzada y background móvil;
+* estrategia de realtime para GameSession y fases posteriores;
 * forma exacta de operaciones autoritativas en Supabase;
 * esquema SQL y políticas RLS detalladas;
 * limpieza automática de salas viejas;

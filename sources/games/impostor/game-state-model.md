@@ -168,12 +168,15 @@ IMPOSTOR_GUESS
 
 La sala existe y los jugadores pueden entrar antes de comenzar la tanda.
 
-## Información relevante
+## Información relevante para Incremento 4
 
-* participantes presentes;
+* Room en estado `lobby`;
+* participantes persistidos;
 * host;
-* estado de conexión;
-* cantidad de palabras disponibles.
+* cantidad de jugadores;
+* código/enlace de Room.
+
+La pertenencia persistida no equivale a conexión. Presence y estado online/offline pertenecen al Incremento 5.
 
 ## Acciones posibles
 
@@ -196,12 +199,27 @@ Actor:
 
 Efecto:
 
-* deja de estar disponible;
-* puede provocar sucesión de host.
+* elimina su pertenencia actual si no es host;
+* si es host, cierra la Room en Incremento 4;
+* no provoca sucesión automática.
+
+### Cerrar lobby
+
+Actor autorizado:
+
+`host`
+
+Efecto:
+
+```text
+lobby → closed
+```
+
+Una Room cerrada deja de considerarse activa y no admite nuevos joins.
 
 ### Iniciar tanda
 
-Evento:
+Evento futuro, fuera de Incremento 4:
 
 `START_SESSION`
 
@@ -209,7 +227,9 @@ Actor autorizado:
 
 `host`
 
-## Guards
+## Guards futuros de START_SESSION
+
+Estos guards pertenecen al incremento que introduzca `GameSession`. No bloquean la formación ni la lectura del lobby en Incremento 4.
 
 Para iniciar:
 

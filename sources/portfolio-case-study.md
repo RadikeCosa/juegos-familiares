@@ -27,7 +27,7 @@ El case study futuro debe mostrar tanto el resultado como el razonamiento que ll
 
 ```text
 Estado:
-Incremento 3 cerrado localmente / pendiente de alineación y smoke de producción
+Incremento 3 cerrado local y remotamente
 ```
 
 ## Ya existe
@@ -59,8 +59,8 @@ Incremento 3 cerrado localmente / pendiente de alineación y smoke de producció
 * tests unitarios, validaciones de base de datos y smoke browser/mobile para Incremento 2;
 * migrations remotas aplicadas y alineadas con el historial local;
 * smoke de producción aprobado en Vercel con dos identidades reales aisladas para Incremento 2;
-* banco persistente de palabras de Impostor validado localmente con alta, cantidad total, listado propio y borrado propio;
-* privacidad del banco validada localmente: los integrantes conocen la cantidad total y sólo ven sus propios aportes;
+* banco persistente de palabras de Impostor validado local y remotamente con alta, cantidad total, listado propio y borrado propio;
+* privacidad del banco validada local y remotamente: los integrantes conocen la cantidad total y sólo ven sus propios aportes;
 * UI local del banco en `/impostor/grupo` y `/impostor/grupo/palabras`.
 
 ## PENDIENTE
@@ -68,9 +68,8 @@ Incremento 3 cerrado localmente / pendiente de alineación y smoke de producció
 * producto jugable;
 * playtesting real;
 * métricas;
-* alineación remota y smoke de producción del banco de palabras;
-* sala/lobby;
-* realtime/presence;
+* Room + Lobby;
+* Presence y sucesión automática del host;
 * tests de dominio de juego;
 * UI final;
 * evidencia visual;

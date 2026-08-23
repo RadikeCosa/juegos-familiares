@@ -215,19 +215,50 @@ Esto permite que cualquier integrante pueda iniciar una partida aunque el admini
 
 ---
 
-# Reasignación del host
+# Lifecycle mínimo de Room
 
 ## Decisión
 
-Si el host deja de estar disponible, el sistema asigna como nuevo host al participante conectado que haya ingresado primero a la sala entre los restantes.
+En Incremento 4 una Room puede estar en:
 
-Si el host original vuelve posteriormente, vuelve como participante normal y no recupera automáticamente el rol de host.
+```text
+lobby
+closed
+```
 
-## Alcance
+Una Room cerrada deja de considerarse activa.
 
-Esta regla define solamente la sucesión del host para el MVP.
+Un participante no-host puede abandonar el lobby. El host puede cerrar el lobby. Si el host quiere abandonar durante este incremento, la Room se cierra.
 
-No diseñamos todavía reconexión avanzada ni tiempos de tolerancia.
+No existe expiración automática ni sucesión automática del host en este incremento. La sucesión, el host desconectado y el host original que vuelve pertenecen al Incremento 5.
+
+## Persistencia
+
+Aunque Room es temporal en el dominio, se persiste técnicamente para refresh, concurrencia, reconstrucción y sincronización entre dispositivos.
+
+# Rooms activas
+
+## Decisión
+
+Un Player puede pertenecer a una sola Room activa de Impostor.
+
+Un Group puede tener varias Rooms activas simultáneamente.
+
+Si el Player ya pertenece a una Room activa y solicita crear otra, la operación devuelve la Room existente en lugar de crear una segunda Room ambigua.
+
+# Código y enlace de Room
+
+## Decisión
+
+Cada Room tiene un código opaco de 8 caracteres, no secuencial. El código y el enlace son dos representaciones de la misma Room.
+
+La ruta conceptual es:
+
+```text
+/impostor/sala/[code]
+```
+
+No existe `RoomInvitation` separada. QR queda fuera de Incremento 4.
 
 ---
 
@@ -711,14 +742,12 @@ No agregaremos datos históricos adicionales si no son necesarios para el conjun
 
 # Decisiones pendientes
 
-Todavía debemos definir principalmente cuestiones de UX y arquitectura:
+Room + Lobby queda cerrado para Incremento 4. Permanecen abiertas únicamente cuestiones posteriores o generales:
 
 * experiencia de primera instalación;
 * cómo se crea inicialmente un grupo;
 * cómo se invita a otro dispositivo al grupo;
-* cómo se crea y comparte una sala;
-* código, enlace, QR o combinación;
 * comportamiento cuando un jugador pierde conexión;
 * entrada o salida de jugadores durante una tanda;
 
-Estas decisiones no modifican las reglas centrales de la primera variante jugable.
+Estas decisiones no modifican el contrato de Room + Lobby ni las reglas centrales de la primera variante jugable.
