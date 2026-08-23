@@ -9,7 +9,9 @@ import {
   type AnonymousAuthIdentity,
 } from "../../../../lib/supabase/anonymous-auth";
 import {
+  createCloseRoomController,
   createJoinRoomByCodeController,
+  createLeaveRoomController,
   createLobbySyncController,
   clearRoomCreationIntent,
   clearRoomJoinIntent,
@@ -33,6 +35,12 @@ type RoomLobbyDataState =
   | { status: "error"; message: string }
   | { status: "awaiting-join"; error?: string }
   | { status: "joining" };
+
+type RoomLifecycleActionState =
+  | { status: "idle" }
+  | { status: "leaving" }
+  | { status: "closing" }
+  | { status: "error"; message: string };
 
 const GENERIC_ROOM_LOBBY_ERROR = "No pudimos cargar la sala. Intentá de nuevo.";
 const GENERIC_START_AUTH_ERROR =
@@ -70,9 +78,12 @@ export function renderRoomParticipantsList(
   return (
     <ul className="impostor-group-members">
       {participants.map((participant) => (
-        <li key={participant.nickname}>
+        <li key={`${participant.nickname}-${participant.joinedAt}`}>
           <span>{participant.nickname}</span>
-          {participant.isHost ? <strong>Host</strong> : null}
+          <span className="impostor-room-badges">
+            {participant.isSelf ? <strong>Vos</strong> : null}
+            {participant.isHost ? <strong>Host</strong> : null}
+          </span>
         </li>
       ))}
     </ul>
@@ -87,7 +98,10 @@ export function renderRoomLobbyContent(
     onRetryBootstrap?: () => void;
     onRetryData?: () => void;
     onJoinRoom?: () => void;
+    onLeaveRoom?: () => void;
+    onCloseRoom?: () => void;
     onStartAnonymousAuth?: () => void;
+    lifecycleActionState?: RoomLifecycleActionState;
     isStartingAuth?: boolean;
     startAuthError?: string;
   },
@@ -241,6 +255,15 @@ export function renderRoomLobbyContent(
   }
 
   const { lobby } = dataState;
+  const selfParticipant = lobby.participants.find(
+    (participant) => participant.isSelf,
+  );
+  const lifecycleActionState = options.lifecycleActionState ?? {
+    status: "idle" as const,
+  };
+  const isLifecycleActionPending =
+    lifecycleActionState.status === "leaving" ||
+    lifecycleActionState.status === "closing";
 
   return (
     <section
@@ -261,6 +284,43 @@ export function renderRoomLobbyContent(
       <p className="impostor-word-bank-count">
         {formatPlayerCount(lobby.participants.length)}
       </p>
+
+      {selfParticipant ? (
+        <div className="impostor-room-danger-zone">
+          {selfParticipant.isHost ? (
+            <>
+              <p>Cerrar la sala termina este lobby para todos.</p>
+              <button
+                className="impostor-action impostor-action--danger"
+                type="button"
+                disabled={isLifecycleActionPending}
+                onClick={options.onCloseRoom}
+              >
+                {lifecycleActionState.status === "closing"
+                  ? "Cerrando sala..."
+                  : "Cerrar sala"}
+              </button>
+            </>
+          ) : (
+            <button
+              className="impostor-action"
+              type="button"
+              disabled={isLifecycleActionPending}
+              onClick={options.onLeaveRoom}
+            >
+              {lifecycleActionState.status === "leaving"
+                ? "Saliendo..."
+                : "Salir de la sala"}
+            </button>
+          )}
+
+          {lifecycleActionState.status === "error" ? (
+            <div className="impostor-group-error" aria-live="polite">
+              <p>{lifecycleActionState.message}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -275,9 +335,13 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   });
   const [isStartingAuth, setIsStartingAuth] = useState(false);
   const [startAuthError, setStartAuthError] = useState<string | undefined>();
+  const [lifecycleActionState, setLifecycleActionState] =
+    useState<RoomLifecycleActionState>({ status: "idle" });
   const joinRoomController = useState(() =>
     createJoinRoomByCodeController(),
   )[0];
+  const leaveRoomController = useState(() => createLeaveRoomController())[0];
+  const closeRoomController = useState(() => createCloseRoomController())[0];
   const activeRoomId =
     bootstrapState.status === "recognized" && dataState.status === "success"
       ? dataState.lobby.room.id
@@ -308,6 +372,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
 
         clearRoomCreationIntent(roomCode);
         clearRoomJoinIntent(roomCode);
+        setLifecycleActionState({ status: "idle" });
         setDataState({ status: "success", lobby: activeLobby });
 
         return;
@@ -334,11 +399,52 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
       );
 
       recordRoomJoinIntent(lobby.room.code);
+      setLifecycleActionState({ status: "idle" });
       setDataState({ status: "success", lobby });
     } catch (error) {
       setDataState({
         status: "awaiting-join",
         error: getFriendlyError(error, GENERIC_ROOM_LOBBY_ERROR),
+      });
+    }
+  }
+
+  async function handleLeaveRoom() {
+    if (lifecycleActionState.status === "leaving") {
+      return;
+    }
+
+    setLifecycleActionState({ status: "leaving" });
+
+    try {
+      await leaveRoomController.submit(createImpostorRoomsClient());
+      router.replace("/impostor/grupo");
+    } catch (error) {
+      setLifecycleActionState({
+        status: "error",
+        message: getFriendlyError(error, "No pudimos salir de la sala."),
+      });
+    }
+  }
+
+  async function handleCloseRoom() {
+    if (lifecycleActionState.status === "closing") {
+      return;
+    }
+
+    if (!window.confirm("Cerrar la sala termina este lobby para todos.")) {
+      return;
+    }
+
+    setLifecycleActionState({ status: "closing" });
+
+    try {
+      await closeRoomController.submit(createImpostorRoomsClient());
+      router.replace("/impostor/grupo");
+    } catch (error) {
+      setLifecycleActionState({
+        status: "error",
+        message: getFriendlyError(error, "No pudimos cerrar la sala."),
       });
     }
   }
@@ -410,11 +516,12 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
 
           clearRoomCreationIntent(roomCode);
           clearRoomJoinIntent(roomCode);
+          setLifecycleActionState({ status: "idle" });
           setDataState({ status: "success", lobby: snapshot.lobby });
         }
 
         if (snapshot.status === "absent") {
-          setDataState({ status: "awaiting-join" });
+          router.replace("/impostor/grupo");
         }
       },
     });
@@ -436,7 +543,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     onRetryBootstrap: () => void runBootstrap(),
     onRetryData: () => void runRecognizedFlow(),
     onJoinRoom: () => void handleJoinRoom(),
+    onLeaveRoom: () => void handleLeaveRoom(),
+    onCloseRoom: () => void handleCloseRoom(),
     onStartAnonymousAuth: () => void handleStartAnonymousAuth(),
+    lifecycleActionState,
     isStartingAuth,
     startAuthError,
   });

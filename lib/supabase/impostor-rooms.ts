@@ -5,7 +5,7 @@ type SupabaseRpcResult<TData> = {
 
 export type ImpostorRoomsClient = {
     rpc: (
-        fn: "create_room" | "join_room_by_code" | "get_my_active_room",
+        fn: "create_room" | "join_room_by_code" | "get_my_active_room" | "leave_room" | "close_room",
         params?: { room_code: string }
     ) => PromiseLike<SupabaseRpcResult<unknown>>;
 };
@@ -20,7 +20,7 @@ type RealtimeChannel = {
     on: (
         type: "postgres_changes",
         filter: {
-            event: "INSERT" | "UPDATE";
+            event: "INSERT" | "UPDATE" | "DELETE";
             schema: "public";
             table: "room_participants" | "rooms";
             filter: string;
@@ -172,6 +172,20 @@ const INCONSISTENT_ACTIVE_ROOM_ERROR =
     "No pudimos reconstruir tu sala activa. Volvé a intentar más tarde.";
 const GENERIC_ACTIVE_ROOM_ERROR =
     "No pudimos recuperar tu sala activa. Intentá de nuevo.";
+const UNAUTHENTICATED_LEAVE_ROOM_ERROR =
+    "Necesitás entrar a tu grupo antes de salir de una sala.";
+const MISSING_PLAYER_LEAVE_ROOM_ERROR =
+    "No pudimos reconocer tu jugador para salir de la sala.";
+const GENERIC_LEAVE_ROOM_ERROR =
+    "No pudimos salir de la sala. Intentá de nuevo.";
+const UNAUTHENTICATED_CLOSE_ROOM_ERROR =
+    "Necesitás entrar a tu grupo antes de cerrar una sala.";
+const MISSING_PLAYER_CLOSE_ROOM_ERROR =
+    "No pudimos reconocer tu jugador para cerrar la sala.";
+const NO_ACTIVE_ROOM_TO_CLOSE_ERROR = "Ya no tenés una sala activa para cerrar.";
+const NOT_ROOM_HOST_ERROR = "Solo el host puede cerrar la sala.";
+const GENERIC_CLOSE_ROOM_ERROR =
+    "No pudimos cerrar la sala. Intentá de nuevo.";
 
 type RoomLobbyRow = {
     room_id?: string;
@@ -179,12 +193,14 @@ type RoomLobbyRow = {
     room_status: string;
     participant_nickname: string;
     participant_is_host: boolean;
+    participant_is_self?: boolean;
     participant_joined_at: string;
 };
 
 export type RoomLobbyParticipant = {
     nickname: string;
     isHost: boolean;
+    isSelf?: boolean;
     joinedAt: string;
 };
 
@@ -260,6 +276,42 @@ function getActiveRoomErrorMessage(error: unknown) {
     return GENERIC_ACTIVE_ROOM_ERROR;
 }
 
+function getLeaveRoomErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "28000" || error.code === "42501") {
+            return UNAUTHENTICATED_LEAVE_ROOM_ERROR;
+        }
+
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_LEAVE_ROOM_ERROR;
+        }
+    }
+
+    return GENERIC_LEAVE_ROOM_ERROR;
+}
+
+function getCloseRoomErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "28000" || error.code === "42501") {
+            return UNAUTHENTICATED_CLOSE_ROOM_ERROR;
+        }
+
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_CLOSE_ROOM_ERROR;
+        }
+
+        if (error.code === "P0015") {
+            return NO_ACTIVE_ROOM_TO_CLOSE_ERROR;
+        }
+
+        if (error.code === "P0016") {
+            return NOT_ROOM_HOST_ERROR;
+        }
+    }
+
+    return GENERIC_CLOSE_ROOM_ERROR;
+}
+
 function isRoomLobbyRow(value: unknown): value is RoomLobbyRow {
     const row = value as Partial<RoomLobbyRow>;
 
@@ -281,11 +333,19 @@ function toRoomLobby(rows: RoomLobbyRow[]): RoomLobby {
             code: firstRow.room_join_code,
             status: firstRow.room_status
         },
-        participants: rows.map((row) => ({
-            nickname: row.participant_nickname,
-            isHost: row.participant_is_host,
-            joinedAt: row.participant_joined_at
-        }))
+        participants: rows.map((row) => {
+            const participant: RoomLobbyParticipant = {
+                nickname: row.participant_nickname,
+                isHost: row.participant_is_host,
+                joinedAt: row.participant_joined_at
+            };
+
+            if (typeof row.participant_is_self === "boolean") {
+                participant.isSelf = row.participant_is_self;
+            }
+
+            return participant;
+        })
     };
 }
 
@@ -390,6 +450,62 @@ export function createJoinRoomByCodeController() {
     };
 }
 
+export async function leaveRoom(supabase: ImpostorRoomsClient): Promise<void> {
+    const result = await supabase.rpc("leave_room");
+
+    if (result.error) {
+        throw new Error(getLeaveRoomErrorMessage(result.error));
+    }
+}
+
+export async function closeRoom(supabase: ImpostorRoomsClient): Promise<void> {
+    const result = await supabase.rpc("close_room");
+
+    if (result.error) {
+        throw new Error(getCloseRoomErrorMessage(result.error));
+    }
+}
+
+export function createLeaveRoomController() {
+    let activeRequest: Promise<void> | null = null;
+
+    return {
+        submit(supabase: ImpostorRoomsClient): Promise<void> {
+            if (activeRequest) {
+                return activeRequest;
+            }
+
+            activeRequest = leaveRoom(supabase);
+
+            void activeRequest.finally(() => {
+                activeRequest = null;
+            });
+
+            return activeRequest;
+        }
+    };
+}
+
+export function createCloseRoomController() {
+    let activeRequest: Promise<void> | null = null;
+
+    return {
+        submit(supabase: ImpostorRoomsClient): Promise<void> {
+            if (activeRequest) {
+                return activeRequest;
+            }
+
+            activeRequest = closeRoom(supabase);
+
+            void activeRequest.finally(() => {
+                activeRequest = null;
+            });
+
+            return activeRequest;
+        }
+    };
+}
+
 export type RoomChangesSubscription = {
     unsubscribe: () => Promise<void>;
 };
@@ -407,6 +523,16 @@ export function subscribeToRoomChanges(
             "postgres_changes",
             {
                 event: "INSERT",
+                schema: "public",
+                table: "room_participants",
+                filter: `room_id=eq.${encodedRoomId}`
+            },
+            () => onInvalidate()
+        )
+        .on(
+            "postgres_changes",
+            {
+                event: "DELETE",
                 schema: "public",
                 table: "room_participants",
                 filter: `room_id=eq.${encodedRoomId}`
