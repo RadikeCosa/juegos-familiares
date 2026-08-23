@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createBrowserSupabaseClient } from "../../../../lib/supabase/browser-client";
 import {
   ensureAnonymousAuthIdentity,
@@ -10,6 +10,7 @@ import {
 } from "../../../../lib/supabase/anonymous-auth";
 import {
   createCloseRoomController,
+  createHostSuccessionController,
   createJoinRoomByCodeController,
   createLeaveRoomController,
   createLobbySyncController,
@@ -20,6 +21,7 @@ import {
   refreshMyRoomLiveness,
   subscribeToRoomPresence,
   recordRoomJoinIntent,
+  startRoomHostSuccessionRecheck,
   startRoomLivenessHeartbeat,
   subscribeToRoomChanges,
   type ImpostorRoomChangesClient,
@@ -52,6 +54,7 @@ const GENERIC_ROOM_LOBBY_ERROR = "No pudimos cargar la sala. Intentá de nuevo."
 const GENERIC_START_AUTH_ERROR =
   "No pudimos empezar. Revisá tu conexión e intentá de nuevo.";
 const ROOM_LIVENESS_LOG_MESSAGE = "No pudimos refrescar liveness de sala.";
+const ROOM_HOST_SUCCESSION_LOG_MESSAGE = "No pudimos revisar sucesión de host.";
 
 function createPlatformBootstrapClient(): PlatformBootstrapClient {
   return createBrowserSupabaseClient() as unknown as PlatformBootstrapClient;
@@ -81,6 +84,10 @@ function getFriendlyError(error: unknown, fallback: string) {
 
 function logRoomLivenessError(error: unknown) {
   console.warn(ROOM_LIVENESS_LOG_MESSAGE, error);
+}
+
+function logRoomHostSuccessionError(error: unknown) {
+  console.warn(ROOM_HOST_SUCCESSION_LOG_MESSAGE, error);
 }
 
 export function formatPlayerCount(count: number) {
@@ -132,6 +139,7 @@ export function renderRoomLobbyContent(
     isStartingAuth?: boolean;
     startAuthError?: string;
     connectedPlayerIds?: Set<string>;
+    hostSuccessionNotice?: string;
   },
 ) {
   if (bootstrapState.status === "loading") {
@@ -306,6 +314,11 @@ export function renderRoomLobbyContent(
         aria-labelledby="impostor-room-participants-title"
       >
         <h2 id="impostor-room-participants-title">Jugadores</h2>
+        {options.hostSuccessionNotice ? (
+          <p className="impostor-room-notice" aria-live="polite">
+            {options.hostSuccessionNotice}
+          </p>
+        ) : null}
         {renderRoomParticipantsList(
           lobby.participants,
           options.connectedPlayerIds,
@@ -372,11 +385,19 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     roomId?: string;
     state: RoomPresenceState;
   }>({ state: {} });
+  const [hostSuccessionNotice, setHostSuccessionNotice] = useState<
+    string | undefined
+  >();
+  const isActiveHostMissingRef = useRef(false);
+  const [, setPreviousHostPlayerId] = useState<string | undefined>();
   const joinRoomController = useState(() =>
     createJoinRoomByCodeController(),
   )[0];
   const leaveRoomController = useState(() => createLeaveRoomController())[0];
   const closeRoomController = useState(() => createCloseRoomController())[0];
+  const hostSuccessionController = useState(() =>
+    createHostSuccessionController(),
+  )[0];
   const activeRoomId =
     bootstrapState.status === "recognized" && dataState.status === "success"
       ? dataState.lobby.room.id
@@ -386,6 +407,24 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
       ? dataState.lobby.participants.find((participant) => participant.isSelf)
           ?.playerId
       : undefined;
+
+  const acceptLobby = useCallback((lobby: RoomLobby) => {
+    const nextHost = lobby.participants.find((participant) => participant.isHost);
+
+    setPreviousHostPlayerId((previousHostPlayerId) => {
+      if (
+        previousHostPlayerId &&
+        nextHost &&
+        nextHost.playerId !== previousHostPlayerId
+      ) {
+        setHostSuccessionNotice(`${nextHost.nickname} ahora es el host`);
+      }
+
+      return nextHost?.playerId;
+    });
+
+    setDataState({ status: "success", lobby });
+  }, []);
 
   async function runBootstrap() {
     setBootstrapState({ status: "loading" });
@@ -413,7 +452,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
         clearRoomCreationIntent(roomCode);
         clearRoomJoinIntent(roomCode);
         setLifecycleActionState({ status: "idle" });
-        setDataState({ status: "success", lobby: activeLobby });
+        acceptLobby(activeLobby);
 
         return;
       }
@@ -440,7 +479,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
 
       recordRoomJoinIntent(lobby.room.code);
       setLifecycleActionState({ status: "idle" });
-      setDataState({ status: "success", lobby });
+      acceptLobby(lobby);
     } catch (error) {
       setDataState({
         status: "awaiting-join",
@@ -557,7 +596,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
           clearRoomCreationIntent(roomCode);
           clearRoomJoinIntent(roomCode);
           setLifecycleActionState({ status: "idle" });
-          setDataState({ status: "success", lobby: snapshot.lobby });
+          acceptLobby(snapshot.lobby);
         }
 
         if (snapshot.status === "absent") {
@@ -576,7 +615,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
       syncController.dispose();
       void subscription.unsubscribe();
     };
-  }, [bootstrapState.status, activeRoomId, roomCode, router]);
+  }, [bootstrapState.status, activeRoomId, roomCode, router, acceptLobby]);
 
   useEffect(() => {
     if (
@@ -635,6 +674,45 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
           activePresenceState,
         )
       : new Set<string>();
+  const activeHostParticipant =
+    dataState.status === "success"
+      ? dataState.lobby.participants.find((participant) => participant.isHost)
+      : undefined;
+  const activeHostPlayerId = activeHostParticipant?.playerId;
+  const isActiveHostMissing =
+    Boolean(activeHostPlayerId) && !connectedPlayerIds.has(activeHostPlayerId ?? "");
+
+  useEffect(() => {
+    isActiveHostMissingRef.current = isActiveHostMissing;
+  }, [isActiveHostMissing]);
+
+  useEffect(() => {
+    if (
+      bootstrapState.status !== "recognized" ||
+      !activeRoomId ||
+      !currentRoomPlayerId ||
+      !activeHostPlayerId
+    ) {
+      return;
+    }
+
+    const recheck = startRoomHostSuccessionRecheck({
+      evaluate: () =>
+        hostSuccessionController.submit(createImpostorRoomsClient()),
+      isHostMissing: () => isActiveHostMissingRef.current,
+      onError: logRoomHostSuccessionError,
+    });
+
+    return () => {
+      recheck.dispose();
+    };
+  }, [
+    bootstrapState.status,
+    activeRoomId,
+    currentRoomPlayerId,
+    activeHostPlayerId,
+    hostSuccessionController,
+  ]);
 
   return renderRoomLobbyContent(bootstrapState, dataState, {
     roomCode,
@@ -648,5 +726,6 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     isStartingAuth,
     startAuthError,
     connectedPlayerIds,
+    hostSuccessionNotice,
   });
 }

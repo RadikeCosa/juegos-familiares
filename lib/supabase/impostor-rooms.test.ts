@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
     createCreateRoomController,
     createCloseRoomController,
+    createHostSuccessionController,
     createJoinRoomByCodeController,
     createLeaveRoomController,
     createLobbySyncController,
@@ -18,8 +19,11 @@ import {
     normalizeRoomJoinCode,
     recordRoomCreationIntent,
     recordRoomJoinIntent,
+    reassignRoomHostIfStale,
+    ROOM_HOST_SUCCESSION_RECHECK_MS,
     refreshMyRoomLiveness,
     ROOM_LIVENESS_HEARTBEAT_MS,
+    startRoomHostSuccessionRecheck,
     startRoomLivenessHeartbeat,
     subscribeToRoomPresence,
     subscribeToRoomChanges
@@ -719,6 +723,69 @@ describe("refreshMyRoomLiveness", () => {
     });
 });
 
+describe("reassignRoomHostIfStale", () => {
+    it("calls the authoritative RPC without room, host, candidate or timestamp arguments", async () => {
+        const supabase = {
+            rpc: vi.fn(async (_fn: string) => {
+                void _fn;
+
+                return {
+                    data: [{
+                        host_changed: true,
+                        current_host_player_id: "player-2"
+                    }],
+                    error: null
+                };
+            })
+        };
+
+        await expect(reassignRoomHostIfStale(supabase)).resolves.toEqual({
+            hostChanged: true,
+            currentHostPlayerId: "player-2"
+        });
+
+        expect(supabase.rpc).toHaveBeenCalledWith("reassign_room_host_if_stale");
+        expect(supabase.rpc.mock.calls[0]).toHaveLength(1);
+    });
+
+    it("accepts a no-op result when there is no active Room or no eligible candidate", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    host_changed: false,
+                    current_host_player_id: null
+                }],
+                error: null
+            }))
+        };
+
+        await expect(reassignRoomHostIfStale(supabase)).resolves.toEqual({
+            hostChanged: false,
+            currentHostPlayerId: null
+        });
+    });
+
+    it("maps missing Player context to product-level feedback", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0002" } }))
+        };
+
+        await expect(reassignRoomHostIfStale(supabase)).rejects.toThrow(
+            "No pudimos reconocer tu jugador para revisar el host."
+        );
+    });
+
+    it("keeps unexpected host succession failures generic", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: null, error: new Error("network") }))
+        };
+
+        await expect(reassignRoomHostIfStale(supabase)).rejects.toThrow(
+            "No pudimos revisar quién debería ser host. Intentá de nuevo."
+        );
+    });
+});
+
 describe("startRoomLivenessHeartbeat", () => {
     afterEach(() => {
         vi.useRealTimers();
@@ -804,7 +871,210 @@ describe("startRoomLivenessHeartbeat", () => {
     });
 });
 
+describe("startRoomHostSuccessionRecheck", () => {
+    afterEach(() => {
+        vi.useRealTimers();
+    });
+
+    it("requests evaluation immediately without selecting a successor", async () => {
+        vi.useFakeTimers();
+        const evaluate = vi.fn(async () => ({
+            hostChanged: false,
+            currentHostPlayerId: "player-1"
+        }));
+
+        const recheck = startRoomHostSuccessionRecheck({
+            evaluate,
+            isHostMissing: () => false
+        });
+
+        await vi.waitFor(() => expect(evaluate).toHaveBeenCalledTimes(1));
+        expect(ROOM_HOST_SUCCESSION_RECHECK_MS).toBe(30_000);
+
+        recheck.dispose();
+    });
+
+    it("rechecks slowly while the host remains absent from Presence", async () => {
+        vi.useFakeTimers();
+        const evaluate = vi.fn(async () => ({
+            hostChanged: false,
+            currentHostPlayerId: "player-1"
+        }));
+        let hostMissing = true;
+
+        const recheck = startRoomHostSuccessionRecheck({
+            evaluate,
+            isHostMissing: () => hostMissing
+        });
+
+        await vi.waitFor(() => expect(evaluate).toHaveBeenCalledTimes(1));
+
+        await vi.advanceTimersByTimeAsync(ROOM_HOST_SUCCESSION_RECHECK_MS);
+        await vi.waitFor(() => expect(evaluate).toHaveBeenCalledTimes(2));
+
+        hostMissing = false;
+        await vi.advanceTimersByTimeAsync(ROOM_HOST_SUCCESSION_RECHECK_MS);
+        expect(evaluate).toHaveBeenCalledTimes(2);
+
+        recheck.dispose();
+    });
+
+    it("collapses overlapping evaluations in the same browser instance", async () => {
+        vi.useFakeTimers();
+        let resolveEvaluate: (value: {
+            hostChanged: boolean;
+            currentHostPlayerId: string;
+        }) => void = () => { };
+        const evaluatePromise = new Promise<{
+            hostChanged: boolean;
+            currentHostPlayerId: string;
+        }>((resolve) => {
+            resolveEvaluate = resolve;
+        });
+        const evaluate = vi.fn(() => evaluatePromise);
+
+        const recheck = startRoomHostSuccessionRecheck({
+            evaluate,
+            isHostMissing: () => true
+        });
+
+        recheck.requestNow();
+        await vi.advanceTimersByTimeAsync(ROOM_HOST_SUCCESSION_RECHECK_MS);
+
+        expect(evaluate).toHaveBeenCalledTimes(1);
+
+        resolveEvaluate({ hostChanged: false, currentHostPlayerId: "player-1" });
+        await evaluatePromise;
+        await Promise.resolve();
+
+        recheck.requestNow();
+        await vi.waitFor(() => expect(evaluate).toHaveBeenCalledTimes(2));
+
+        recheck.dispose();
+    });
+
+    it("requests evaluation on foreground and cleans up timers/listeners", async () => {
+        vi.useFakeTimers();
+        let visibilityListener: (() => void) | undefined;
+        const targetDocument = {
+            visibilityState: "hidden" as DocumentVisibilityState,
+            addEventListener: vi.fn((_type: "visibilitychange", listener: () => void) => {
+                visibilityListener = listener;
+            }),
+            removeEventListener: vi.fn()
+        };
+        const evaluate = vi.fn(async () => ({
+            hostChanged: false,
+            currentHostPlayerId: "player-1"
+        }));
+
+        const recheck = startRoomHostSuccessionRecheck({
+            evaluate,
+            isHostMissing: () => false,
+            document: targetDocument
+        });
+
+        await vi.waitFor(() => expect(evaluate).toHaveBeenCalledTimes(1));
+        await Promise.resolve();
+
+        visibilityListener?.();
+        expect(evaluate).toHaveBeenCalledTimes(1);
+
+        targetDocument.visibilityState = "visible";
+        visibilityListener?.();
+        await vi.waitFor(() => expect(evaluate).toHaveBeenCalledTimes(2));
+
+        recheck.dispose();
+        expect(targetDocument.removeEventListener).toHaveBeenCalledWith(
+            "visibilitychange",
+            visibilityListener
+        );
+
+        await vi.advanceTimersByTimeAsync(ROOM_HOST_SUCCESSION_RECHECK_MS);
+        expect(evaluate).toHaveBeenCalledTimes(2);
+    });
+
+    it("reports transient errors without stopping future rechecks", async () => {
+        vi.useFakeTimers();
+        const evaluate = vi
+            .fn()
+            .mockRejectedValueOnce(new Error("offline"))
+            .mockResolvedValue({ hostChanged: false, currentHostPlayerId: "player-1" });
+        const onError = vi.fn();
+
+        const recheck = startRoomHostSuccessionRecheck({
+            evaluate,
+            isHostMissing: () => true,
+            onError
+        });
+
+        await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+
+        await vi.advanceTimersByTimeAsync(ROOM_HOST_SUCCESSION_RECHECK_MS);
+        await vi.waitFor(() => expect(evaluate).toHaveBeenCalledTimes(2));
+
+        recheck.dispose();
+    });
+});
+
 describe("room lifecycle controllers", () => {
+    it("collapses concurrent host succession submissions into a single in-flight RPC call", async () => {
+        let resolveRpc: (value: { data: unknown; error: unknown }) => void = () => { };
+        const rpcPromise = new Promise<{ data: unknown; error: unknown }>((resolve) => {
+            resolveRpc = resolve;
+        });
+        const supabase = {
+            rpc: vi.fn(() => rpcPromise)
+        };
+
+        const controller = createHostSuccessionController();
+        const firstSubmit = controller.submit(supabase);
+        const secondSubmit = controller.submit(supabase);
+
+        resolveRpc({
+            data: [{
+                host_changed: false,
+                current_host_player_id: "player-1"
+            }],
+            error: null
+        });
+
+        const [firstResult, secondResult] = await Promise.all([
+            firstSubmit,
+            secondSubmit
+        ]);
+
+        expect(supabase.rpc).toHaveBeenCalledTimes(1);
+        expect(firstResult).toEqual(secondResult);
+    });
+
+    it("releases the host succession single-flight guard after errors", async () => {
+        const supabase = {
+            rpc: vi
+                .fn()
+                .mockResolvedValueOnce({ data: null, error: new Error("network") })
+                .mockResolvedValueOnce({
+                    data: [{
+                        host_changed: false,
+                        current_host_player_id: "player-1"
+                    }],
+                    error: null
+                })
+        };
+
+        const controller = createHostSuccessionController();
+
+        await expect(controller.submit(supabase)).rejects.toThrow(
+            "No pudimos revisar quién debería ser host. Intentá de nuevo."
+        );
+        await expect(controller.submit(supabase)).resolves.toEqual({
+            hostChanged: false,
+            currentHostPlayerId: "player-1"
+        });
+
+        expect(supabase.rpc).toHaveBeenCalledTimes(2);
+    });
+
     it("collapses concurrent leave submissions into a single in-flight RPC call", async () => {
         let resolveRpc: (value: { data: unknown; error: unknown }) => void = () => { };
         const rpcPromise = new Promise<{ data: unknown; error: unknown }>((resolve) => {

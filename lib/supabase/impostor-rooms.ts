@@ -11,7 +11,8 @@ export type ImpostorRoomsClient = {
             | "get_my_active_room"
             | "leave_room"
             | "close_room"
-            | "refresh_my_room_liveness",
+            | "refresh_my_room_liveness"
+            | "reassign_room_host_if_stale",
         params?: { room_code: string }
     ) => PromiseLike<SupabaseRpcResult<unknown>>;
 };
@@ -243,8 +244,15 @@ const MISSING_PLAYER_LIVENESS_ERROR =
     "No pudimos reconocer tu jugador para mantener activa la sala.";
 const GENERIC_LIVENESS_ERROR =
     "No pudimos mantener activa la sala. Intentá de nuevo.";
+const UNAUTHENTICATED_HOST_SUCCESSION_ERROR =
+    "Necesitás entrar a tu grupo antes de revisar el host.";
+const MISSING_PLAYER_HOST_SUCCESSION_ERROR =
+    "No pudimos reconocer tu jugador para revisar el host.";
+const GENERIC_HOST_SUCCESSION_ERROR =
+    "No pudimos revisar quién debería ser host. Intentá de nuevo.";
 
 export const ROOM_LIVENESS_HEARTBEAT_MS = 30_000;
+export const ROOM_HOST_SUCCESSION_RECHECK_MS = 30_000;
 
 type RoomLobbyRow = {
     room_id?: string;
@@ -385,6 +393,20 @@ function getLivenessErrorMessage(error: unknown) {
     }
 
     return GENERIC_LIVENESS_ERROR;
+}
+
+function getHostSuccessionErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "28000" || error.code === "42501") {
+            return UNAUTHENTICATED_HOST_SUCCESSION_ERROR;
+        }
+
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_HOST_SUCCESSION_ERROR;
+        }
+    }
+
+    return GENERIC_HOST_SUCCESSION_ERROR;
 }
 
 function isRoomLobbyRow(value: unknown): value is RoomLobbyRow {
@@ -544,6 +566,73 @@ export async function refreshMyRoomLiveness(
     }
 }
 
+type HostSuccessionRow = {
+    host_changed: boolean;
+    current_host_player_id: string | null;
+};
+
+export type HostSuccessionResult = {
+    hostChanged: boolean;
+    currentHostPlayerId: string | null;
+};
+
+function isHostSuccessionRow(value: unknown): value is HostSuccessionRow {
+    const row = value as Partial<HostSuccessionRow>;
+
+    return (
+        typeof row.host_changed === "boolean" &&
+        (typeof row.current_host_player_id === "string" ||
+            row.current_host_player_id === null)
+    );
+}
+
+export async function reassignRoomHostIfStale(
+    supabase: ImpostorRoomsClient
+): Promise<HostSuccessionResult> {
+    const result = await supabase.rpc("reassign_room_host_if_stale");
+
+    if (result.error) {
+        throw new Error(getHostSuccessionErrorMessage(result.error));
+    }
+
+    const rows = Array.isArray(result.data) ? result.data : [];
+    const [row] = rows;
+
+    if (!row || !isHostSuccessionRow(row)) {
+        throw new Error("No pudimos confirmar quién debería ser host.");
+    }
+
+    return {
+        hostChanged: row.host_changed,
+        currentHostPlayerId: row.current_host_player_id
+    };
+}
+
+export function createHostSuccessionController() {
+    let activeRequest: Promise<HostSuccessionResult> | null = null;
+
+    return {
+        submit(supabase: ImpostorRoomsClient): Promise<HostSuccessionResult> {
+            if (activeRequest) {
+                return activeRequest;
+            }
+
+            activeRequest = reassignRoomHostIfStale(supabase);
+
+            void activeRequest.then(
+                () => {
+                    activeRequest = null;
+                },
+                () => {
+                    activeRequest = null;
+                }
+            );
+
+            return activeRequest;
+        }
+    };
+}
+
 type LivenessDocument = {
     visibilityState?: DocumentVisibilityState;
     addEventListener?: (
@@ -604,6 +693,77 @@ export function startRoomLivenessHeartbeat(
 
     return {
         refreshNow,
+        dispose() {
+            isDisposed = true;
+            clearIntervalFn(intervalId);
+            targetDocument?.removeEventListener?.(
+                "visibilitychange",
+                handleVisibilityChange
+            );
+        }
+    };
+}
+
+type RoomHostSuccessionRecheckOptions = {
+    evaluate: () => PromiseLike<HostSuccessionResult>;
+    isHostMissing: () => boolean;
+    onError?: (error: unknown) => void;
+    intervalMs?: number;
+    document?: LivenessDocument | null;
+    setIntervalFn?: typeof setInterval;
+    clearIntervalFn?: typeof clearInterval;
+};
+
+export type RoomHostSuccessionRecheck = {
+    requestNow: () => void;
+    dispose: () => void;
+};
+
+export function startRoomHostSuccessionRecheck(
+    options: RoomHostSuccessionRecheckOptions
+): RoomHostSuccessionRecheck {
+    let isDisposed = false;
+    let activeRequest: Promise<unknown> | null = null;
+    const intervalMs = options.intervalMs ?? ROOM_HOST_SUCCESSION_RECHECK_MS;
+    const setIntervalFn = options.setIntervalFn ?? globalThis.setInterval;
+    const clearIntervalFn = options.clearIntervalFn ?? globalThis.clearInterval;
+    const targetDocument =
+        options.document ?? (typeof document === "undefined" ? null : document);
+
+    function requestNow() {
+        if (isDisposed || activeRequest) {
+            return;
+        }
+
+        activeRequest = Promise.resolve(options.evaluate())
+            .catch((error) => {
+                if (!isDisposed) {
+                    options.onError?.(error);
+                }
+            })
+            .finally(() => {
+                activeRequest = null;
+            });
+    }
+
+    function requestIfHostMissing() {
+        if (options.isHostMissing()) {
+            requestNow();
+        }
+    }
+
+    function handleVisibilityChange() {
+        if (targetDocument?.visibilityState === "visible") {
+            requestNow();
+        }
+    }
+
+    const intervalId = setIntervalFn(requestIfHostMissing, intervalMs);
+    targetDocument?.addEventListener?.("visibilitychange", handleVisibilityChange);
+    requestNow();
+
+    return {
+        requestNow,
         dispose() {
             isDisposed = true;
             clearIntervalFn(intervalId);

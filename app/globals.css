@@ -744,6 +744,12 @@ body {
   gap: var(--space-2);
 }
 
+.impostor-room-notice {
+  margin: 0;
+  color: var(--success);
+  font-weight: 700;
+}
+
 .impostor-presence {
   flex: 0 0 auto;
   border: 1px solid var(--border);

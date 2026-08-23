@@ -190,6 +190,23 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).not.toMatch(/nuevo host|ahora es host|reasign/i);
     });
 
+    it("can show brief feedback when an authoritative refetch changes host", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "success", lobby: twoPlayerLobby },
+                {
+                    roomCode: "AB7KQ2M4",
+                    hostSuccessionNotice: "Pedro ahora es el host"
+                }
+            )
+        );
+
+        expect(markup).toContain("Pedro ahora es el host");
+        expect(markup).toContain("aria-live=\"polite\"");
+        expect(markup).not.toMatch(/modal|confirm/i);
+    });
+
     it("disables the explicit host close action while it is in flight", () => {
         const markup = renderToStaticMarkup(
             renderRoomLobbyContent(
@@ -308,7 +325,9 @@ describe("renderRoomLobbyContent", () => {
         expect(source).toContain("const activeRoomId =");
         expect(source).toContain("subscribeToRoomChanges(");
         expect(source).toContain("activeRoomId,");
-        expect(source).toContain("[bootstrapState.status, activeRoomId, roomCode, router]");
+        expect(source).toContain(
+            "[bootstrapState.status, activeRoomId, roomCode, router, acceptLobby]"
+        );
         expect(source).not.toContain("[bootstrapState.status, dataState, roomCode, router]");
     });
 
@@ -345,6 +364,43 @@ describe("renderRoomLobbyContent", () => {
         expect(source).toContain("refreshMyRoomLiveness(createImpostorRoomsClient())");
         expect(source).toContain("onError: logRoomLivenessError");
         expect(source).toContain("getConnectedRoomParticipantIds(");
-        expect(source).not.toMatch(/last_seen_at|stale/i);
+        expect(source).not.toMatch(/last_seen_at/i);
+    });
+
+    it("requests host succession evaluation without choosing a successor in React", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("startRoomHostSuccessionRecheck({");
+        expect(source).toContain("createHostSuccessionController()");
+        expect(source).toContain("hostSuccessionController.submit(createImpostorRoomsClient())");
+        expect(source).toContain("isHostMissing: () => isActiveHostMissingRef.current");
+        expect(source).toContain("recheck.dispose()");
+        expect(source).not.toMatch(/set.*host_player_id|successorPlayerId|candidatePlayerId/i);
+    });
+
+    it("derives host-missing trigger from Presence while keeping host authority in lobby data", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("participant.isHost");
+        expect(source).toContain("!connectedPlayerIds.has(activeHostPlayerId");
+        expect(source).toContain("isActiveHostMissingRef.current = isActiveHostMissing");
+        expect(source).toContain("acceptLobby(snapshot.lobby)");
+        expect(source).toContain("`${nextHost.nickname} ahora es el host`");
+    });
+
+    it("does not restart host succession recheck only because Presence changes", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("activeHostPlayerId,\n    hostSuccessionController");
+        expect(source).not.toContain("isActiveHostMissing,\n    hostSuccessionController");
     });
 });
