@@ -526,7 +526,9 @@ Las operaciones de Room derivan ownership desde `auth.uid()`. El cliente no env�
 
 La creación incluye atómicamente Room, host y participación inicial. El join es idempotente y no duplica `RoomParticipant`.
 
-Las lecturas del lobby devuelven únicamente Room, estado, host, nicknames y la marca necesaria para identificar al participante propio sin exponer UUIDs de Player. No existe una lectura pública de todas las Rooms. Supabase Realtime funciona como capa de invalidación: avisa `INSERT`/`DELETE` de participantes y `UPDATE` de Room para repetir una lectura autorizada. La autoridad sigue siendo Postgres + RPCs.
+Las lecturas del lobby devuelven únicamente la información necesaria para reconstruir la Room autorizada: Room, estado, host, nicknames, marca del participante propio y metadatos técnicos estrictamente necesarios para el lobby. Desde Incremento 5.1 pueden incluir `participant_player_id` para correlacionar cada `RoomParticipant` persistido con Presence efímera y deduplicar varias conexiones del mismo Player.
+
+Ese identificador técnico no se muestra como dato de producto, no concede autoridad, no sustituye `auth.uid()`, no se acepta como ownership en mutaciones y no habilita enumeración pública de Players. Queda limitado a participantes autorizados de la Room. No existe una lectura pública de todas las Rooms. Supabase Realtime funciona como capa de invalidación: avisa `INSERT`/`DELETE` de participantes y `UPDATE` de Room para repetir una lectura autorizada. La autoridad sigue siendo Postgres + RPCs.
 
 ---
 
