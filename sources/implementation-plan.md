@@ -1518,16 +1518,18 @@ El lobby puede distinguir disponibilidad efímera, conservar pertenencia persist
 
 ### Objetivo
 
-Permitir que el host inicie una tanda y que el sistema prepare la primera ronda con palabra e impostor seleccionados autoritativamente.
+Permitir que el host actual inicie una tanda y que el sistema prepare la primera ronda con roster congelado, palabra e impostor seleccionados autoritativamente.
 
 ### Resultado observable
 
-Con al menos tres jugadores conectados y al menos una palabra disponible, el host inicia la tanda.
+Con al menos tres participantes autoritativamente activos y al menos una palabra disponible, el host actual inicia la tanda.
 
 Cada dispositivo recibe solamente su información privada:
 
 * jugadores normales ven la palabra;
 * impostor ve `IMPOSTOR` y no recibe la palabra.
+
+La Room pasa de `lobby` a `playing` y deja de admitir nuevos joins.
 
 ### Dominio involucrado
 
@@ -1536,23 +1538,28 @@ Impostor:
 * `GameSession`;
 * `SessionPlayer`;
 * `Round`;
+* `Room.status = playing`;
 * palabra no usada;
 * impostor balanceado;
-* asignación privada.
+* vista privada derivada para cada caller.
 
 ### Infraestructura necesaria
 
-* operación autoritativa para iniciar tanda y preparar ronda;
+* operación autoritativa para iniciar tanda y preparar Round 1;
 * persistencia operativa de sesión, jugadores de sesión y ronda;
-* autorización del host;
-* RLS o vistas privadas para asignaciones.
+* autorización del host actual desde `auth.uid() -> Player -> Room -> rooms.host_player_id`;
+* lectura compartida sin secretos;
+* lectura privada autoritativa del caller;
+* serialización coherente sobre la Room.
 
 ### Decisiones técnicas a cerrar
 
-* forma concreta de operación autoritativa: transacción, RPC, Edge Function u otra opción compatible con Supabase;
-* cómo representar asignaciones privadas sin enviar palabra al impostor;
-* cómo registrar palabras usadas en la tanda;
-* cómo asegurar idempotencia ante doble toque de `Iniciar partida`.
+* forma concreta de operación autoritativa compatible con Supabase;
+* forma física mínima de `GameSession`, `SessionPlayer` y `Round`;
+* cómo conservar snapshot de palabra en Round sin decidir más historial del necesario;
+* cómo exponer la vista privada sin enviar palabra al impostor ni impostor a jugadores normales;
+* cómo asegurar idempotencia ante doble toque, retry o respuesta perdida;
+* cómo serializar `START_SESSION` frente a join, leave, close y sucesión de host.
 
 ### Tests / validación
 
@@ -1561,12 +1568,15 @@ Impostor:
 * integración: no inicia con menos de tres jugadores;
 * integración: no inicia sin palabras disponibles;
 * integración/privacidad: el impostor no puede obtener la palabra;
-* integración/autorización: solo host inicia;
+* integración/autorización: solo el host actual inicia;
+* integración/idempotencia: doble tap o retry no crea dos GameSessions ni dos Rounds 1;
+* integración/concurrencia: `START_SESSION` vs join/leave/close/host succession converge de forma coherente;
 * prueba manual con cuatro teléfonos.
 
 ### Riesgos
 
 * filtrar la palabra al impostor;
+* filtrar el impostor a jugadores normales;
 * dejar ronda parcial sin palabra o sin impostor;
 * permitir doble creación de ronda;
 * usar el cliente como autoridad por conveniencia.
@@ -1590,6 +1600,403 @@ La primera ronda queda preparada de forma consistente y privada para todos los p
 * azar controlado;
 * balance de roles;
 * idempotencia.
+
+### Subincrementos
+
+Estado de cierre documental:
+
+```text
+6.0 — CERRADO
+6.1 — CERRADO
+6.2 — CERRADO
+6.3 — CERRADO
+6.4 — CERRADO
+6.5 — CERRADO
+```
+
+El Incremento 6 queda técnicamente cerrado. Queda pendiente, sin bloquear el cierre técnico, la validación manual multi-dispositivo del flujo completo de inicio de tanda y revelación privada.
+
+#### Incremento 6.0 — Contrato documental
+
+Objetivo:
+
+```text
+cerrar documentalmente el contrato de iniciar tanda y preparar Round 1
+```
+
+Resultado observable:
+
+El corpus describe inequívocamente:
+
+```text
+Group → Room → GameSession → SessionPlayers + Rounds
+Room.status = lobby | playing | closed
+Room 1 → 0..1 GameSession
+START_SESSION lobby → playing
+GameSession.state = ROLE_REVEAL
+```
+
+Dominio:
+
+* separación Group / Room / GameSession / Round;
+* `SessionPlayer` como roster congelado;
+* Room sigue siendo autoridad de host y membership;
+* privacidad compartida vs privada;
+* palabra snapshot;
+* exactamente un impostor por Round.
+
+Infraestructura:
+
+No implementa infraestructura. Solo deja preparado el contrato para implementación posterior.
+
+Tests / validación futura:
+
+* revisión documental de consistencia;
+* `git diff --check`;
+* verificar que no se definan tablas, migrations, RPCs ni SQL concretos.
+
+Fuera de alcance:
+
+* código;
+* migrations;
+* Supabase;
+* tests;
+* UI.
+
+Criterio de terminado:
+
+La documentación vigente permite implementar 6.1 sin reabrir decisiones de dominio de 6.0.
+
+#### Incremento 6.1 — Persistencia mínima de GameSession y SessionPlayer
+
+Objetivo:
+
+```text
+introducir el soporte operativo mínimo para representar una tanda y su roster congelado
+```
+
+Resultado observable:
+
+Existe una representación persistida mínima de:
+
+```text
+GameSession
+- id
+- roomId
+- startedAt
+
+SessionPlayer
+- sessionId
+- playerId
+```
+
+Dominio:
+
+* una Room produce como máximo una GameSession;
+* `SessionPlayer` no se deriva dinámicamente de `RoomParticipant`;
+* no se agrega score, ready, voteSubmitted ni historial final.
+
+Infraestructura:
+
+* persistencia mínima;
+* constraints o garantías equivalentes para una GameSession por Room;
+* tablas cerradas para cliente hasta que exista una API de gameplay concreta;
+* ninguna API de producto crea todavía GameSessions ni SessionPlayers.
+
+Tests / validación futura:
+
+* estructura mínima;
+* unicidad de GameSession por Room;
+* integridad de Group entre Room, GameSession, SessionPlayer y Player;
+* RLS activo sin grants ni policies de producto;
+* rechazo/no visibilidad para clientes normales.
+
+Fuera de alcance:
+
+* `GameSession.state`;
+* `START_SESSION`;
+* selección de palabra;
+* selección de impostor;
+* Round 1;
+* UI completa.
+
+Criterio de terminado:
+
+El sistema puede representar físicamente una tanda y su roster congelado sin adelantar comportamiento de inicio, ronda, secretos ni lectura de gameplay.
+
+#### Incremento 6.2 — Lifecycle de Room preparado para gameplay
+
+Objetivo:
+
+```text
+preparar Room para representar lobby | playing | closed sin romper invariantes existentes
+```
+
+Resultado observable:
+
+El backend puede representar correctamente una Room en `playing` sin liberar slots, sin permitir que un Player cree o entre a una segunda Room, sin perder reconstrucción compartida, sin perder membership, y sin desactivar liveness, Presence ni sucesión de host.
+
+No hace falta que el usuario pueda provocar `playing` desde UI en este slice.
+
+Dominio:
+
+* `Room.status = lobby | playing | closed`;
+* Room activa significa `lobby` o `playing`;
+* una Room en `playing` no admite nuevos joins;
+* `RoomParticipant` sigue siendo membership de Room durante gameplay;
+* `rooms.host_player_id` sigue siendo la autoridad de host durante gameplay.
+
+Infraestructura:
+
+* ajustar `rooms.status` para admitir `playing`;
+* ajustar slots para que `lobby -> playing` mantenga `player_active_room_slots`;
+* liberar slots al cerrar, incluido `playing -> closed`;
+* hacer que `create_room()` trate `playing` como Room activa existente y no cree una segunda Room;
+* mantener `join_room_by_code()` limitado a `lobby`;
+* hacer que `get_my_active_room()` reconstruya `lobby` y `playing` sin secretos de gameplay;
+* hacer explícito que `leave_room()` y `close_room()` son operaciones de lobby y no modifican membership/lifecycle durante `playing`;
+* ajustar RLS de `room_participants` para lectura autorizada en `lobby` y `playing`;
+* mantener `room_participants.last_seen_at` como liveness autoritativo en `playing`;
+* mantener Presence como UX efímera en `playing` si sus helpers estaban limitados a `lobby`;
+* mantener host succession en `lobby` y `playing`;
+* reutilizar Realtime como invalidación (`rooms UPDATE -> lectura autoritativa`) sin infraestructura nueva;
+* mantener `game_sessions` y `session_players` cerradas para cliente.
+
+Tests / validación futura:
+
+* `lobby -> playing` mantiene slots;
+* `playing -> closed` libera slots;
+* `create_room()` con Room en `playing` no crea una segunda Room;
+* `join_room_by_code()` contra Room en `playing` rechaza el ingreso;
+* `get_my_active_room()` reconstruye Room en `playing`;
+* `leave_room()` en `playing` no elimina membership ni cierra gameplay;
+* `close_room()` en `playing` no cierra gameplay;
+* RLS permite a participantes leer membership de Room en `playing`;
+* liveness sigue funcionando en `playing` con el umbral vigente de 90 segundos;
+* host succession sigue funcionando en `playing`;
+* Presence sigue funcionando en `playing` como estado efímero;
+* `game_sessions` y `session_players` siguen sin acceso directo de cliente.
+
+Fuera de alcance:
+
+* `start_session()`;
+* creación de GameSession desde producto;
+* snapshot de SessionPlayers desde producto;
+* selección de palabra;
+* selección de impostor;
+* Round;
+* `GameSession.state`;
+* `ROLE_REVEAL`;
+* lectura privada;
+* botón Iniciar tanda;
+* UI de gameplay;
+* Realtime de gameplay;
+* vista privada;
+* confirmación `Estoy listo`.
+
+Criterio de terminado:
+
+El lifecycle físico de Room puede avanzar a `playing` de forma consistente y reversible hacia `closed`, sin adelantar gameplay ni crear estados de tanda durables incompletos.
+
+#### Incremento 6.3 — START_SESSION atómico, snapshot y Round 1 privada
+
+Objetivo:
+
+```text
+implementar START_SESSION como operación atómica completa hasta ROLE_REVEAL
+```
+
+Resultado observable:
+
+El host actual inicia la tanda desde una Room en `lobby`. En una única operación autoritativa se congela el roster, se selecciona palabra e impostor, se crea Round 1, la Room pasa a `playing` y la GameSession queda en `ROLE_REVEAL`.
+
+Dominio:
+
+* el caller debe ser `rooms.host_player_id` actual;
+* el roster se forma desde `RoomParticipant` + liveness autoritativo;
+* Presence no decide el roster;
+* mínimo de 3 evaluado sobre SessionPlayers que se van a congelar;
+* palabra seleccionada server-side;
+* palabra elegible = pertenece al Group y no fue usada antes en la misma GameSession;
+* Round conserva `secretWord` y `normalizedSecretWord` como snapshot conceptual;
+* selección de impostor balanceada por conteos derivados dentro de la GameSession;
+* Round 1 parte de todos los SessionPlayers empatados en cero.
+
+Infraestructura:
+
+* operación autoritativa derivada desde `auth.uid()`;
+* serialización/locking coherente sobre Room;
+* refresh de `last_seen_at` del caller con `observed_at := now()` antes del snapshot;
+* selección autoritativa y aleatoria;
+* creación de GameSession;
+* creación de SessionPlayers;
+* garantía de una Round número 1 por GameSession;
+* introducción de `GameSession.state` con estado inicial persistido válido `ROLE_REVEAL`;
+* idempotencia ante retry/doble tap;
+* rollback total si falla cualquier paso.
+
+Tests / validación futura:
+
+* `START_SESSION` happy path;
+* no inicia con menos de 3 participantes autoritativamente activos;
+* snapshot exacto;
+* jugadores stale quedan excluidos;
+* liveness del caller se refresca antes del snapshot;
+* no host no inicia;
+* Group admin no inicia por ser admin;
+* creador original no inicia si ya no es host;
+* doble start/retry produce una sola GameSession y una sola Round 1;
+* `START_SESSION` vs join/leave/close/sucesión converge según orden serializado;
+* no inicia sin palabras;
+* palabra pertenece al Group;
+* no repite palabra dentro de la GameSession;
+* exactamente un impostor;
+* selección balanceada respeta menor conteo;
+* crea Round 1;
+* deja `GameSession.state = ROLE_REVEAL`;
+* no queda estado parcial: Room playing sin Round, GameSession sin Round, Round sin palabra, Round sin impostor o GameSession sin SessionPlayers.
+
+Fuera de alcance:
+
+* nuevas rondas;
+* scoring;
+* historial;
+* entidad persistente `RoundPlayerAssignment`.
+
+Criterio de terminado:
+
+`START_SESSION` queda implementado como una operación atómica completa: si falla cualquier guard, la Room sigue en `lobby` y no existen GameSession, SessionPlayers ni Round parciales; si tiene éxito, el estado observable inicial es `ROLE_REVEAL`.
+
+#### Incremento 6.4 — Lectura compartida, vista privada y sincronización mínima
+
+Objetivo:
+
+```text
+permitir reconstruir estado compartido seguro y vista privada del caller
+```
+
+Resultado observable:
+
+Cada participante puede reconstruir la Room en `playing` y recuperar solo su información privada:
+
+```text
+jugador normal → role = player, word = secretWord
+impostor → role = impostor
+```
+
+Dominio:
+
+* estado compartido sin secretos;
+* vista privada autoritativa por caller;
+* `get_my_active_room()` conserva responsabilidad de Room, host, participants y lifecycle;
+* lectura privada conceptual equivalente a `GET_MY_GAME_STATE`.
+
+Infraestructura:
+
+* lectura compartida segura;
+* lectura privada derivada desde `auth.uid() -> Player -> Room -> GameSession -> SessionPlayer -> Round actual`;
+* Realtime como invalidación o cambio compartido seguro, sin transmitir secretos globalmente.
+
+Tests / validación futura:
+
+* jugador normal recibe palabra y no impostor;
+* impostor no recibe palabra;
+* ningún jugador consulta estado privado ajeno;
+* Realtime no emite payload global con `secretWord` ni `impostorPlayerId`;
+* refresh/reconstrucción recupera estado correcto.
+
+Fuera de alcance:
+
+* Broadcast específico;
+* ACK de rol;
+* transición a PLAYING;
+* votación.
+
+Criterio de terminado:
+
+La pantalla de revelación de rol puede reconstruirse de forma segura después de refresh.
+
+#### Incremento 6.5 — UI vertical, endurecimiento y auditoría
+
+Objetivo:
+
+```text
+conectar el flujo visible de lobby a revelación privada de Round 1 y auditar seguridad/consistencia
+```
+
+Resultado observable:
+
+El host inicia la tanda desde el lobby y cada teléfono llega a su vista privada de `ROLE_REVEAL`.
+
+Dominio:
+
+* flujo vertical mínimo hasta Round 1;
+* mensajes claros para guards fallidos;
+* Room en `playing` sin ingreso posterior.
+
+Infraestructura:
+
+* integración frontend con operaciones de 6.1-6.4;
+* manejo de loading, retry y respuesta perdida;
+* refetch autoritativo tras invalidaciones.
+
+Tests / validación futura:
+
+* componentes/flujo de iniciar tanda;
+* e2e o integración vertical con host y participantes;
+* prueba manual con cuatro teléfonos;
+* auditoría de que secretos no aparecen en estado compartido, logs ni payloads globales.
+
+Validación final de cierre:
+
+* Supabase reset local;
+* DB tests locales;
+* validators 6.1-6.4;
+* unit/render tests;
+* TypeScript;
+* Next build;
+* lint;
+* `git diff --check`.
+
+Resultado automatizado conocido de la auditoría final 6.5:
+
+```text
+35 test files
+333 tests
+```
+
+Validación manual pendiente:
+
+```text
+PENDIENTE — validación manual multi-dispositivo de Incremento 6
+```
+
+Casos pendientes:
+
+* A/B/C en dispositivos o sesiones independientes;
+* host inicia tanda;
+* todos reciben role reveal;
+* exactamente uno ve impostor;
+* jugadores normales ven la misma palabra;
+* refresh por cliente reconstruye el mismo rol;
+* host succession durante `role_reveal`;
+* D excluido si se reproduce el caso de liveness stale.
+
+Esto no cierra 5.4, que sigue `EN SUSPENSO`.
+
+Fuera de alcance:
+
+* `ACKNOWLEDGE_ROLE`;
+* `roleAcknowledged`;
+* transición `ROLE_REVEAL → PLAYING`;
+* votación;
+* scoring;
+* `END_SESSION`;
+* rejoin avanzado.
+
+Criterio de terminado:
+
+La primera ronda privada está preparada y visible para cada participante correcto, sin ampliar alcance hacia Incremento 7.
 
 ---
 
@@ -1626,7 +2033,7 @@ Impostor:
 
 ### Decisiones técnicas a cerrar
 
-* si la confirmación se guarda en `SessionPlayer`, `RoundAssignment` o entidad equivalente;
+* si la confirmación se guarda en `SessionPlayer` o entidad equivalente;
 * cómo evitar doble confirmación problemática;
 * cómo se recupera esta pantalla después de refresh.
 
@@ -1914,7 +2321,7 @@ Impostor:
 * `ROUND_RESULT`;
 * `SCOREBOARD`;
 * `SessionPlayer.score`;
-* `SessionPlayer.impostorCount`;
+* conteo derivado de veces como impostor;
 * palabras usadas;
 * `NEW_ROUND`.
 
@@ -2401,7 +2808,9 @@ Se agregó Room + Lobby: creación de Room, join por código/enlace, reconstrucc
 
 ## Incrementos 6 a 12
 
-Se agregan operaciones autoritativas, persistencia operativa, votación, scoring e historial.
+Incremento 6 quedó cerrado técnicamente: inicio de tanda autoritativo, `GameSession`, `SessionPlayer`, Round 1, privacidad por caller y UI vertical hasta `role_reveal`.
+
+Incrementos 7 a 12 agregan confirmación de rol, conversación, votación, scoring e historial.
 
 ## Incrementos 13 y 14
 

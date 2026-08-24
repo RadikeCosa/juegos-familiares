@@ -46,6 +46,14 @@ La conversación y la parte principal del juego ocurren entre las personas.
 
 ---
 
+# Alcance vigente
+
+Al cierre técnico del Incremento 6, el producto ya soporta crear grupo, administrar banco de palabras, crear/unirse a Room, Presence/liveness/sucesión de host, iniciar tanda desde el host actual y revelar privadamente Round 1.
+
+Todavía no están implementados `roleAcknowledged`, avance a conversación digital, timer, votación, scoring, ganador, `END_SESSION`, Realtime de gameplay ni Broadcast.
+
+---
+
 # Contexto inicial
 
 El grupo principal de referencia está formado por:
@@ -168,7 +176,9 @@ Una sala representa a quienes están jugando en ese momento.
 
 No todos los integrantes del grupo deben participar de todas las partidas.
 
-La persona que crea la sala actúa como host durante esa tanda.
+La persona que crea la sala actúa como host inicial.
+
+El host actual es el valor persistido de la Room y puede cambiar por sucesión.
 
 El host no necesita ser administrador del grupo.
 

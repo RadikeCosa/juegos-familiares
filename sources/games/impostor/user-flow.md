@@ -394,9 +394,15 @@ Si el host original vuelve después de haber sido reemplazado, aparece como part
 
 Cuando el host inicia:
 
-1. se fija el conjunto de participantes de la tanda;
-2. se inicializa el marcador;
-3. se prepara la primera ronda.
+1. la autoridad valida que quien llama es el host actual de la Room;
+2. se fija el conjunto de participantes activos de la tanda;
+3. la Room pasa de `lobby` a `playing`;
+4. se crea la GameSession de esa Room;
+5. se prepara la primera ronda.
+
+Desde ese momento no se admiten nuevos ingresos a la Room.
+
+El creador original de la Room no recupera autoridad si ya no es host. El administrador del Group tampoco puede iniciar la tanda por ser administrador.
 
 ---
 
@@ -406,11 +412,21 @@ El sistema:
 
 1. selecciona una palabra;
 2. selecciona un impostor;
-3. distribuye la información correspondiente a cada dispositivo.
+3. crea la ronda con la palabra usada y el impostor;
+4. permite que cada dispositivo recupere solamente su vista privada.
 
 ---
 
 # Información del jugador
+
+Antes de revelar el contenido privado, la pantalla muestra:
+
+```text
+Tu rol está listo
+Ver mi rol
+```
+
+Ese tap es local: no persiste confirmación, no cambia `GameSession` y no equivale a `roleAcknowledged`.
 
 ## Jugador normal
 
@@ -434,15 +450,15 @@ No muestra la palabra secreta.
 
 ---
 
-# Confirmación individual
+# Confirmación individual futura
 
-Cada jugador confirma que vio su información.
+La confirmación persistida de que cada jugador vio su información no forma parte del Incremento 6.
 
 Ejemplo:
 
 `Estoy listo`
 
-La aplicación espera a que todos estén preparados.
+Ese flujo pertenece a Incremento 7. En 6.5, refrescar la pantalla vuelve a ocultar visualmente el rol y reconstruye la vista privada desde servidor.
 
 ---
 

@@ -62,6 +62,8 @@ Todos los participantes pertenecen al mismo estado global.
 
 Describe el progreso particular de cada participante dentro de ese estado.
 
+En Incremento 6, la revelación visual del rol usa un tap local y no persiste estado individual. `roleAcknowledged` es un estado futuro de Incremento 7, no una capacidad implementada por 6.
+
 Ejemplo:
 
 ```text
@@ -85,9 +87,9 @@ La partida continúa globalmente en `ROLE_REVEAL` hasta que se cumpla la condici
 
 ---
 
-# Estados globales
+# Estados globales previstos
 
-La primera versión utiliza los siguientes estados conceptuales:
+El modelo completo previsto para el MVP utiliza los siguientes estados conceptuales:
 
 ```text
 LOBBY
@@ -102,6 +104,14 @@ ROUND_RESULT
 SCOREBOARD
 FINISHED
 ```
+
+Al cierre de Incremento 6, el único estado durable de `GameSession` implementado es:
+
+```text
+role_reveal
+```
+
+`PREPARING_ROUND` existe solo como preparación transaccional interna de `start_session()`. `PLAYING`, votación, resultado, marcador y fin de tanda pertenecen a incrementos posteriores.
 
 ---
 
@@ -237,25 +247,32 @@ El leave de un participante no-host elimina su pertenencia a la Room, pero no ca
 
 ### Iniciar tanda
 
-Evento futuro, fuera de Incremento 4:
+Evento de producto implementado desde Incremento 6.3:
 
 `START_SESSION`
 
 Actor autorizado:
 
-`host`
+`rooms.host_player_id` actual
 
-## Guards futuros de START_SESSION
+## Guards de START_SESSION
 
-Estos guards pertenecen al incremento que introduzca `GameSession`. No bloquean la formación ni la lectura del lobby en Incremento 4.
+Estos guards no bloquean la formación ni la lectura del lobby en Incremento 4.
 
 Para iniciar:
 
 ```text
-connectedPlayers >= 3
-AND
-availableWords >= 1
+caller tiene identidad válida
+caller resuelve Player válido
+caller pertenece a Room activa
+Room está en lobby
+caller es host actual
+no existe otra GameSession para esa Room
+connected/active participants >= 3
+available words >= 1
 ```
+
+La actividad autoritativa para el snapshot se deriva del mecanismo vigente de liveness. Presence puede ayudar a UX, pero no decide por sí sola el roster.
 
 Si alguna condición no se cumple, la transición no ocurre.
 
@@ -263,8 +280,11 @@ Si alguna condición no se cumple, la transición no ocurre.
 
 ```text
 LOBBY
-→ PREPARING_ROUND
+→ preparación transaccional
+→ ROLE_REVEAL
 ```
+
+Como efecto de la misma operación, la Room pasa de `lobby` a `playing` y deja de aceptar nuevos joins.
 
 ---
 
@@ -276,6 +296,8 @@ El sistema está construyendo una nueva ronda.
 
 Es principalmente un estado de coordinación interna.
 
+En el inicio de la primera ronda, `PREPARING_ROUND` no necesita ser un estado durable observable. `START_SESSION` puede realizar la preparación atómicamente y dejar la `GameSession` directamente en `ROLE_REVEAL`.
+
 ## Actor
 
 `system`
@@ -284,13 +306,14 @@ Es principalmente un estado de coordinación interna.
 
 El sistema debe:
 
-1. determinar jugadores activos;
+1. determinar participantes activos de la Room mediante liveness autoritativo;
 2. comprobar que existe una palabra disponible;
 3. seleccionar una palabra no utilizada en la tanda;
 4. seleccionar un impostor usando la regla de balance;
-5. crear la ronda;
-6. preparar la información privada de cada participante;
-7. actualizar el historial necesario para balancear futuras selecciones.
+5. crear la GameSession si corresponde;
+6. crear el snapshot de SessionPlayers;
+7. crear la ronda con snapshot de palabra e impostor;
+8. dejar disponible una vista privada derivable para cada participante.
 
 ## Guard
 
@@ -357,7 +380,18 @@ No recibe la palabra secreta.
 
 ## Estado individual
 
-Cada participante posee:
+Incremento 6 no persiste estado individual de confirmación de rol.
+
+La UI implementada usa una interacción local:
+
+```text
+Tu rol está listo
+→ Ver mi rol
+```
+
+Esto no cambia `GameSession`, no escribe `SessionPlayer` y se reinicia visualmente al refrescar porque la vista privada vuelve a reconstruirse desde servidor.
+
+En Incremento 7, cada participante podrá poseer:
 
 ```text
 roleAcknowledged
@@ -369,7 +403,7 @@ Inicialmente:
 false
 ```
 
-Después de ver su información selecciona:
+Después de ver su información seleccionará:
 
 `Estoy listo`
 
@@ -389,7 +423,7 @@ roleAcknowledged = true
 
 ## Guard de transición
 
-La partida solamente avanza cuando:
+En Incremento 7, la partida solamente avanzará cuando:
 
 ```text
 todos los participantes activos
@@ -952,6 +986,8 @@ true
 false
 ```
 
+`roleAcknowledged` no existe todavía en el cierre de Incremento 6. El estado individual implementado en 6.5 es solamente visual/local.
+
 ## Voto
 
 Durante cada etapa de votación:
@@ -987,7 +1023,7 @@ PLAYING
 
 En el lobby de Incremento 5, una ausencia breve no elimina `RoomParticipant` ni dispara por sí sola sucesión de host. Presence es una señal efímera para UI y para detectar candidatos, no una decisión autoritativa.
 
-La política avanzada de recuperación de jugadores durante una tanda queda fuera de Incremento 5 y pertenece a reconexión posterior.
+La política avanzada de recuperación de jugadores durante una tanda queda fuera de Incremento 6 y pertenece a reconexión posterior.
 
 ---
 
@@ -1001,8 +1037,9 @@ Si el host deja de estar disponible:
 2. la autoridad valida staleness con `room_participants.last_seen_at` o representación física equivalente;
 3. se aplica un threshold inicial de 90 segundos;
 4. se identifican participantes disponibles restantes;
-5. se ordenan según `joined_at ASC, player_id ASC`;
-6. se asigna como host al primer candidato mediante actualización autoritativa y consistente.
+5. si la Room está en `playing`, se intersectan con los `SessionPlayers` de la GameSession;
+6. se ordenan según `joined_at ASC, player_id ASC`;
+7. se asigna como host al primer candidato mediante actualización autoritativa y consistente.
 
 `player_id` es solo desempate técnico determinístico.
 
@@ -1039,7 +1076,7 @@ Camila = host
 
 El host anterior no recupera automáticamente el rol.
 
-Si el host está stale y no hay candidatos active, no hay transición: la Room sigue `lobby`, el host actual permanece persistido y no se cierra automáticamente.
+Si el host está stale y no hay candidatos active, no hay transición: el host actual permanece persistido y la Room no se cierra automáticamente.
 
 El threshold de 90 segundos reemplaza la hipótesis previa de 60 segundos para la implementación inicial. Busca dar margen frente a heartbeat de 30 segundos, throttling, red y suspensión de timers móviles. No es una regla definitiva del juego ni configuración de usuario.
 
@@ -1112,9 +1149,11 @@ REASSIGN_HOST
 ## Iniciar tanda
 
 ```text
-connectedPlayers >= 3
-AND
-availableWords >= 1
+Room.status = lobby
+caller = rooms.host_player_id actual
+no existe GameSession para la Room
+connected/active participants >= 3
+available words >= 1
 ```
 
 ## Crear ronda
@@ -1128,6 +1167,8 @@ availableUnusedWords >= 1
 ```text
 allActivePlayers.roleAcknowledged = true
 ```
+
+Este guard no está implementado en Incremento 6.
 
 ## Resolver votación
 
@@ -1152,8 +1193,7 @@ Las transiciones pueden producir cambios adicionales.
 ```text
 seleccionar palabra
 seleccionar impostor
-crear asignaciones privadas
-actualizar impostorCount
+crear Round con snapshot de palabra
 ```
 
 ## Votar
@@ -1243,9 +1283,11 @@ Ejemplo conceptual:
 
 ```text
 Round
-word = "Milanesa"
-impostor = Camila
-status = ROLE_REVEAL
+secretWord = "Milanesa"
+impostorPlayerId = Camila
+
+GameSession
+state = ROLE_REVEAL
 ```
 
 Pero las vistas individuales son diferentes.
