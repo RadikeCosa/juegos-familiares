@@ -857,6 +857,22 @@ body {
   width: fit-content;
 }
 
+.impostor-room-role-reveal {
+  align-content: start;
+}
+
+.impostor-room-secret-word {
+  color: var(--foreground);
+  font-family:
+    var(--font-display),
+    system-ui,
+    sans-serif;
+  font-size: clamp(2rem, 10vw, 4rem);
+  font-weight: 700;
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
 .impostor-own-words {
   display: grid;
   gap: var(--space-2);

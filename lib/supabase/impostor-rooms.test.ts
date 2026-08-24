@@ -6,12 +6,14 @@ import {
     createJoinRoomByCodeController,
     createLeaveRoomController,
     createLobbySyncController,
+    createStartSessionController,
     clearRoomCreationIntent,
     clearRoomJoinIntent,
     closeRoom,
     createRoom,
     getConnectedRoomParticipantIds,
     getMyActiveRoom,
+    getMyGameState,
     hasRoomCreationIntent,
     hasRoomJoinIntent,
     joinRoomByCode,
@@ -25,6 +27,7 @@ import {
     ROOM_LIVENESS_HEARTBEAT_MS,
     startRoomHostSuccessionRecheck,
     startRoomLivenessHeartbeat,
+    startSession,
     subscribeToRoomPresence,
     subscribeToRoomChanges
 } from "./impostor-rooms";
@@ -37,6 +40,29 @@ const singleParticipantRow = {
     participant_nickname: "Ramiro",
     participant_is_host: true,
     participant_joined_at: "2026-08-19T12:00:00.000Z"
+};
+
+const startSessionRow = {
+    started: true,
+    already_started: false,
+    room_status: "playing",
+    game_session_state: "role_reveal",
+    round_number: 1,
+    participant_count: 3
+};
+
+const gameStatePlayerRow = {
+    state: "role_reveal",
+    round_number: 1,
+    role: "player",
+    word: "Tesoro Azul"
+};
+
+const gameStateImpostorRow = {
+    state: "role_reveal",
+    round_number: 1,
+    role: "impostor",
+    word: null
 };
 
 describe("createRoom", () => {
@@ -683,6 +709,230 @@ describe("closeRoom", () => {
         await expect(closeRoom(supabase)).rejects.toThrow(
             "Ya no tenés una sala activa para cerrar."
         );
+    });
+});
+
+describe("startSession", () => {
+    it("calls the authoritative RPC without room, player, host or word arguments", async () => {
+        const supabase = {
+            rpc: vi.fn(async (_fn: string) => {
+                void _fn;
+
+                return { data: [startSessionRow], error: null };
+            })
+        };
+
+        await expect(startSession(supabase)).resolves.toEqual({
+            started: true,
+            alreadyStarted: false,
+            roomStatus: "playing",
+            gameSessionState: "role_reveal",
+            roundNumber: 1,
+            participantCount: 3
+        });
+
+        expect(supabase.rpc).toHaveBeenCalledWith("start_session");
+        expect(supabase.rpc.mock.calls[0]).toHaveLength(1);
+    });
+
+    it("does not expose secret-bearing fields in the returned result", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...startSessionRow,
+                    secret_word: "Tesoro",
+                    normalized_secret_word: "tesoro",
+                    impostor_player_id: "player-1"
+                }],
+                error: null
+            }))
+        };
+
+        const result = await startSession(supabase);
+
+        expect(JSON.stringify(result)).not.toMatch(/secret_word|normalized_secret_word|impostor_player_id|Tesoro/);
+    });
+
+    it("maps idempotent start responses", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...startSessionRow,
+                    started: false,
+                    already_started: true
+                }],
+                error: null
+            }))
+        };
+
+        await expect(startSession(supabase)).resolves.toEqual({
+            started: false,
+            alreadyStarted: true,
+            roomStatus: "playing",
+            gameSessionState: "role_reveal",
+            roundNumber: 1,
+            participantCount: 3
+        });
+    });
+
+    it("maps start failures to product-level feedback", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0020" } }))
+        };
+
+        await expect(startSession(supabase)).rejects.toThrow(
+            "Necesitás al menos 3 participantes activos para iniciar."
+        );
+    });
+
+    it("rejects malformed RPC results explicitly", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{ started: true }],
+                error: null
+            }))
+        };
+
+        await expect(startSession(supabase)).rejects.toThrow(
+            "No pudimos confirmar el inicio de la tanda."
+        );
+    });
+});
+
+describe("createStartSessionController", () => {
+    it("collapses concurrent submissions into a single in-flight RPC call", async () => {
+        let resolveRpc: (value: { data: unknown; error: unknown }) => void = () => { };
+        const rpcPromise = new Promise<{ data: unknown; error: unknown }>((resolve) => {
+            resolveRpc = resolve;
+        });
+        const supabase = {
+            rpc: vi.fn(() => rpcPromise)
+        };
+
+        const controller = createStartSessionController();
+        const firstSubmit = controller.submit(supabase);
+        const secondSubmit = controller.submit(supabase);
+
+        resolveRpc({ data: [startSessionRow], error: null });
+
+        const [firstResult, secondResult] = await Promise.all([firstSubmit, secondSubmit]);
+
+        expect(supabase.rpc).toHaveBeenCalledTimes(1);
+        expect(firstResult).toEqual(secondResult);
+    });
+});
+
+describe("getMyGameState", () => {
+    it("calls the authoritative RPC without room, session, player or round arguments", async () => {
+        const supabase = {
+            rpc: vi.fn(async (_fn: string) => {
+                void _fn;
+
+                return { data: [gameStatePlayerRow], error: null };
+            })
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toEqual({
+            state: "role_reveal",
+            roundNumber: 1,
+            privateView: { role: "player", word: "Tesoro Azul" }
+        });
+
+        expect(supabase.rpc).toHaveBeenCalledWith("get_my_game_state");
+        expect(supabase.rpc.mock.calls[0]).toHaveLength(1);
+    });
+
+    it("returns null when gameplay has not started for the caller", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: [], error: null }))
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toBeNull();
+    });
+
+    it("maps an impostor private view without a word", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: [gameStateImpostorRow], error: null }))
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toEqual({
+            state: "role_reveal",
+            roundNumber: 1,
+            privateView: { role: "impostor", word: null }
+        });
+    });
+
+    it("maps game-state domain failures to product-level feedback", async () => {
+        const inconsistent = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0022" } }))
+        };
+        const excluded = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0023" } }))
+        };
+
+        await expect(getMyGameState(inconsistent)).rejects.toThrow(
+            "No pudimos reconstruir la tanda. Volvé a intentar más tarde."
+        );
+        await expect(getMyGameState(excluded)).rejects.toThrow(
+            "No participás de la tanda actual."
+        );
+    });
+
+    it("rejects malformed private views explicitly", async () => {
+        const impostorWithWord = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...gameStateImpostorRow, word: "Tesoro Azul" }],
+                error: null
+            }))
+        };
+        const playerWithoutWord = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...gameStatePlayerRow, word: null }],
+                error: null
+            }))
+        };
+        const unknownRole = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...gameStatePlayerRow, role: "spectator" }],
+                error: null
+            }))
+        };
+        const invalidRoundNumber = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...gameStatePlayerRow, round_number: 0 }],
+                error: null
+            }))
+        };
+
+        await expect(getMyGameState(impostorWithWord)).rejects.toThrow(
+            "No pudimos confirmar el estado de la tanda."
+        );
+        await expect(getMyGameState(playerWithoutWord)).rejects.toThrow(
+            "No pudimos confirmar el estado de la tanda."
+        );
+        await expect(getMyGameState(unknownRole)).rejects.toThrow(
+            "No pudimos confirmar el estado de la tanda."
+        );
+        await expect(getMyGameState(invalidRoundNumber)).rejects.toThrow(
+            "No pudimos confirmar el estado de la tanda."
+        );
+    });
+
+    it("does not expose secret internals in mapped results", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...gameStatePlayerRow,
+                    normalized_secret_word: "tesoro azul",
+                    impostor_player_id: "player-3"
+                }],
+                error: null
+            }))
+        };
+
+        const result = await getMyGameState(supabase);
+
+        expect(JSON.stringify(result)).not.toMatch(/normalized_secret_word|impostor_player_id|player-3/);
     });
 });
 

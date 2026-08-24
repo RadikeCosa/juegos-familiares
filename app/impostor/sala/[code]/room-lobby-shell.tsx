@@ -13,10 +13,11 @@ import {
   createHostSuccessionController,
   createJoinRoomByCodeController,
   createLeaveRoomController,
-  createLobbySyncController,
+  createStartSessionController,
   clearRoomCreationIntent,
   clearRoomJoinIntent,
   getConnectedRoomParticipantIds,
+  getMyGameState,
   getMyActiveRoom,
   refreshMyRoomLiveness,
   subscribeToRoomPresence,
@@ -27,6 +28,7 @@ import {
   type ImpostorRoomChangesClient,
   type ImpostorRoomPresenceClient,
   type ImpostorRoomsClient,
+  type MyGameState,
   type RoomPresenceState,
   type RoomLobby,
 } from "../../../../lib/supabase/impostor-rooms";
@@ -39,7 +41,16 @@ import {
 type RoomLobbyDataState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "success"; lobby: RoomLobby }
+  | { status: "success"; lobby: RoomLobby; startError?: string }
+  | { status: "starting"; lobby: RoomLobby }
+  | { status: "loading-game-state"; lobby: RoomLobby }
+  | {
+      status: "role-reveal";
+      lobby: RoomLobby;
+      gameState: MyGameState;
+      isRoleRevealed: boolean;
+    }
+  | { status: "excluded"; lobby: RoomLobby; message: string }
   | { status: "error"; message: string }
   | { status: "awaiting-join"; error?: string }
   | { status: "joining" };
@@ -51,8 +62,12 @@ type RoomLifecycleActionState =
   | { status: "error"; message: string };
 
 const GENERIC_ROOM_LOBBY_ERROR = "No pudimos cargar la sala. Intentá de nuevo.";
+const GENERIC_GAME_RECONSTRUCTION_ERROR = "No pudimos reconstruir la partida.";
 const GENERIC_START_AUTH_ERROR =
   "No pudimos empezar. Revisá tu conexión e intentá de nuevo.";
+const START_NOT_HOST_MESSAGE = "Solo el host actual puede iniciar la tanda.";
+const START_NOT_HOST_UI_MESSAGE = "Ya no sos el host actual.";
+const EXCLUDED_GAME_STATE_MESSAGE = "No participás de la tanda actual.";
 const ROOM_LIVENESS_LOG_MESSAGE = "No pudimos refrescar liveness de sala.";
 const ROOM_HOST_SUCCESSION_LOG_MESSAGE = "No pudimos revisar sucesión de host.";
 
@@ -88,6 +103,26 @@ function logRoomLivenessError(error: unknown) {
 
 function logRoomHostSuccessionError(error: unknown) {
   console.warn(ROOM_HOST_SUCCESSION_LOG_MESSAGE, error);
+}
+
+function getLobbyFromDataState(state: RoomLobbyDataState) {
+  return "lobby" in state ? state.lobby : undefined;
+}
+
+function getSelfParticipant(lobby: RoomLobby) {
+  return lobby.participants.find((participant) => participant.isSelf);
+}
+
+function getHostParticipant(lobby: RoomLobby) {
+  return lobby.participants.find((participant) => participant.isHost);
+}
+
+function isExcludedGameStateError(error: unknown) {
+  return error instanceof Error && error.message === EXCLUDED_GAME_STATE_MESSAGE;
+}
+
+function isNotHostStartError(error: unknown) {
+  return error instanceof Error && error.message === START_NOT_HOST_MESSAGE;
 }
 
 export function formatPlayerCount(count: number) {
@@ -134,6 +169,8 @@ export function renderRoomLobbyContent(
     onJoinRoom?: () => void;
     onLeaveRoom?: () => void;
     onCloseRoom?: () => void;
+    onStartSession?: () => void;
+    onRevealRole?: () => void;
     onStartAnonymousAuth?: () => void;
     lifecycleActionState?: RoomLifecycleActionState;
     isStartingAuth?: boolean;
@@ -290,16 +327,101 @@ export function renderRoomLobbyContent(
     );
   }
 
+  if (
+    dataState.status === "loading-game-state" ||
+    dataState.status === "excluded" ||
+    dataState.status === "role-reveal"
+  ) {
+    const { lobby } = dataState;
+    const hostParticipant = getHostParticipant(lobby);
+
+    if (dataState.status === "loading-game-state") {
+      return (
+        <section className="impostor-group-card" aria-live="polite">
+          <p className="impostor-kicker">Tanda</p>
+          <h1>Preparando tu rol...</h1>
+          {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
+        </section>
+      );
+    }
+
+    if (dataState.status === "excluded") {
+      return (
+        <section
+          className="impostor-group-card impostor-room-role-reveal"
+          aria-labelledby="impostor-room-excluded-title"
+        >
+          <p className="impostor-kicker">Tanda</p>
+          <h1 id="impostor-room-excluded-title">
+            La tanda ya empezó y no quedaste incluido.
+          </h1>
+          <p>Esperá a la próxima.</p>
+          <div className="impostor-group-error" aria-live="polite">
+            <p>{dataState.message}</p>
+          </div>
+        </section>
+      );
+    }
+
+    if (!dataState.isRoleRevealed) {
+      return (
+        <section
+          className="impostor-group-card impostor-room-role-reveal"
+          aria-labelledby="impostor-role-hidden-title"
+        >
+          <p className="impostor-kicker">Tanda</p>
+          <h1 id="impostor-role-hidden-title">Tu rol está listo</h1>
+          {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
+          <button
+            className="impostor-action impostor-action--primary"
+            type="button"
+            onClick={options.onRevealRole}
+          >
+            Ver mi rol
+          </button>
+        </section>
+      );
+    }
+
+    if (dataState.gameState.privateView.role === "impostor") {
+      return (
+        <section
+          className="impostor-group-card impostor-room-role-reveal"
+          aria-labelledby="impostor-role-impostor-title"
+        >
+          <p className="impostor-kicker">Ronda {dataState.gameState.roundNumber}</p>
+          <h1 id="impostor-role-impostor-title">SOS EL IMPOSTOR</h1>
+          {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
+        </section>
+      );
+    }
+
+    return (
+      <section
+        className="impostor-group-card impostor-room-role-reveal"
+        aria-labelledby="impostor-role-player-title"
+      >
+        <p className="impostor-kicker">Ronda {dataState.gameState.roundNumber}</p>
+        <h1 id="impostor-role-player-title">Tu palabra</h1>
+        <p className="impostor-room-secret-word">
+          {dataState.gameState.privateView.word}
+        </p>
+        {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
+      </section>
+    );
+  }
+
   const { lobby } = dataState;
-  const selfParticipant = lobby.participants.find(
-    (participant) => participant.isSelf,
-  );
+  const selfParticipant = getSelfParticipant(lobby);
   const lifecycleActionState = options.lifecycleActionState ?? {
     status: "idle" as const,
   };
+  const isStartingSession = dataState.status === "starting";
   const isLifecycleActionPending =
     lifecycleActionState.status === "leaving" ||
-    lifecycleActionState.status === "closing";
+    lifecycleActionState.status === "closing" ||
+    isStartingSession;
+  const isHost = Boolean(selfParticipant?.isHost);
 
   return (
     <section
@@ -331,6 +453,24 @@ export function renderRoomLobbyContent(
 
       {selfParticipant ? (
         <div className="impostor-room-danger-zone">
+          {isHost && lobby.room.status === "lobby" ? (
+            <>
+              <button
+                className="impostor-action impostor-action--primary"
+                type="button"
+                disabled={isStartingSession}
+                onClick={options.onStartSession}
+              >
+                {isStartingSession ? "Iniciando..." : "Iniciar tanda"}
+              </button>
+              {dataState.status === "success" && dataState.startError ? (
+                <div className="impostor-group-error" aria-live="polite">
+                  <p>{dataState.startError}</p>
+                </div>
+              ) : null}
+            </>
+          ) : null}
+
           {selfParticipant.isHost ? (
             <>
               <p>Cerrar la sala termina este lobby para todos.</p>
@@ -389,6 +529,8 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     string | undefined
   >();
   const isActiveHostMissingRef = useRef(false);
+  const isMountedRef = useRef(false);
+  const refreshSequenceRef = useRef(0);
   const [, setPreviousHostPlayerId] = useState<string | undefined>();
   const joinRoomController = useState(() =>
     createJoinRoomByCodeController(),
@@ -398,17 +540,19 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   const hostSuccessionController = useState(() =>
     createHostSuccessionController(),
   )[0];
+  const startSessionController = useState(() =>
+    createStartSessionController(),
+  )[0];
   const activeRoomId =
-    bootstrapState.status === "recognized" && dataState.status === "success"
-      ? dataState.lobby.room.id
+    bootstrapState.status === "recognized"
+      ? getLobbyFromDataState(dataState)?.room.id
       : undefined;
   const currentRoomPlayerId =
-    dataState.status === "success"
-      ? dataState.lobby.participants.find((participant) => participant.isSelf)
-          ?.playerId
-      : undefined;
+    getLobbyFromDataState(dataState)?.participants.find(
+      (participant) => participant.isSelf,
+    )?.playerId;
 
-  const acceptLobby = useCallback((lobby: RoomLobby) => {
+  const recordActiveRoomHost = useCallback((lobby: RoomLobby) => {
     const nextHost = lobby.participants.find((participant) => participant.isHost);
 
     setPreviousHostPlayerId((previousHostPlayerId) => {
@@ -422,25 +566,45 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
 
       return nextHost?.playerId;
     });
-
-    setDataState({ status: "success", lobby });
   }, []);
 
-  async function runBootstrap() {
-    setBootstrapState({ status: "loading" });
-    setDataState({ status: "idle" });
-    setBootstrapState(
-      await bootstrapPlatformContext(createPlatformBootstrapClient()),
-    );
-  }
+  const acceptActiveRoom = useCallback((lobby: RoomLobby, startError?: string) => {
+    recordActiveRoomHost(lobby);
+    setDataState({ status: "success", lobby, startError });
+  }, [recordActiveRoomHost]);
 
-  async function runRecognizedFlow() {
-    setDataState({ status: "loading" });
+  const refreshAuthoritativeRoomState = useCallback(
+    async (
+      reason: "bootstrap" | "start" | "realtime" | "retry" | "authority",
+      options: { startError?: string; absentDestination?: "join" | "group" } = {},
+    ) => {
+      const requestId = refreshSequenceRef.current + 1;
+      refreshSequenceRef.current = requestId;
 
-    try {
-      const activeLobby = await getMyActiveRoom(createImpostorRoomsClient());
+      function isLatestRefresh() {
+        return isMountedRef.current && refreshSequenceRef.current === requestId;
+      }
 
-      if (activeLobby) {
+      void reason;
+      setDataState({ status: "loading" });
+
+      try {
+        const activeLobby = await getMyActiveRoom(createImpostorRoomsClient());
+
+        if (!isLatestRefresh()) {
+          return;
+        }
+
+        if (!activeLobby) {
+          if (options.absentDestination === "group") {
+            router.replace("/impostor/grupo");
+            return;
+          }
+
+          setDataState({ status: "awaiting-join" });
+          return;
+        }
+
         if (activeLobby.room.code !== roomCode) {
           router.replace(
             `/impostor/sala/${encodeURIComponent(activeLobby.room.code)}`,
@@ -452,20 +616,90 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
         clearRoomCreationIntent(roomCode);
         clearRoomJoinIntent(roomCode);
         setLifecycleActionState({ status: "idle" });
-        acceptLobby(activeLobby);
 
-        return;
+        if (activeLobby.room.status !== "playing") {
+          acceptActiveRoom(activeLobby, options.startError);
+          return;
+        }
+
+        recordActiveRoomHost(activeLobby);
+        setDataState({ status: "loading-game-state", lobby: activeLobby });
+
+        let gameState: MyGameState | null;
+
+        try {
+          gameState = await getMyGameState(createImpostorRoomsClient());
+        } catch (error) {
+          if (!isLatestRefresh()) {
+            return;
+          }
+
+          if (isExcludedGameStateError(error)) {
+            setDataState({
+              status: "excluded",
+              lobby: activeLobby,
+              message: "Esperá a la próxima tanda para volver a jugar.",
+            });
+            return;
+          }
+
+          setDataState({
+            status: "error",
+            message: getFriendlyError(error, GENERIC_GAME_RECONSTRUCTION_ERROR),
+          });
+          return;
+        }
+
+        if (!isLatestRefresh()) {
+          return;
+        }
+
+        if (!gameState) {
+          setDataState({
+            status: "error",
+            message: GENERIC_GAME_RECONSTRUCTION_ERROR,
+          });
+          return;
+        }
+
+        setDataState({
+          status: "role-reveal",
+          lobby: activeLobby,
+          gameState,
+          isRoleRevealed: false,
+        });
+      } catch (error) {
+        if (!isLatestRefresh()) {
+          return;
+        }
+
+        setDataState({
+          status: "error",
+          message: getFriendlyError(error, GENERIC_ROOM_LOBBY_ERROR),
+        });
       }
-    } catch (error) {
-      setDataState({
-        status: "error",
-        message: getFriendlyError(error, GENERIC_ROOM_LOBBY_ERROR),
-      });
+    },
+    [acceptActiveRoom, recordActiveRoomHost, roomCode, router],
+  );
 
+  async function runBootstrap() {
+    const requestId = refreshSequenceRef.current + 1;
+    refreshSequenceRef.current = requestId;
+    setBootstrapState({ status: "loading" });
+    setDataState({ status: "idle" });
+    const nextBootstrapState = await bootstrapPlatformContext(
+      createPlatformBootstrapClient(),
+    );
+
+    if (!isMountedRef.current || refreshSequenceRef.current !== requestId) {
       return;
     }
 
-    setDataState({ status: "awaiting-join" });
+    setBootstrapState(nextBootstrapState);
+  }
+
+  async function runRecognizedFlow() {
+    await refreshAuthoritativeRoomState("bootstrap");
   }
 
   async function handleJoinRoom() {
@@ -479,7 +713,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
 
       recordRoomJoinIntent(lobby.room.code);
       setLifecycleActionState({ status: "idle" });
-      acceptLobby(lobby);
+      acceptActiveRoom(lobby);
     } catch (error) {
       setDataState({
         status: "awaiting-join",
@@ -538,16 +772,76 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
       );
 
       void identity;
+      if (!isMountedRef.current) {
+        return;
+      }
+
       await runBootstrap();
     } catch (error) {
+      if (!isMountedRef.current) {
+        return;
+      }
+
       setStartAuthError(getFriendlyError(error, GENERIC_START_AUTH_ERROR));
     } finally {
-      setIsStartingAuth(false);
+      if (isMountedRef.current) {
+        setIsStartingAuth(false);
+      }
     }
+  }
+
+  async function handleStartSession() {
+    const lobby = getLobbyFromDataState(dataState);
+
+    if (!lobby || dataState.status === "starting" || !isMountedRef.current) {
+      return;
+    }
+
+    setDataState({ status: "starting", lobby });
+
+    try {
+      await startSessionController.submit(createImpostorRoomsClient());
+      await refreshAuthoritativeRoomState("start");
+    } catch (error) {
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      const message = isNotHostStartError(error)
+        ? START_NOT_HOST_UI_MESSAGE
+        : getFriendlyError(error, "No pudimos iniciar la tanda. Intentá de nuevo.");
+
+      if (
+        isNotHostStartError(error) ||
+        message === "No tenés una sala activa para iniciar." ||
+        message === "Esta sala no se puede iniciar ahora."
+      ) {
+        await refreshAuthoritativeRoomState("authority", {
+          startError: message,
+        });
+        return;
+      }
+
+      setDataState({ status: "success", lobby, startError: message });
+    }
+  }
+
+  function handleRevealRole() {
+    setDataState((currentState) => {
+      if (currentState.status !== "role-reveal") {
+        return currentState;
+      }
+
+      return {
+        ...currentState,
+        isRoleRevealed: true,
+      };
+    });
   }
 
   useEffect(() => {
     let isActive = true;
+    isMountedRef.current = true;
 
     void bootstrapPlatformContext(createPlatformBootstrapClient()).then(
       (nextBootstrapState) => {
@@ -559,6 +853,8 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
 
     return () => {
       isActive = false;
+      isMountedRef.current = false;
+      refreshSequenceRef.current += 1;
     };
   }, []);
 
@@ -576,46 +872,24 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
       return;
     }
 
-    let isActive = true;
-    const syncController = createLobbySyncController({
-      readLobby: () => getMyActiveRoom(createImpostorRoomsClient()),
-      onSnapshot: (snapshot) => {
-        if (!isActive) {
-          return;
-        }
-
-        if (snapshot.status === "success") {
-          if (snapshot.lobby.room.code !== roomCode) {
-            router.replace(
-              `/impostor/sala/${encodeURIComponent(snapshot.lobby.room.code)}`,
-            );
-
-            return;
-          }
-
-          clearRoomCreationIntent(roomCode);
-          clearRoomJoinIntent(roomCode);
-          setLifecycleActionState({ status: "idle" });
-          acceptLobby(snapshot.lobby);
-        }
-
-        if (snapshot.status === "absent") {
-          router.replace("/impostor/grupo");
-        }
-      },
-    });
     const subscription = subscribeToRoomChanges(
       createImpostorRoomChangesClient(),
       activeRoomId,
-      () => syncController.invalidate(),
+      () =>
+        void refreshAuthoritativeRoomState("realtime", {
+          absentDestination: "group",
+        }),
     );
 
     return () => {
-      isActive = false;
-      syncController.dispose();
       void subscription.unsubscribe();
     };
-  }, [bootstrapState.status, activeRoomId, roomCode, router, acceptLobby]);
+  }, [
+    bootstrapState.status,
+    activeRoomId,
+    roomCode,
+    refreshAuthoritativeRoomState,
+  ]);
 
   useEffect(() => {
     if (
@@ -667,17 +941,17 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
 
   const activePresenceState =
     roomPresenceSnapshot.roomId === activeRoomId ? roomPresenceSnapshot.state : {};
+  const activeLobby = getLobbyFromDataState(dataState);
   const connectedPlayerIds =
-    dataState.status === "success"
+    activeLobby
       ? getConnectedRoomParticipantIds(
-          dataState.lobby.participants,
+          activeLobby.participants,
           activePresenceState,
         )
       : new Set<string>();
-  const activeHostParticipant =
-    dataState.status === "success"
-      ? dataState.lobby.participants.find((participant) => participant.isHost)
-      : undefined;
+  const activeHostParticipant = activeLobby?.participants.find(
+    (participant) => participant.isHost,
+  );
   const activeHostPlayerId = activeHostParticipant?.playerId;
   const isActiveHostMissing =
     Boolean(activeHostPlayerId) && !connectedPlayerIds.has(activeHostPlayerId ?? "");
@@ -714,13 +988,16 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     hostSuccessionController,
   ]);
 
+  // eslint-disable-next-line react-hooks/refs -- renderRoomLobbyContent only passes callbacks to JSX event handlers.
   return renderRoomLobbyContent(bootstrapState, dataState, {
     roomCode,
     onRetryBootstrap: () => void runBootstrap(),
-    onRetryData: () => void runRecognizedFlow(),
+    onRetryData: () => void refreshAuthoritativeRoomState("retry"),
     onJoinRoom: () => void handleJoinRoom(),
     onLeaveRoom: () => void handleLeaveRoom(),
     onCloseRoom: () => void handleCloseRoom(),
+    onStartSession: () => void handleStartSession(),
+    onRevealRole: () => void handleRevealRole(),
     onStartAnonymousAuth: () => void handleStartAnonymousAuth(),
     lifecycleActionState,
     isStartingAuth,
