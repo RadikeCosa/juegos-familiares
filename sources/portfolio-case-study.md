@@ -66,13 +66,15 @@ Incremento 5.0 documental completado sobre Incremento 4 cerrado localmente
 * Presence básica privada de lobby cerrada en 5.1, separando disponibilidad efímera, pertenencia persistida y host autoritativo.
 * liveness autoritativo mínimo cerrado en 5.2 con timestamp server-side, heartbeat proporcional y smoke productivo específico.
 * sucesión autoritativa de host cerrada en 5.3 con `reassign_room_host_if_stale()`, selección server-side, concurrencia consistente, feedback breve y smoke productivo multi-cliente.
+* Incremento 6 cerrado técnicamente: host inicia tanda con `start_session()`, roster congelado en `SessionPlayers`, palabra e impostor server-side, Round 1 en `role_reveal`, Room `playing`, lectura privada con `get_my_game_state()` y UI tap-to-reveal sin filtrar secretos.
 
 ## PENDIENTE
 
 * producto jugable;
 * playtesting real;
 * métricas;
-* hardening mobile/concurrencia de 5.4;
+* hardening mobile/concurrencia de 5.4, en suspenso hasta validación física;
+* validación manual multi-dispositivo del Incremento 6;
 * tests de dominio de juego;
 * UI final;
 * evidencia visual;
@@ -259,7 +261,7 @@ PENDIENTE:
 * votación, scoring e historial;
 * testing práctico;
 * diseño UI final;
-* hardening mobile/concurrencia de 5.4;
+* hardening mobile/concurrencia de 5.4, en suspenso hasta validación física;
 * validación ampliada en dispositivos reales;
 * playtesting;
 * iteración sobre uso real.
@@ -760,8 +762,8 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 5.1 | Presence básica del lobby | CERRADO | Presence privada por Room activa, autorización por RoomParticipant, connected/disconnected visible, separación estado efímero/persistente, validación productiva multi-cliente y mobile |
 | 5.2 | Liveness autoritativo mínimo | CERRADO | `room_participants.last_seen_at`, RPC autoritativa de refresh propio, heartbeat 30s, stale 90s, seguridad, smoke productivo y límites mobile/background |
 | 5.3 | Sucesión autoritativa de host | CERRADO | RPC `reassign_room_host_if_stale()`, autoridad desde `auth.uid()`, host stale por liveness, sucesor por `joined_at ASC, player_id ASC`, concurrencia, revival, no-op sin candidatos, feedback breve y smoke productivo PASS |
-| 5.4 | Hardening mobile/concurrencia | PENDIENTE | Validación ampliada de mobile/background, múltiples pestañas, rechecks y pulido UX si el uso real lo requiere |
-| 6 | Iniciar tanda y preparar ronda privada | PENDIENTE | PENDIENTE |
+| 5.4 | Hardening mobile/concurrencia | EN SUSPENSO / VALIDACIÓN PENDIENTE | La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios; falta validación física mobile/desktop de background, lock, reconnect, multiple connections y timings 30s/90s/30s antes del cierre final del MVP |
+| 6 | Iniciar tanda y preparar ronda privada | CERRADO TÉCNICAMENTE | 6.0-6.5 cerrados: GameSession/SessionPlayer/Round, lifecycle `playing`, `start_session()` atómico, snapshot de activos, palabra e impostor server-side, `get_my_game_state()`, privacidad por caller, UI role reveal y hardening de refetch; validación manual multi-dispositivo pendiente |
 | 7 | Confirmación de rol y estado PLAYING | PENDIENTE | PENDIENTE |
 | 8 | Primera votación | PENDIENTE | PENDIENTE |
 | 9 | Empate y segunda votación | PENDIENTE | PENDIENTE |
@@ -937,6 +939,8 @@ Incremento 5.1 cerró la primera parte de esa decisión: Presence privada de lob
 Incremento 5.2 cerró liveness autoritativo mínimo: `room_participants.last_seen_at` representa actividad reciente verificable, se refresca mediante una RPC derivada desde `auth.uid()` y usa heartbeat inicial de 30 segundos con threshold de stale de 90 segundos. El aprendizaje fue introducir una señal server-side proporcional antes de permitir sucesión: Presence sigue siendo UX efímera, el timestamp usa reloj Postgres, y los 90 segundos dejan margen frente a mobile/background sin convertirlo en regla de juego. La sucesión real del host queda fuera de 5.2.
 
 Incremento 5.3 cerró la sucesión real: el cliente puede disparar una evaluación, pero la decisión queda centralizada en Postgres. La RPC no acepta ownership enviado por cliente, revalida host/liveness dentro de la operación protegida y elige un único sucesor por `joined_at ASC, player_id ASC`. El smoke productivo confirmó que Presence desconectada con liveness active no cambia host, que un host stale transfiere el rol, que el host original vuelve como participante normal y que sin candidatos active no se cierra la Room ni se borra el host persistido.
+
+Incremento 6 cerró el primer tramo de gameplay privado. El aprendizaje principal fue mantener dos lecturas separadas: `get_my_active_room()` para Room, participantes y host sin secretos, y `get_my_game_state()` para la vista privada del caller. `start_session()` quedó como operación 0-args y autoritativa: deriva identidad desde `auth.uid()`, refresca liveness del host antes del snapshot, congela `SessionPlayers`, elige palabra e impostor en servidor y cambia la Room a `playing`. El frontend no fabrica estado privado desde START; usa Realtime de Room solo como invalidación y reconstruye todo autoritativamente antes de mostrar el tap-to-reveal.
 
 ---
 

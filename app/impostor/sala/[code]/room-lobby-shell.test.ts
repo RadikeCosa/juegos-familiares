@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { PlatformBootstrapState } from "../../../../lib/supabase/platform-bootstrap";
-import type { RoomLobby } from "../../../../lib/supabase/impostor-rooms";
+import type { MyGameState, RoomLobby } from "../../../../lib/supabase/impostor-rooms";
 import {
     formatPlayerCount,
     renderRoomLobbyContent
@@ -40,6 +40,41 @@ const twoPlayerLobby: RoomLobby = {
         { playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" },
         { playerId: "player-2", nickname: "Pedro", isHost: false, isSelf: true, joinedAt: "2026-08-19T12:05:00.000Z" }
     ]
+};
+
+const hostLobby: RoomLobby = {
+    room: { id: "room-1", code: "AB7KQ2M4", status: "lobby" },
+    participants: [
+        { playerId: "player-1", nickname: "Ramiro", isHost: true, isSelf: true, joinedAt: "2026-08-19T12:00:00.000Z" },
+        { playerId: "player-2", nickname: "Pedro", isHost: false, joinedAt: "2026-08-19T12:05:00.000Z" },
+        { playerId: "player-3", nickname: "Ana", isHost: false, joinedAt: "2026-08-19T12:06:00.000Z" }
+    ]
+};
+
+const nonHostLobby: RoomLobby = {
+    ...hostLobby,
+    participants: [
+        { playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" },
+        { playerId: "player-2", nickname: "Pedro", isHost: false, isSelf: true, joinedAt: "2026-08-19T12:05:00.000Z" },
+        { playerId: "player-3", nickname: "Ana", isHost: false, joinedAt: "2026-08-19T12:06:00.000Z" }
+    ]
+};
+
+const playingHostLobby: RoomLobby = {
+    ...hostLobby,
+    room: { id: "room-1", code: "AB7KQ2M4", status: "playing" }
+};
+
+const playerGameState: MyGameState = {
+    state: "role_reveal",
+    roundNumber: 1,
+    privateView: { role: "player", word: "Casa" }
+};
+
+const impostorGameState: MyGameState = {
+    state: "role_reveal",
+    roundNumber: 1,
+    privateView: { role: "impostor", word: null }
 };
 
 describe("formatPlayerCount", () => {
@@ -292,6 +327,161 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("disabled=\"\"");
     });
 
+    it("shows Start only to the current self host while Room is lobby", () => {
+        const hostMarkup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "success", lobby: hostLobby },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+        const nonHostMarkup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "success", lobby: nonHostLobby },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+        const playingMarkup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "loading-game-state", lobby: playingHostLobby },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(hostMarkup).toContain("Iniciar tanda");
+        expect(nonHostMarkup).not.toContain("Iniciar tanda");
+        expect(playingMarkup).not.toContain("Iniciar tanda");
+    });
+
+    it("disables Start and shows loading copy while start_session is in flight", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "starting", lobby: hostLobby },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Iniciando...");
+        expect(markup).toContain("disabled=\"\"");
+    });
+
+    it("keeps lobby visible with product feedback after start_session domain errors", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "success",
+                    lobby: hostLobby,
+                    startError: "Necesitás al menos 3 participantes activos para iniciar."
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Iniciar tanda");
+        expect(markup).toContain("Necesitás al menos 3 participantes activos para iniciar.");
+        expect(markup).not.toMatch(/SQL|Postgres|P00\d+/);
+    });
+
+    it("does not render lobby while private game state is loading", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "loading-game-state", lobby: playingHostLobby },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Preparando tu rol");
+        expect(markup).not.toContain("Jugadores");
+        expect(markup).not.toContain("Iniciar tanda");
+        expect(markup).not.toContain("Casa");
+    });
+
+    it("renders tap-to-reveal without placing the private word in hidden DOM", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "role-reveal",
+                    lobby: playingHostLobby,
+                    gameState: playerGameState,
+                    isRoleRevealed: false
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Tu rol está listo");
+        expect(markup).toContain("Ver mi rol");
+        expect(markup).not.toContain("Casa");
+        expect(markup).not.toContain("SOS EL IMPOSTOR");
+        expect(markup).not.toContain("Sala AB7KQ2M4");
+    });
+
+    it("reveals the normal player's word without exposing impostor internals", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "role-reveal",
+                    lobby: playingHostLobby,
+                    gameState: playerGameState,
+                    isRoleRevealed: true
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Tu palabra");
+        expect(markup).toContain("Casa");
+        expect(markup).not.toContain("SOS EL IMPOSTOR");
+        expect(markup).not.toMatch(/normalized|impostor_player_id|player-\d/);
+    });
+
+    it("reveals impostor without rendering a word, including when the host is impostor", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "role-reveal",
+                    lobby: playingHostLobby,
+                    gameState: impostorGameState,
+                    isRoleRevealed: true
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("SOS EL IMPOSTOR");
+        expect(markup).not.toContain("Casa");
+        expect(markup).not.toContain("Tu palabra");
+    });
+
+    it("renders excluded state without role, word, participants or Start", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "excluded",
+                    lobby: playingHostLobby,
+                    message: "Esperá a la próxima tanda para volver a jugar."
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("La tanda ya empezó y no quedaste incluido");
+        expect(markup).toContain("Esperá a la próxima");
+        expect(markup).not.toContain("Casa");
+        expect(markup).not.toContain("SOS EL IMPOSTOR");
+        expect(markup).not.toContain("Jugadores");
+        expect(markup).not.toContain("Iniciar tanda");
+    });
+
     it("reconstructs the active Room without consulting one-shot create or join intents", () => {
         const source = readFileSync(
             join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
@@ -326,9 +516,10 @@ describe("renderRoomLobbyContent", () => {
         expect(source).toContain("subscribeToRoomChanges(");
         expect(source).toContain("activeRoomId,");
         expect(source).toContain(
-            "[bootstrapState.status, activeRoomId, roomCode, router, acceptLobby]"
+            "[\n    bootstrapState.status,\n    activeRoomId,\n    roomCode,\n    refreshAuthoritativeRoomState"
         );
         expect(source).not.toContain("[bootstrapState.status, dataState, roomCode, router]");
+        expect(source).not.toContain("createLobbySyncController");
     });
 
     it("leaves the lobby route when an authoritative Realtime refetch returns no active Room", () => {
@@ -337,7 +528,7 @@ describe("renderRoomLobbyContent", () => {
             "utf8"
         );
 
-        expect(source).toContain("if (snapshot.status === \"absent\")");
+        expect(source).toContain("absentDestination: \"group\"");
         expect(source).toContain("router.replace(\"/impostor/grupo\")");
     });
 
@@ -390,7 +581,8 @@ describe("renderRoomLobbyContent", () => {
         expect(source).toContain("participant.isHost");
         expect(source).toContain("!connectedPlayerIds.has(activeHostPlayerId");
         expect(source).toContain("isActiveHostMissingRef.current = isActiveHostMissing");
-        expect(source).toContain("acceptLobby(snapshot.lobby)");
+        expect(source).toContain("acceptActiveRoom(activeLobby, options.startError)");
+        expect(source).toContain("recordActiveRoomHost(activeLobby)");
         expect(source).toContain("`${nextHost.nickname} ahora es el host`");
     });
 
@@ -402,5 +594,63 @@ describe("renderRoomLobbyContent", () => {
 
         expect(source).toContain("activeHostPlayerId,\n    hostSuccessionController");
         expect(source).not.toContain("isActiveHostMissing,\n    hostSuccessionController");
+    });
+
+    it("uses one authoritative refresh path for bootstrap, START success, retry and Realtime", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("const refreshAuthoritativeRoomState = useCallback(");
+        expect(source).toContain("await refreshAuthoritativeRoomState(\"bootstrap\")");
+        expect(source).toContain("await refreshAuthoritativeRoomState(\"start\")");
+        expect(source).toContain("void refreshAuthoritativeRoomState(\"realtime\", {");
+        expect(source).toContain("onRetryData: () => void refreshAuthoritativeRoomState(\"retry\")");
+        expect(source).toContain("getMyActiveRoom(createImpostorRoomsClient())");
+        expect(source).toContain("getMyGameState(createImpostorRoomsClient())");
+    });
+
+    it("does not accept a playing Room as lobby before private state loading", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+        const playingBranch = source.slice(
+            source.indexOf("if (activeLobby.room.status !== \"playing\")"),
+            source.indexOf("let gameState: MyGameState | null;")
+        );
+
+        expect(playingBranch).toContain("recordActiveRoomHost(activeLobby)");
+        expect(playingBranch).toContain("setDataState({ status: \"loading-game-state\", lobby: activeLobby })");
+        expect(playingBranch).not.toContain("acceptActiveRoom(activeLobby)");
+    });
+
+    it("protects against stale refresh responses and setState after unmount", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("const refreshSequenceRef = useRef(0)");
+        expect(source).toContain("const requestId = refreshSequenceRef.current + 1");
+        expect(source).toContain("refreshSequenceRef.current = requestId");
+        expect(source).toContain("refreshSequenceRef.current === requestId");
+        expect(source).toContain("isMountedRef.current");
+        expect(source).toContain("refreshSequenceRef.current += 1");
+    });
+
+    it("cleans private state before loading, lobby, excluded and error states", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("setDataState({ status: \"loading\" })");
+        expect(source).toContain("setDataState({ status: \"loading-game-state\", lobby: activeLobby })");
+        expect(source).toContain("setDataState({ status: \"awaiting-join\" })");
+        expect(source).toContain("status: \"excluded\"");
+        expect(source).toContain("status: \"error\"");
+        expect(source).not.toMatch(/localStorage|sessionStorage|document\.cookie|searchParams|console\.log\(.*gameState/i);
     });
 });

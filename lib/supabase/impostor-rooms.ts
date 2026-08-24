@@ -12,7 +12,9 @@ export type ImpostorRoomsClient = {
             | "leave_room"
             | "close_room"
             | "refresh_my_room_liveness"
-            | "reassign_room_host_if_stale",
+            | "reassign_room_host_if_stale"
+            | "start_session"
+            | "get_my_game_state",
         params?: { room_code: string }
     ) => PromiseLike<SupabaseRpcResult<unknown>>;
 };
@@ -250,6 +252,31 @@ const MISSING_PLAYER_HOST_SUCCESSION_ERROR =
     "No pudimos reconocer tu jugador para revisar el host.";
 const GENERIC_HOST_SUCCESSION_ERROR =
     "No pudimos revisar quién debería ser host. Intentá de nuevo.";
+const UNAUTHENTICATED_START_SESSION_ERROR =
+    "Necesitás entrar a tu grupo antes de iniciar la tanda.";
+const MISSING_PLAYER_START_SESSION_ERROR =
+    "No pudimos reconocer tu jugador para iniciar la tanda.";
+const NO_ACTIVE_ROOM_START_SESSION_ERROR =
+    "No tenés una sala activa para iniciar.";
+const ROOM_NOT_STARTABLE_ERROR = "Esta sala no se puede iniciar ahora.";
+const NOT_ROOM_HOST_START_SESSION_ERROR =
+    "Solo el host actual puede iniciar la tanda.";
+const NOT_ENOUGH_ACTIVE_PLAYERS_ERROR =
+    "Necesitás al menos 3 participantes activos para iniciar.";
+const NO_ELIGIBLE_WORDS_ERROR =
+    "Agregá al menos una palabra al banco antes de iniciar.";
+const GENERIC_START_SESSION_ERROR =
+    "No pudimos iniciar la tanda. Intentá de nuevo.";
+const UNAUTHENTICATED_GAME_STATE_ERROR =
+    "Necesitás entrar a tu grupo antes de recuperar la tanda.";
+const MISSING_PLAYER_GAME_STATE_ERROR =
+    "No pudimos reconocer tu jugador para recuperar la tanda.";
+const INCONSISTENT_GAME_STATE_ERROR =
+    "No pudimos reconstruir la tanda. Volvé a intentar más tarde.";
+const NOT_SESSION_PLAYER_GAME_STATE_ERROR =
+    "No participás de la tanda actual.";
+const GENERIC_GAME_STATE_ERROR =
+    "No pudimos recuperar la tanda. Intentá de nuevo.";
 
 export const ROOM_LIVENESS_HEARTBEAT_MS = 30_000;
 export const ROOM_HOST_SUCCESSION_RECHECK_MS = 30_000;
@@ -280,6 +307,56 @@ export type RoomLobby = {
         status: string;
     };
     participants: RoomLobbyParticipant[];
+};
+
+type StartSessionRow = {
+    started: boolean;
+    already_started: boolean;
+    room_status: string;
+    game_session_state: string;
+    round_number: number;
+    participant_count: number;
+};
+
+export type StartSessionResult = {
+    started: boolean;
+    alreadyStarted: boolean;
+    roomStatus: string;
+    gameSessionState: string;
+    roundNumber: number;
+    participantCount: number;
+};
+
+export type GameSessionState = "role_reveal";
+
+type MyGameStateRow = {
+    state: GameSessionState;
+    round_number: number;
+} & (
+    | {
+        role: "player";
+        word: string;
+    }
+    | {
+        role: "impostor";
+        word: null;
+    }
+);
+
+export type MyPrivateRoundView =
+    | {
+        role: "player";
+        word: string;
+    }
+    | {
+        role: "impostor";
+        word: null;
+    };
+
+export type MyGameState = {
+    state: GameSessionState;
+    roundNumber: number;
+    privateView: MyPrivateRoundView;
 };
 
 function isSupabaseErrorLike(error: unknown): error is SupabaseErrorLike {
@@ -409,6 +486,62 @@ function getHostSuccessionErrorMessage(error: unknown) {
     return GENERIC_HOST_SUCCESSION_ERROR;
 }
 
+function getStartSessionErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "28000" || error.code === "42501") {
+            return UNAUTHENTICATED_START_SESSION_ERROR;
+        }
+
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_START_SESSION_ERROR;
+        }
+
+        if (error.code === "P0017") {
+            return NO_ACTIVE_ROOM_START_SESSION_ERROR;
+        }
+
+        if (error.code === "P0018") {
+            return ROOM_NOT_STARTABLE_ERROR;
+        }
+
+        if (error.code === "P0019") {
+            return NOT_ROOM_HOST_START_SESSION_ERROR;
+        }
+
+        if (error.code === "P0020") {
+            return NOT_ENOUGH_ACTIVE_PLAYERS_ERROR;
+        }
+
+        if (error.code === "P0021") {
+            return NO_ELIGIBLE_WORDS_ERROR;
+        }
+    }
+
+    return GENERIC_START_SESSION_ERROR;
+}
+
+function getGameStateErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "28000" || error.code === "42501") {
+            return UNAUTHENTICATED_GAME_STATE_ERROR;
+        }
+
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_GAME_STATE_ERROR;
+        }
+
+        if (error.code === "P0022") {
+            return INCONSISTENT_GAME_STATE_ERROR;
+        }
+
+        if (error.code === "P0023") {
+            return NOT_SESSION_PLAYER_GAME_STATE_ERROR;
+        }
+    }
+
+    return GENERIC_GAME_STATE_ERROR;
+}
+
 function isRoomLobbyRow(value: unknown): value is RoomLobbyRow {
     const row = value as Partial<RoomLobbyRow>;
 
@@ -420,6 +553,65 @@ function isRoomLobbyRow(value: unknown): value is RoomLobbyRow {
         typeof row.participant_is_host === "boolean" &&
         typeof row.participant_joined_at === "string"
     );
+}
+
+function isStartSessionRow(value: unknown): value is StartSessionRow {
+    const row = value as Partial<StartSessionRow>;
+
+    return (
+        typeof row.started === "boolean" &&
+        typeof row.already_started === "boolean" &&
+        typeof row.room_status === "string" &&
+        typeof row.game_session_state === "string" &&
+        typeof row.round_number === "number" &&
+        typeof row.participant_count === "number"
+    );
+}
+
+function isMyGameStateRow(value: unknown): value is MyGameStateRow {
+    const row = value as Partial<MyGameStateRow>;
+
+    if (
+        row.state !== "role_reveal" ||
+        typeof row.round_number !== "number" ||
+        !Number.isInteger(row.round_number) ||
+        row.round_number < 1
+    ) {
+        return false;
+    }
+
+    if (row.role === "player") {
+        return typeof row.word === "string";
+    }
+
+    return row.role === "impostor" && row.word === null;
+}
+
+function toStartSessionResult(row: StartSessionRow): StartSessionResult {
+    return {
+        started: row.started,
+        alreadyStarted: row.already_started,
+        roomStatus: row.room_status,
+        gameSessionState: row.game_session_state,
+        roundNumber: row.round_number,
+        participantCount: row.participant_count
+    };
+}
+
+function toMyGameState(row: MyGameStateRow): MyGameState {
+    if (row.role === "player") {
+        return {
+            state: row.state,
+            roundNumber: row.round_number,
+            privateView: { role: "player", word: row.word }
+        };
+    }
+
+    return {
+        state: row.state,
+        roundNumber: row.round_number,
+        privateView: { role: "impostor", word: null }
+    };
 }
 
 function toRoomLobby(rows: RoomLobbyRow[]): RoomLobby {
@@ -892,6 +1084,46 @@ export async function closeRoom(supabase: ImpostorRoomsClient): Promise<void> {
     }
 }
 
+export async function startSession(
+    supabase: ImpostorRoomsClient
+): Promise<StartSessionResult> {
+    const result = await supabase.rpc("start_session");
+
+    if (result.error) {
+        throw new Error(getStartSessionErrorMessage(result.error));
+    }
+
+    const rows = Array.isArray(result.data) ? result.data : [];
+
+    if (rows.length !== 1 || !isStartSessionRow(rows[0])) {
+        throw new Error("No pudimos confirmar el inicio de la tanda.");
+    }
+
+    return toStartSessionResult(rows[0]);
+}
+
+export async function getMyGameState(
+    supabase: ImpostorRoomsClient
+): Promise<MyGameState | null> {
+    const result = await supabase.rpc("get_my_game_state");
+
+    if (result.error) {
+        throw new Error(getGameStateErrorMessage(result.error));
+    }
+
+    const rows = Array.isArray(result.data) ? result.data : [];
+
+    if (rows.length === 0) {
+        return null;
+    }
+
+    if (rows.length !== 1 || !isMyGameStateRow(rows[0])) {
+        throw new Error("No pudimos confirmar el estado de la tanda.");
+    }
+
+    return toMyGameState(rows[0]);
+}
+
 export function createLeaveRoomController() {
     let activeRequest: Promise<void> | null = null;
 
@@ -922,6 +1154,26 @@ export function createCloseRoomController() {
             }
 
             activeRequest = closeRoom(supabase);
+
+            void activeRequest.finally(() => {
+                activeRequest = null;
+            });
+
+            return activeRequest;
+        }
+    };
+}
+
+export function createStartSessionController() {
+    let activeRequest: Promise<StartSessionResult> | null = null;
+
+    return {
+        submit(supabase: ImpostorRoomsClient): Promise<StartSessionResult> {
+            if (activeRequest) {
+                return activeRequest;
+            }
+
+            activeRequest = startSession(supabase);
 
             void activeRequest.finally(() => {
                 activeRequest = null;

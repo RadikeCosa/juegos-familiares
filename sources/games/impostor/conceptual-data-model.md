@@ -80,6 +80,15 @@ Group = quiénes somos
 Room  = dónde/qué estamos jugando ahora
 ```
 
+Desde Incremento 6 se agrega explícitamente:
+
+```text
+Group = contexto social persistente
+Room = espacio temporal de juego actual
+GameSession = tanda competitiva concreta
+Round = ronda dentro de la tanda
+```
+
 ---
 
 # 1. Grupo
@@ -409,7 +418,7 @@ Victoria
 
 Camila puede pertenecer al grupo y no formar parte de esa sala.
 
-## Información mínima para Incremento 4
+## Información mínima
 
 ```text
 Room
@@ -421,20 +430,45 @@ Room
 - createdAt
 ```
 
-`status` solo admite conceptualmente:
+En Incremento 4 el lifecycle implementado fue:
 
 ```text
 lobby
 closed
 ```
 
-`playing` y `finished` pertenecen al lifecycle posterior de `GameSession`.
+Desde Incremento 6, el lifecycle conceptual vigente de Room es:
+
+```text
+lobby
+playing
+closed
+```
+
+`Room.status` responde solamente:
+
+```text
+¿se puede seguir entrando?
+¿hay una tanda en curso?
+¿la Room terminó?
+```
+
+El detalle de fases de juego pertenece a `GameSession.state`, por ejemplo:
+
+```text
+Room.status = playing
+GameSession.state = ROLE_REVEAL
+```
+
+`finished` no se introduce como estado de Room en el contrato mínimo de Incremento 6.
 
 ## Persistencia
 
 Room es temporal en el dominio, pero se persiste técnicamente para concurrencia, refresh, reconstrucción y sincronización.
 
 Una Room cerrada no cuenta como activa.
+
+Una Room en `playing` mantiene el contexto compartido de gameplay y no admite nuevos joins.
 
 El cierre de una Room libera a sus participantes para crear o unirse a otra Room. La membresía puede conservarse técnicamente para saber quién participó, pero una Room `closed` no es lobby activo ni historial visible de producto.
 
@@ -555,16 +589,31 @@ Tanda
 → competencia y marcador
 ```
 
-## Información mínima
+## Información mínima para Incremento 6
 
 ```text
 GameSession
 - id
 - roomId
-- status
 - startedAt
-- finishedAt
+- state
 ```
+
+El lifecycle futuro de GameSession puede crecer, pero Incremento 6 solamente necesita llegar a:
+
+```text
+ROLE_REVEAL
+```
+
+`PREPARING_ROUND` sigue siendo un concepto válido de la máquina de estados, pero no necesita obligatoriamente constituir un estado persistido observable. `START_SESSION` puede realizar atómicamente:
+
+```text
+LOBBY
+→ preparación transaccional
+→ ROLE_REVEAL
+```
+
+No debe existir un estado durable inválido como una GameSession creada sin Round.
 
 ## Persistencia
 
@@ -578,9 +627,10 @@ Mantiene:
 
 * participantes de la tanda;
 * rondas;
-* puntuaciones;
 * palabras utilizadas;
 * historial necesario para balancear impostores.
+
+En Incremento 6 no se agrega todavía `winner`, `finalScores` ni `roundCount`.
 
 El estado operativo puede desaparecer cuando ya no se necesita para coordinar la sala activa.
 
@@ -594,25 +644,19 @@ El resumen histórico de la tanda debe conservarse para estadísticas futuras.
 
 La participación de un jugador en una tanda concreta.
 
-## Información conceptual
+## Información conceptual para Incremento 6
 
 ```text
 SessionPlayer
 - sessionId
 - playerId
-- score
-- impostorCount
 ```
 
-## Score
+`SessionPlayer` representa el roster congelado de la tanda. No se reutiliza dinámicamente `RoomParticipant` como roster de `GameSession`.
 
-Puntos acumulados durante la tanda.
+Una desconexión no elimina `SessionPlayer` ni modifica automáticamente el roster.
 
-## ImpostorCount
-
-Cantidad de veces que ese jugador fue impostor.
-
-Este dato permite aplicar la selección balanceada definida por las reglas.
+`score` pertenece a scoring posterior. `roleAcknowledged` pertenece al Incremento 7. `voteSubmitted` pertenece a votación. `impostorCount` puede derivarse de rondas anteriores y no se persiste conceptualmente como dato obligatorio en Incremento 6.
 
 ## Persistencia
 
@@ -640,22 +684,21 @@ Round
 - id
 - sessionId
 - number
-- wordId
+- secretWord
+- normalizedSecretWord
 - impostorPlayerId
-- status
-- winner
 - createdAt
-- finishedAt
 ```
 
-## Winner
+`secretWord` y `normalizedSecretWord` son un snapshot conceptual de la palabra efectivamente usada.
 
-Conceptualmente:
+Ese snapshot permite recordar qué palabra se jugó aunque el `GroupWord` original deje de existir, y preservar la regla de no repetición durante la tanda aunque una palabra se borre y vuelva a agregarse con diferencias triviales de mayúsculas o espacios.
 
-```text
-impostor
-group
-```
+En la forma mínima implementada por Incremento 6, `Round` guarda el snapshot de texto y normalización. No existe `rounds.group_word_id`.
+
+`winner`, `accusedPlayer`, `finishedAt`, `guessResult` y cambios de score quedan fuera de Incremento 6.
+
+Para Incremento 6 la fase global pertenece a `GameSession.state`; no se agrega `Round.status` si duplicaría esa misma fase.
 
 ## Persistencia
 
@@ -665,14 +708,14 @@ Al finalizar la tanda, solamente debe conservarse un resumen histórico mínimo 
 
 ---
 
-# 11. Información privada de la ronda
+# 11. Vista privada de la ronda
 
 ## Problema
 
-La ronda contiene:
+La ronda contiene conceptualmente:
 
 ```text
-wordId
+secretWord
 impostorPlayerId
 ```
 
@@ -680,24 +723,25 @@ pero esa información no debe entregarse completa a todos los dispositivos.
 
 El servidor conoce el estado completo.
 
-Cada jugador recibe una vista limitada.
+Cada jugador recibe una vista limitada derivada para el caller.
 
 ## Jugador normal
 
 ```text
-RoundAssignment
-- role: player
-- word: "Milanesa"
+role = player
+word = "Milanesa"
 ```
 
 ## Impostor
 
 ```text
-RoundAssignment
-- role: impostor
+role = impostor
+word = null
 ```
 
 No recibe la palabra.
+
+No se introduce en Incremento 6 una entidad persistente `RoundPlayerAssignment` si únicamente repetiría `Round.secretWord`, `Round.impostorPlayerId` y `SessionPlayers`.
 
 ## Principio
 
@@ -914,7 +958,7 @@ Room
   1 ──────── N RoomParticipant
 
 Room
-  1 ──────── 1 GameSession
+  1 ──────── 0..1 GameSession
 
 GameSession
   1 ──────── N SessionPlayer
@@ -923,7 +967,8 @@ GameSession
   1 ──────── N Round
 
 Round
-  N ──────── 1 GroupWord
+  guarda snapshot de palabra
+  sin FK física a GroupWord
 
 Round
   N ──────── 1 Player

@@ -203,7 +203,9 @@ No todos los integrantes del grupo deben participar de todas las salas.
 
 ## Decisión
 
-La persona que crea la sala actúa como host.
+La persona que crea la sala actúa como host inicial.
+
+El host actual de una Room se representa por `rooms.host_player_id` y puede cambiar por sucesión.
 
 El host puede ser cualquier integrante del grupo y no necesita ser administrador.
 
@@ -312,6 +314,129 @@ La acción explícita del host para cerrar/abandonar sigue usando el lifecycle v
 Queremos que una ausencia breve, un bloqueo de pantalla o una transición background/foreground móvil no cierre ni desordene el lobby.
 
 También queremos evitar que un cliente pueda decidir el host solo porque observó una pérdida de Presence. El host es un rol persistido y cambia mediante una decisión autoritativa derivada desde `auth.uid() -> Player -> Room`, sin aceptar IDs de ownership enviados por cliente.
+
+# GameSession y comienzo de tanda
+
+## Decisión
+
+Incremento 6 introduce `GameSession` como la tanda concreta jugada por un conjunto fijo de participantes dentro de una `Room`.
+
+La separación conceptual queda así:
+
+```text
+Group = quiénes somos habitualmente
+Room = dónde estamos jugando ahora
+GameSession = tanda competitiva concreta
+Round = una ronda dentro de la tanda
+```
+
+Para el MVP actual, una Room produce como máximo una GameSession:
+
+```text
+Room 1 → 0..1 GameSession
+```
+
+No se diseña reutilización de una misma Room para múltiples tandas.
+
+`GameSession` no reemplaza a `Room`. Durante gameplay, Room sigue siendo necesaria para host actual, `RoomParticipant`, liveness, Presence, `joinedAt` y reconstrucción del contexto compartido.
+
+No se copia el host en `GameSession`. La única autoridad de host sigue siendo:
+
+```text
+rooms.host_player_id
+```
+
+Al ejecutar `START_SESSION`, la autoridad congela el roster de la tanda a partir de los `RoomParticipant` autoritativamente activos en ese momento, según el mecanismo vigente de liveness.
+
+El slicing de implementación preservó esta atomicidad:
+
+* 6.2 prepara el lifecycle físico `lobby | playing | closed` y las invariantes de Room necesarias para gameplay;
+* 6.3 implementa el `START_SESSION` de producto completo, con snapshot, palabra, impostor y Round 1.
+
+El cierre completo de Incremento 6 deja implementado el flujo vertical:
+
+```text
+Room lobby
+→ host actual pulsa "Iniciar tanda"
+→ start_session()
+→ snapshot de RoomParticipants activos
+→ SessionPlayers congelados
+→ palabra e impostor server-side
+→ Round 1
+→ GameSession.state = role_reveal
+→ Room.status = playing
+→ get_my_active_room()
+→ get_my_game_state()
+→ tap-to-reveal local
+```
+
+La separación queda:
+
+```text
+RoomParticipant = pertenencia a la Room
+SessionPlayer = participante estable de esta tanda
+```
+
+Presence puede ayudar a la UX, pero no es autoridad final para decidir el roster.
+
+Una desconexión posterior no elimina `SessionPlayer` ni modifica automáticamente el roster.
+
+Un `RoomParticipant` que quedó fuera del snapshot no ingresa después a la tanda aunque vuelva a estar activo. Puede reconstruir el estado compartido de Room, pero no obtiene vista privada de gameplay.
+
+Durante `playing`, la sucesión de host elige candidatos activos que además pertenezcan a `SessionPlayers`. Así, un RoomParticipant excluido nunca adquiere autoridad de gameplay.
+
+Solo el host actual puede iniciar la tanda. No pueden iniciarla por sí mismos el administrador del Group, el creador original de la Room si ya no es host ni cualquier participante no-host.
+
+La autorización se deriva server-side desde:
+
+```text
+auth.uid()
+→ Player
+→ Room
+→ rooms.host_player_id actual
+```
+
+El cliente no demuestra autoridad enviando `host_player_id`, `player_id` ni `group_id`.
+
+Los guards conceptuales mínimos son:
+
+```text
+caller tiene identidad válida
+caller resuelve Player válido
+caller pertenece a Room activa
+Room está en lobby
+caller es host actual
+no existe otra GameSession para esa Room
+connected/active participants >= 3
+available words >= 1
+```
+
+`START_SESSION` cambia la Room de `lobby` a `playing`. Desde ese momento la Room no admite nuevos joins.
+
+No debe existir como estado durable exitoso una Room en `playing` sin Round 1, una GameSession sin Round, una Round sin palabra, una Round sin impostor ni una GameSession sin SessionPlayers.
+
+Las operaciones de lifecycle de lobby no se interpretan automáticamente como salida o cierre de la tanda mientras `Room.status = playing`. El cierre normal futuro de gameplay será mediante `END_SESSION`; la política detallada de abandono durante gameplay queda fuera de Incremento 6.
+
+## Palabra, impostor y privacidad
+
+La palabra de la ronda se selecciona server-side, autoritativamente y de forma aleatoria entre palabras del banco del Group que no hayan sido utilizadas antes en la misma GameSession.
+
+No se introduce todavía `group_words.active`, `group_words.used`, `rotation_weight`, `last_used_at` ni una entidad `UsedWord`.
+
+La ronda conserva un snapshot conceptual de la palabra efectivamente usada, incluyendo una forma normalizada suficiente para sostener la regla de no repetición durante la tanda aunque el `GroupWord` original se borre y luego se vuelva a agregar con diferencias triviales de mayúsculas o espacios.
+
+La selección de impostor mantiene la regla vigente:
+
+1. calcular cuántas veces fue impostor cada `SessionPlayer` dentro de la `GameSession`;
+2. obtener el menor conteo;
+3. elegir únicamente entre quienes tengan ese menor conteo;
+4. seleccionar aleatoriamente entre esos candidatos.
+
+Para Round 1 todos comienzan empatados en cero.
+
+El estado compartido puede indicar que existe una GameSession, la fase actual, el número de ronda, participantes y host actual. No debe exponer `secretWord` ni `impostorPlayerId` antes del momento de revelación correspondiente.
+
+La vista privada del caller debe derivarse de una lectura autoritativa específica. `get_my_active_room()` conserva su responsabilidad de Room, host, participants y lifecycle compartido; no incorpora palabra, impostor ni asignación privada.
 
 # Sincronización de lobby
 

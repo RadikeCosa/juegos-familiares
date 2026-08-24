@@ -147,7 +147,7 @@ close_room()
 
 Salvo el código de join, las RPCs no reciben identificadores de ownership. La identidad, Player y Group se derivan desde `auth.uid()`.
 
-`create_room()` recupera la Room activa existente si el Player ya pertenece a una. `join_room_by_code(room_code)` valida que la Room exista, esté en `lobby` y pertenezca al mismo Group. `get_my_active_room()` reconstruye el lobby activo del Player. `leave_room()` elimina la membresía de un no-host y cierra la Room si quien sale es el host. `close_room()` solo puede ejecutarla el host de su Room activa.
+`create_room()` recupera la Room activa existente si el Player ya pertenece a una. `join_room_by_code(room_code)` valida que la Room exista, esté en `lobby` y pertenezca al mismo Group. `get_my_active_room()` reconstruye el estado compartido autorizado de la Room activa del Player. `leave_room()` elimina la membresía de un no-host y cierra la Room si quien sale es el host mientras la Room sigue en lobby. `close_room()` solo puede ejecutarla el host de su Room activa mientras corresponde al lifecycle de lobby.
 
 La garantía de una Room activa por Player se sostiene con una estructura técnica de slots activos. Esa estructura no es parte del dominio visible, pero evita que un Player quede en dos Rooms activas. El join bloquea la fila de Room antes de validar `lobby`, para que una carrera entre join y close no deje slots activos en una Room cerrada.
 
@@ -304,6 +304,37 @@ Debe existir estado operativo persistible para coordinar:
 
 Tanda, ronda, votos, estado de conexión y marcador pertenecen a incrementos posteriores.
 
+## Requisito de Incremento 6
+
+El lifecycle conceptual vigente de Room incorpora:
+
+```text
+lobby
+playing
+closed
+```
+
+Incremento 6 cerró el schema y las operaciones de Room para que `playing` sea físicamente representable sin romper invariantes existentes.
+
+`start_session()` cambia la Room de `lobby` a `playing` de forma atómica. Una Room en `playing` no admite nuevos joins.
+
+Una Room activa debe entenderse como:
+
+```text
+lobby OR playing
+```
+
+Por lo tanto:
+
+* `lobby -> playing` conserva `player_active_room_slots`;
+* `playing -> closed` libera `player_active_room_slots`;
+* `create_room()` no debe crear una segunda Room si el Player ya está en una Room `playing`;
+* `get_my_active_room()` debe poder reconstruir `lobby` y `playing` sin secretos;
+* `leave_room()` y `close_room()` siguen siendo operaciones de lobby y no terminan gameplay;
+* `RoomParticipant`, liveness, Presence autorizada y host succession siguen existiendo durante `playing`.
+
+La Room sigue siendo necesaria durante gameplay para host actual, `RoomParticipant`, liveness, Presence, `joinedAt` y reconstrucción del contexto compartido. `GameSession` no copia ni reemplaza esa responsabilidad.
+
 Aunque una implementación futura pudiera persistir técnicamente parte de este estado, conceptualmente debe distinguirse del historial permanente.
 
 ---
@@ -347,16 +378,24 @@ La UI de estadísticas no es parte obligatoria del primer MVP.
 
 Las operaciones compuestas deben completarse coherentemente.
 
-Ejemplo: preparar ronda implica conceptualmente:
+Ejemplo: iniciar tanda y preparar Round 1 implica conceptualmente:
 
-* comprobar palabra disponible;
-* elegir palabra;
-* elegir impostor;
-* crear ronda;
-* preparar asignaciones privadas;
-* actualizar contador de impostor.
+* validar caller;
+* bloquear/serializar Room;
+* validar host actual;
+* actualizar actividad del caller antes del snapshot;
+* determinar participantes elegibles;
+* validar mínimo de 3;
+* validar palabra disponible;
+* crear GameSession;
+* crear snapshot de SessionPlayers;
+* seleccionar palabra;
+* seleccionar impostor;
+* crear Round 1;
+* pasar Room a `playing`;
+* dejar GameSession en `ROLE_REVEAL`.
 
-No debería existir un estado parcial donde, por ejemplo, haya ronda sin palabra, ronda sin impostor o asignaciones privadas inconsistentes.
+No debería existir un estado parcial donde haya GameSession sin Round, Round sin palabra, Round sin impostor o GameSession sin SessionPlayers.
 
 ---
 
@@ -370,6 +409,7 @@ Casos mínimos:
 
 * doble toque al crear o unirse a una Room;
 * join y cierre de Room ocurriendo al mismo tiempo;
+* START_SESSION compitiendo con join, leave, close o sucesión de host;
 * salida de participante y cierre de Room ocurriendo al mismo tiempo;
 * varios votos llegando casi al mismo tiempo;
 * último voto disparando resolución;
@@ -391,6 +431,8 @@ El sistema debe evitar:
 
 * dos Rooms activas para el mismo Player;
 * slot activo en una Room cerrada;
+* dos GameSessions para una misma Room;
+* dos Rounds número 1 para una misma GameSession;
 * voto duplicado;
 * creación de dos rondas por reintento;
 * iniciar dos veces la votación;
@@ -485,13 +527,13 @@ Debe rechazar o no operar cuando:
 * no existe Player;
 * no existe Room activa;
 * el Player no pertenece a la Room;
-* la Room no está en `lobby`.
+* la Room no está activa.
 
 El cliente refresca liveness como mínimo:
 
-* al establecer o reconstruir correctamente el lobby;
+* al establecer o reconstruir correctamente la Room activa;
 * al establecer correctamente Presence;
-* periódicamente cada 30 segundos mientras el lobby esté activo;
+* periódicamente cada 30 segundos mientras la Room esté activa;
 * al volver a foreground.
 
 No debe refrescar por cada interacción de usuario.
@@ -543,6 +585,7 @@ Si el host deja de estar disponible, el sistema:
 * aplica el threshold inicial de 90 segundos con reloj Postgres;
 * identifica participantes restantes con liveness active;
 * excluye al host actual y a participantes stale;
+* si la Room está en `playing`, limita candidatos a `SessionPlayers` de la GameSession;
 * ordena por `joined_at ASC, player_id ASC`;
 * persiste el sucesor en `rooms.host_player_id` de forma autoritativa, consistente y resistente a carreras.
 
@@ -557,7 +600,7 @@ last_seen_at todavía active
 
 no hay sucesión.
 
-Si el host está stale y no hay candidatos active, la operación es no-op: la Room sigue `lobby`, el host actual permanece persistido, `host_player_id` no queda `null` y la Room no se cierra automáticamente.
+Si el host está stale y no hay candidatos active válidos, la operación es no-op: la Room conserva su estado, el host actual permanece persistido, `host_player_id` no queda `null` y la Room no se cierra automáticamente.
 
 Si el host original vuelve, vuelve como participante normal y no recupera automáticamente el rol.
 
@@ -635,15 +678,65 @@ La selección de palabra e impostor debe ocurrir en el lado autoritativo.
 
 Para impostor:
 
-* determinar menor `impostorCount`;
+* contar cuántas veces fue impostor cada `SessionPlayer` dentro de la `GameSession`;
+* determinar el menor conteo;
 * obtener jugadores elegibles;
 * elegir aleatoriamente entre ellos.
 
 El objetivo es combinar azar, variedad y distribución razonablemente equilibrada.
 
+No hace falta persistir conceptualmente `impostorCount` si puede derivarse de rondas anteriores.
+
 ---
 
-# 20. Votación
+# 20. START_SESSION y vistas privadas
+
+## Requisito de Incremento 6
+
+`START_SESSION` debe ser una operación autoritativa, atómica e idempotente.
+
+La autorización deriva server-side desde:
+
+```text
+auth.uid()
+→ Player
+→ Room
+→ rooms.host_player_id actual
+```
+
+El cliente no demuestra autoridad enviando `host_player_id`, `player_id` ni `group_id`.
+
+La lectura compartida de Room, incluida `get_my_active_room()` o su evolución compatible, no debe incorporar secretos:
+
+* palabra secreta;
+* impostor;
+* asignación privada.
+
+La vista privada se recupera mediante una lectura autoritativa específica del caller:
+
+```text
+get_my_game_state()
+```
+
+Debe derivar:
+
+```text
+auth.uid()
+→ Player
+→ Room
+→ GameSession
+→ SessionPlayer
+→ Round actual
+→ vista privada del caller
+```
+
+Realtime no debe transmitir filas o payloads con `secretWord` o `impostorPlayerId` a todos los participantes. Puede actuar como señal de invalidación o cambio compartido seguro. No se introduce Broadcast específico en Incremento 6.
+
+En el cierre de Incremento 6 no se agregó Realtime de gameplay ni Broadcast. Las tablas `game_sessions`, `session_players` y `rounds` permanecen cerradas al cliente: RLS enabled, sin policies directas de cliente y sin grants CRUD de cliente.
+
+---
+
+# 21. Votación
 
 ## Requisito MVP
 
@@ -661,7 +754,7 @@ La segunda votación es definitiva: el grupo solamente identifica al impostor si
 
 ---
 
-# 21. Offline
+# 22. Offline
 
 ## Requisito MVP
 
@@ -678,7 +771,7 @@ Esta necesidad de sincronización corresponde a Impostor.
 
 ---
 
-# 22. Escala
+# 23. Escala
 
 ## Requisito MVP
 
@@ -694,7 +787,7 @@ No se debe optimizar prematuramente para comunidades públicas, matchmaking o gr
 
 ---
 
-# 23. Experiencia de desarrollo y aprendizaje
+# 24. Experiencia de desarrollo y aprendizaje
 
 ## Criterio para comparar arquitecturas
 

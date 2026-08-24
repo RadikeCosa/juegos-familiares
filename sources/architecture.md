@@ -396,7 +396,19 @@ El lifecycle mínimo de Incremento 4 es:
 lobby → closed
 ```
 
-No se usan todavía `playing` ni `finished`; esos estados dependen de `GameSession` y pertenecen a incrementos posteriores.
+En Incremento 4 no se usan todavía `playing` ni `finished`; esos estados pertenecen a incrementos posteriores.
+
+Desde Incremento 6, el lifecycle conceptual vigente de Room pasa a:
+
+```text
+lobby
+playing
+closed
+```
+
+Incremento 6 cerró físicamente este lifecycle. `start_session()` produce `lobby → playing` de forma atómica. Esto no representa fases detalladas de juego; solo indica que la Room ya no admite nuevos joins y que hay una tanda en curso. El detalle pertenece a `GameSession.state`.
+
+Una Room activa es una Room en `lobby` o `playing`. Por lo tanto, los slots activos deben preservarse durante `playing` y liberarse al cerrar la Room. La transición `lobby → playing` no debe liberar `player_active_room_slots`.
 
 Un Player puede pertenecer a una sola Room activa de Impostor. Un Group puede tener varias Rooms activas. El creador de una Room es su host inicial y también su participante. El host no recibe capacidades de gameplay en este incremento.
 
@@ -521,14 +533,102 @@ Las operaciones de Room derivan ownership desde `auth.uid()`. El cliente no env�
 * `create_room()` crea Room sin argumentos de ownership o devuelve la Room activa existente si el Player ya pertenece a una;
 * `join_room_by_code(room_code)` deriva Player y Group desde `auth.uid()` y valida que la Room esté en `lobby`;
 * `get_my_active_room()` reconstruye la Room activa del Player sin recibir `player_id` ni `group_id`;
-* `leave_room()` permite abandonar como participante no-host y cierra la Room si quien sale es el host;
-* `close_room()` cierra la Room solo si quien llama es el host.
+* `leave_room()` permite abandonar como participante no-host y cierra la Room si quien sale es el host mientras la Room sigue en lobby;
+* `close_room()` cierra la Room solo si quien llama es el host mientras corresponde al lifecycle de lobby.
 
 La creación incluye atómicamente Room, host y participación inicial. El join es idempotente y no duplica `RoomParticipant`.
 
 Las lecturas del lobby devuelven únicamente la información necesaria para reconstruir la Room autorizada: Room, estado, host, nicknames, marca del participante propio y metadatos técnicos estrictamente necesarios para el lobby. Desde Incremento 5.1 pueden incluir `participant_player_id` para correlacionar cada `RoomParticipant` persistido con Presence efímera y deduplicar varias conexiones del mismo Player.
 
 Ese identificador técnico no se muestra como dato de producto, no concede autoridad, no sustituye `auth.uid()`, no se acepta como ownership en mutaciones y no habilita enumeración pública de Players. Queda limitado a participantes autorizados de la Room. No existe una lectura pública de todas las Rooms. Supabase Realtime funciona como capa de invalidación: avisa `INSERT`/`DELETE` de participantes y `UPDATE` de Room para repetir una lectura autorizada. La autoridad sigue siendo Postgres + RPCs.
+
+Desde Incremento 6, `get_my_active_room()` reconstruye una Room en `lobby` o `playing`, pero sigue siendo una lectura de estado compartido sin secretos. No devuelve palabra secreta, impostor ni asignación privada.
+
+## Operación START_SESSION
+
+Incremento 6.3 introdujo `start_session()`, una operación autoritativa de 0 argumentos para iniciar una tanda y preparar la primera ronda privada.
+
+Debe derivar autorización desde:
+
+```text
+auth.uid()
+→ Player
+→ Room
+→ rooms.host_player_id actual
+```
+
+No acepta `player_id`, `group_id` ni `host_player_id` enviados por cliente como prueba de autoridad.
+
+Guards mínimos:
+
+```text
+caller tiene identidad válida
+caller resuelve Player válido
+caller pertenece a Room activa
+Room está en lobby
+caller es host actual
+no existe otra GameSession para esa Room
+RoomParticipants activos por liveness >= 3
+available words >= 1
+```
+
+La operación debe ejecutarse como una unidad coherente. `PREPARING_ROUND` puede representar una fase transaccional interna para el inicio de la primera ronda, pero el resultado durable exitoso debe ser `ROLE_REVEAL`:
+
+```text
+validar caller
+bloquear/serializar Room
+validar host
+actualizar actividad del caller si corresponde
+determinar participantes elegibles
+validar mínimo 3
+validar palabra disponible
+crear GameSession
+crear snapshot SessionPlayers
+seleccionar palabra
+seleccionar impostor
+crear Round 1
+pasar Room a playing
+dejar GameSession en ROLE_REVEAL
+```
+
+Si algo falla, no queda estado parcial.
+
+No debe existir durablemente una Room en `playing` sin Round 1, una GameSession sin Round, una Round sin palabra, una Round sin impostor ni una GameSession sin SessionPlayers.
+
+La idempotencia conceptual exige:
+
+```text
+máximo una GameSession por Room
+máximo una Round número 1 por GameSession
+```
+
+Un retry tras respuesta perdida debe poder recuperar conceptualmente la sesión existente sin crear otra.
+
+`start_session()` actualiza la liveness del caller antes del snapshot. Por eso, si el host actual toca "Iniciar tanda" y las demás condiciones son válidas, ese host se considera activo y queda incluido en `SessionPlayers`.
+
+El roster congelado queda en `SessionPlayers`. Un `RoomParticipant` que queda fuera del snapshot no se convierte después en `SessionPlayer` aunque vuelva a estar activo.
+
+La lectura privada se realiza con `get_my_game_state()`, también 0-args, derivada desde:
+
+```text
+auth.uid()
+→ Player
+→ active Room
+→ GameSession
+→ SessionPlayer
+→ latest Round
+```
+
+Devuelve solamente la vista privada del caller:
+
+```text
+state
+round_number
+role
+word
+```
+
+Para el impostor, `word = null`. No devuelve `normalized_secret_word`, `impostor_player_id` ni roles de otros jugadores. Host y Group admin no tienen privilegio privado adicional.
 
 ---
 
@@ -632,10 +732,9 @@ El payload no es fuente final de verdad. Ante `INSERT room_participants` o `UPDA
 invalida el lobby y llama nuevamente a `get_my_active_room()`. Ante reconexión exitosa también relee
 completo, porque Realtime no garantiza que todos los eventos intermedios hayan sido observados.
 
-`DELETE room_participants` queda fuera mientras no exista salida de sala en producto. No se habilita
-`REPLICA IDENTITY FULL` solo como preparación especulativa.
+Los cambios persistidos de Room y RoomParticipants se usan como invalidación compartida. En Incremento 6, el `UPDATE rooms` de `lobby → playing` invalida clientes, que reconstruyen con `get_my_active_room()` y luego `get_my_game_state()` si corresponde.
 
-La sincronización de tanda, rondas, votos, resultados y marcador se definirá junto con `GameSession`.
+No se agregó Realtime de gameplay ni Broadcast. `game_sessions`, `session_players` y `rounds` no se publican por Realtime, no tienen grants CRUD de cliente y se acceden mediante RPCs autoritativas. Los secretos nunca viajan por Realtime.
 
 ---
 
@@ -689,7 +788,7 @@ auth.uid()
 
 y escribe tiempo server-side de Postgres.
 
-La RPC debe rechazar o no operar cuando no hay Auth válida, no existe Player, no existe Room activa, el Player no pertenece a la Room o la Room no está en `lobby`.
+La RPC debe rechazar o no operar cuando no hay Auth válida, no existe Player, no existe Room activa o el Player no pertenece a la Room. Desde Incremento 6, Room activa incluye `lobby` y `playing`.
 
 `last_seen_at`:
 
@@ -770,7 +869,7 @@ Presence no se convierte en fuente de verdad del lobby persistente. El retorno d
 
 ---
 
-# 21. Ejemplo completo: START_VOTING
+# 21. Ejemplo futuro: START_VOTING
 
 ```text
 Host toca "Ir a votación"
@@ -790,30 +889,35 @@ cada participante muestra UI de votación
 
 ---
 
-# 22. Ejemplo completo: PREPARE_ROUND
+# 22. Ejemplo completo: START_SESSION + PREPARE_ROUND
 
 ```text
-Host solicita nueva ronda
+Host actual toca "Iniciar tanda"
         ↓
 autoridad valida:
-- jugadores suficientes
+- caller deriva a Player válido
+- Player pertenece a Room activa
+- Room está en lobby
+- caller es rooms.host_player_id actual
+- no existe GameSession para esa Room
+- participantes active >= 3
 - palabra disponible
+        ↓
+congela SessionPlayers desde RoomParticipants active
         ↓
 selecciona palabra
         ↓
-calcula menor impostorCount
+calcula conteos derivados de rondas previas de la GameSession
         ↓
 elige impostor aleatoriamente entre elegibles
         ↓
-crea ronda
+crea GameSession y Round 1 con snapshot de palabra e impostor
         ↓
-actualiza contador
+Room.status pasa a playing
         ↓
-genera vistas privadas
+GameSession.state pasa a ROLE_REVEAL
         ↓
-estado pasa a ROLE_REVEAL
-        ↓
-clientes reciben su información autorizada
+cada cliente recupera su vista privada autorizada
 ```
 
 ---
@@ -824,6 +928,10 @@ La arquitectura debe contemplar pocos clientes concurrentes, pero correctamente.
 
 Casos:
 
+* `START_SESSION` vs join;
+* `START_SESSION` vs leave;
+* `START_SESSION` vs close;
+* `START_SESSION` vs host succession;
 * dos taps sobre `Nueva ronda`;
 * varios votos simultáneos;
 * último voto dispara resolución;
@@ -847,12 +955,13 @@ Si el host deja de estar disponible, el cliente puede solicitar una evaluación 
 La autoridad:
 
 1. deriva caller y Room desde `auth.uid()`;
-2. valida que la Room activa siga en `lobby`;
+2. valida que la Room activa siga en `lobby` o `playing`;
 3. revalida el host actual bajo la operación protegida;
 4. aplica el threshold inicial de 90 segundos sobre `last_seen_at`;
 5. excluye al host actual y a candidatos stale;
-6. ordena candidatos active por `joined_at ASC, player_id ASC`;
-7. registra el nuevo `host_player_id` de forma autoritativa si hay candidato.
+6. si la Room está en `playing`, intersecta candidatos con `SessionPlayers` de la GameSession de esa Room;
+7. ordena candidatos active por `joined_at ASC, player_id ASC`;
+8. registra el nuevo `host_player_id` de forma autoritativa si hay candidato.
 
 No existe:
 
@@ -870,6 +979,14 @@ Revival y sucesión son consistentes según el orden de serialización:
 * si la sucesión gana, el nuevo host queda persistido y el host anterior vuelve como participante normal cuando refresca.
 
 El lifecycle explícito no cambia: un no-host puede salir, el host puede cerrar la Room y el host que ejecuta la acción explícita de abandono/cierre conserva el comportamiento vigente. Desconexión/staleness y acción explícita son conceptos distintos.
+
+Durante `playing`, esto preserva la invariante:
+
+```text
+rooms.host_player_id ∈ SessionPlayers
+```
+
+Un RoomParticipant excluido del snapshot no puede adquirir autoridad de gameplay por sucesión de host.
 
 ---
 
