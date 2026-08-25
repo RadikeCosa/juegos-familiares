@@ -27,7 +27,7 @@ El case study futuro debe mostrar tanto el resultado como el razonamiento que ll
 
 ```text
 Estado:
-Incremento 9 cerrado técnicamente e Incremento 10.0 cerrado documentalmente: empate y segunda votación completos; contrato de intento final del impostor definido; faltan implementación del guess, scoring, scoreboard, nueva ronda, historial, deploy y validación física multi-dispositivo completa.
+Incremento 10 cerrado técnicamente: empate, segunda votación e intento final del impostor completos; siguen pendientes scoring, scoreboard, nueva ronda, historial, fin de tanda, deploy y validación física multi-dispositivo completa.
 ```
 
 ## Ya existe
@@ -135,17 +135,24 @@ Incremento 9 cerrado técnicamente e Incremento 10.0 cerrado documentalmente: em
   * victoria conceptual `impostor | group`;
   * privacidad: sin `secret_word` antes del intento y sin exponer `normalized_secret_word`;
   * contrato de read model para `impostor_guess` y `round_result`.
+* Incremento 10 cerrado técnicamente:
+  * `submit_impostor_guess(guess_text)` autoritativa y solo para el impostor;
+  * intento único, sin edición ni segundo guess distinto;
+  * normalización y comparación server-side;
+  * read model y UI para `impostor_guess` y `round_result`;
+  * hardening de input nulo/vacío, retry y privacidad;
+  * validaciones `validate-10-1.mjs`, `validate-10-2.mjs`, `validate-10-3.mjs` y regresión `validate-9-4.mjs` PASS.
 
 ## PENDIENTE
 
 * validación manual multi-dispositivo completa;
 * playtesting real;
-* implementación del intento final del impostor;
-* implementación del reveal de palabra en resultado;
 * scoring;
 * scoreboard;
 * nueva ronda;
 * historial;
+* fin de tanda;
+* deploy;
 * maduración PWA iOS/Android;
 * evidencia visual;
 * resultados de uso.
@@ -194,9 +201,9 @@ Retos asociados:
 
 Estado: `IMPLEMENTACIÓN PARCIAL`.
 
-La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras, Room + Lobby, Presence básica privada, liveness autoritativo mínimo y sucesión de host validados en producción, más gameplay privado implementado técnicamente hasta la resolución autoritativa de la segunda votación.
+La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras, Room + Lobby, Presence básica privada, liveness autoritativo mínimo y sucesión de host validados en producción, más gameplay privado implementado técnicamente hasta el intento final del impostor y `round_result`.
 
-Todavía no hay tanda completa jugable. El intento final del impostor, el reveal de palabra, scoring, scoreboard, nueva ronda e historial siguen en incrementos futuros, y falta deploy y validación física multi-dispositivo completa.
+Todavía no hay tanda completa jugable. Scoring, scoreboard, nueva ronda, historial y fin de tanda siguen en incrementos futuros, y falta deploy y validación física multi-dispositivo completa.
 
 ---
 
@@ -365,7 +372,8 @@ PENDIENTE:
 | Contrato documental de Presence y sucesión | COMPLETADA DOCUMENTAL |
 | Gameplay privado hasta segunda votación | COMPLETADA TÉCNICAMENTE |
 | Segunda votación | COMPLETADA TÉCNICAMENTE |
-| Intento final / scoring | PENDIENTE |
+| Intento final del impostor | COMPLETADA TÉCNICAMENTE |
+| Scoring | PENDIENTE |
 | Playtesting | PENDIENTE |
 | Iteración | PENDIENTE |
 
@@ -862,7 +870,10 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 9.4 | Hardening de segunda votación | CERRADO TÉCNICAMENTE | Concurrencia, retries, recovery, privacidad, estados inválidos, ausencia de tercera votación y tests adversariales; `validate-9-4.mjs` PASS repetido; regresiones compatibles 8.1/8.3/8.4 PASS |
 | 9 | Empate y segunda votación | CERRADO TÉCNICAMENTE | 9.0 cerrado documentalmente; 9.1-9.4 cerrados técnicamente; validadores 9.1-9.4 PASS, `npm test`, lint, build y `git diff --check` PASS |
 | 10.0 | Contrato documental del intento final del impostor | CERRADO DOCUMENTAL | `impostor_guess → submit_impostor_guess(guess_text) → round_result`, intento único solo por impostor, normalización/comparación server-side, privacidad antes del intento, reveal de palabra solo en resultado y slicing 10.1-10.3 |
-| 10 | Intento final del impostor | EN CURSO | 10.0 cerrado documentalmente; falta persistencia/RPC, read model + UI y hardening |
+| 10.1 | Persistencia/RPC autoritativa del guess | CERRADO TÉCNICAMENTE | `submit_impostor_guess(guess_text)` solo para el impostor, sin ownership cliente, comparación server-side, intento único, transición a `round_result` e idempotencia; `validate-10-1.mjs` PASS |
+| 10.2 | Read model + UI de intento final | CERRADO TÉCNICAMENTE | `get_my_game_state()` para `impostor_guess`/`round_result`, privacidad de palabra antes del intento, reveal permitido en resultado, input solo para impostor y espera para no-impostores; `validate-10-2.mjs` PASS |
+| 10.3 | Hardening de input nulo | CERRADO TÉCNICAMENTE | `guess_text = null` y guess vacío fallan con error controlado sin efectos persistidos; `validate-10-3.mjs` PASS |
+| 10 | Intento final del impostor | CERRADO TÉCNICAMENTE | 10.0 cerrado documentalmente; 10.1-10.3 cerrados técnicamente; validadores 10.1-10.3 y regresión 9.4 PASS, tests estáticos 10.1/10.2/10.3, `npm test`, lint, build y `git diff --check` PASS |
 | 11 | Puntuación, marcador y nueva ronda | PENDIENTE | PENDIENTE |
 | 12 | Terminar tanda e historial mínimo | PENDIENTE | PENDIENTE |
 | 13 | Reconexión básica | PENDIENTE | PENDIENTE |

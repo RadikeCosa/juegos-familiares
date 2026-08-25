@@ -2799,6 +2799,12 @@ Si la ronda llegó a `round_result` sin pasar por `impostor_guess`, `final_guess
 
 La ronda puede resolver autoritativamente el caso en que el impostor fue descubierto: el impostor envía un único intento, el servidor compara la palabra, se define `winner = impostor | group` y todos llegan a `round_result` sin exponer secretos antes de tiempo.
 
+Estado global del Incremento 10:
+
+```text
+CERRADO TÉCNICAMENTE
+```
+
 ### Conceptos a aprender
 
 * revelación progresiva de información;
@@ -2825,7 +2831,7 @@ Implementar la persistencia mínima necesaria del resultado y `submit_impostor_g
 Estado:
 
 ```text
-PENDIENTE
+CERRADO TÉCNICAMENTE
 ```
 
 #### Incremento 10.2 — Read model + UI
@@ -2835,7 +2841,7 @@ Extender `get_my_game_state()` y la UI para `impostor_guess` y `round_result`: f
 Estado:
 
 ```text
-PENDIENTE
+CERRADO TÉCNICAMENTE
 ```
 
 #### Incremento 10.3 — Hardening
@@ -2845,7 +2851,7 @@ Validar concurrencia, retries, refresh/reconnect, privacidad, estados inválidos
 Estado:
 
 ```text
-PENDIENTE
+CERRADO TÉCNICAMENTE
 ```
 
 ---
