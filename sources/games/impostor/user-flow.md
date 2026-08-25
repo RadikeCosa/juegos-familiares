@@ -609,15 +609,21 @@ En el dispositivo del impostor:
 
 > Tenés una última oportunidad.
 
-> Decí cuál creés que era la palabra.
+> ¿Cuál era la palabra?
 
-Cuando responde verbalmente, el host toca:
+El impostor escribe su intento y toca:
 
-`Comprobar palabra`
+`Enviar intento`
+
+En los demás dispositivos:
+
+> El impostor está haciendo su intento final
 
 ---
 
 # Revelar palabra
+
+Después del intento, la ronda pasa a resultado.
 
 Todos los dispositivos muestran:
 
@@ -625,13 +631,9 @@ Todos los dispositivos muestran:
 
 # MILANESA
 
-El host registra:
+También muestran el intento del impostor y el ganador:
 
-`La adivinó`
-
-o
-
-`No la adivinó`
+> El impostor acertó
 
 ---
 
@@ -741,6 +743,67 @@ Si hubo un nuevo empate o fue más votado cualquier otro jugador:
 > La ronda quedó resuelta
 
 No hay tercera votación. La victoria conceptual es del impostor, aunque scoring y marcador quedan para incrementos posteriores.
+
+---
+
+# Intento final del impostor
+
+Cuando la ronda entra en:
+
+```text
+impostor_guess
+```
+
+Todos ven que el impostor fue señalado correctamente.
+
+La palabra todavía no se muestra.
+
+## Vista del impostor
+
+El impostor ve un formulario mínimo:
+
+> ¿Cuál era la palabra?
+
+Acción:
+
+```text
+Enviar intento
+```
+
+Solo puede enviar un intento.
+
+## Vista de los demás jugadores
+
+Los demás jugadores ven una pantalla de espera:
+
+> El impostor está haciendo su intento final
+
+No pueden enviar un guess.
+
+## Después del intento
+
+La aplicación pasa a:
+
+```text
+round_result
+```
+
+Todos pueden ver:
+
+* palabra secreta;
+* intento enviado por el impostor;
+* si acertó o falló;
+* ganador conceptual.
+
+Si acertó:
+
+> Gana el impostor
+
+Si falló:
+
+> Gana el grupo
+
+Scoring, marcador, nueva ronda e historial pertenecen a incrementos posteriores.
 
 ---
 

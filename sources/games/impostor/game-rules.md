@@ -289,15 +289,21 @@ Si el jugador más votado es efectivamente el impostor, todavía tiene una últi
 
 La aplicación revela quién era el impostor pero no muestra inmediatamente la palabra.
 
-El impostor intenta decir en voz alta cuál cree que era la palabra secreta.
+Solo el impostor puede enviar un único intento final para adivinar la palabra secreta.
 
-Después se selecciona:
+El intento se envía desde la aplicación con el texto que el impostor cree que corresponde a la palabra:
 
-`Comprobar palabra`
+```text
+submit_impostor_guess(guess_text)
+```
 
-La aplicación revela la palabra.
+El cliente no decide si acertó. El servidor normaliza y compara el intento contra la palabra secreta de la ronda.
 
-El host registra si el impostor acertó o no.
+Si acierta, gana el impostor.
+
+Si falla, gana el grupo.
+
+Después del intento la ronda pasa a resultado y la aplicación puede revelar la palabra.
 
 ---
 
@@ -309,14 +315,14 @@ El impostor gana si ocurre cualquiera de estas situaciones:
 
 * el grupo acusa a otro jugador;
 * en la segunda votación, el impostor no queda como único jugador con mayor cantidad de votos;
-* el grupo descubre al impostor pero este adivina correctamente la palabra.
+* el grupo descubre al impostor pero este adivina correctamente la palabra en su único intento final.
 
 ## Victoria del grupo
 
 El grupo gana si:
 
 * identifica correctamente al impostor;
-* y el impostor no logra adivinar la palabra.
+* y el impostor no logra adivinar la palabra en su único intento final.
 
 ---
 

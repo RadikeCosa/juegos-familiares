@@ -27,7 +27,7 @@ El case study futuro debe mostrar tanto el resultado como el razonamiento que ll
 
 ```text
 Estado:
-Incremento 9 cerrado técnicamente: empate y segunda votación completos; faltan intento final, reveal, scoring, scoreboard, nueva ronda, historial, deploy y validación física multi-dispositivo completa.
+Incremento 9 cerrado técnicamente e Incremento 10.0 cerrado documentalmente: empate y segunda votación completos; contrato de intento final del impostor definido; faltan implementación del guess, scoring, scoreboard, nueva ronda, historial, deploy y validación física multi-dispositivo completa.
 ```
 
 ## Ya existe
@@ -128,13 +128,20 @@ Incremento 9 cerrado técnicamente: empate y segunda votación completos; faltan
   * privacidad de read model/RPCs y `round_votes` endurecida;
   * ausencia de tercera votación y estados inválidos cubiertos;
   * `validate-9-4.mjs` PASS repetido y regresiones compatibles 8.1/8.3/8.4 PASS.
+* Incremento 10.0 cerrado documentalmente:
+  * `impostor_guess → submit_impostor_guess(guess_text) → round_result`;
+  * solo el impostor puede enviar un único intento final;
+  * comparación server-side contra la palabra normalizada;
+  * victoria conceptual `impostor | group`;
+  * privacidad: sin `secret_word` antes del intento y sin exponer `normalized_secret_word`;
+  * contrato de read model para `impostor_guess` y `round_result`.
 
 ## PENDIENTE
 
 * validación manual multi-dispositivo completa;
 * playtesting real;
-* intento final del impostor;
-* reveal de palabra;
+* implementación del intento final del impostor;
+* implementación del reveal de palabra en resultado;
 * scoring;
 * scoreboard;
 * nueva ronda;
@@ -731,7 +738,7 @@ Estado: REGISTRADA.
 
 La arquitectura está definida conceptualmente. La primera capa de plataforma ya está implementada para identidad, grupo, jugador, invitación y bootstrap. La capa específica de Impostor ya tiene banco de palabras, Room + Lobby, Presence/liveness/host succession, `GameSession`, `SessionPlayers`, `Round`, read model privado, primera votación y segunda votación.
 
-La tanda completa todavía no está cerrada: intento final del impostor, reveal de palabra, scoring, scoreboard, nueva ronda, historial, maduración PWA, deploy y validación física multi-dispositivo permanecen pendientes.
+La tanda completa todavía no está cerrada: implementación del intento final del impostor, reveal físico de palabra en resultado, scoring, scoreboard, nueva ronda, historial, maduración PWA, deploy y validación física multi-dispositivo permanecen pendientes.
 
 Decisión preparada para el Incremento 3: el banco persistente se modelará como `GroupWord`, una entrada propia del grupo y distinta de la futura palabra seleccionada para una ronda. Esto permite alimentar el contenido entre partidas sin adelantar `Room`, `GameSession`, selección aleatoria ni registro de palabras usadas.
 
@@ -854,7 +861,8 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 9.3 | Read model + UI de segunda votación | CERRADO TÉCNICAMENTE | `get_my_game_state()` extendido para candidatos empatados, voto propio de `voting_round = 2`, sin parciales durante `voting_second`, resultado agregado final correcto y UI con CTA host-only; `validate-9-3.mjs` PASS repetido |
 | 9.4 | Hardening de segunda votación | CERRADO TÉCNICAMENTE | Concurrencia, retries, recovery, privacidad, estados inválidos, ausencia de tercera votación y tests adversariales; `validate-9-4.mjs` PASS repetido; regresiones compatibles 8.1/8.3/8.4 PASS |
 | 9 | Empate y segunda votación | CERRADO TÉCNICAMENTE | 9.0 cerrado documentalmente; 9.1-9.4 cerrados técnicamente; validadores 9.1-9.4 PASS, `npm test`, lint, build y `git diff --check` PASS |
-| 10 | Intento final del impostor | PENDIENTE | PENDIENTE |
+| 10.0 | Contrato documental del intento final del impostor | CERRADO DOCUMENTAL | `impostor_guess → submit_impostor_guess(guess_text) → round_result`, intento único solo por impostor, normalización/comparación server-side, privacidad antes del intento, reveal de palabra solo en resultado y slicing 10.1-10.3 |
+| 10 | Intento final del impostor | EN CURSO | 10.0 cerrado documentalmente; falta persistencia/RPC, read model + UI y hardening |
 | 11 | Puntuación, marcador y nueva ronda | PENDIENTE | PENDIENTE |
 | 12 | Terminar tanda e historial mínimo | PENDIENTE | PENDIENTE |
 | 13 | Reconexión básica | PENDIENTE | PENDIENTE |
