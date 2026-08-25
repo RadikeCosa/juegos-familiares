@@ -27,7 +27,7 @@ El case study futuro debe mostrar tanto el resultado como el razonamiento que ll
 
 ```text
 Estado:
-Incremento 5.0 documental completado sobre Incremento 4 cerrado localmente
+Incremento 8 cerrado técnicamente: primera votación completa implementada, validada y hardenizada localmente.
 ```
 
 ## Ya existe
@@ -62,24 +62,53 @@ Incremento 5.0 documental completado sobre Incremento 4 cerrado localmente
 * banco persistente de palabras de Impostor validado local y remotamente con alta, cantidad total, listado propio y borrado propio;
 * privacidad del banco validada local y remotamente: los integrantes conocen la cantidad total y sólo ven sus propios aportes;
 * UI local del banco en `/impostor/grupo` y `/impostor/grupo/palabras`;
-* Room + Lobby completado localmente con creación, join por código/enlace, reconstrucción tras refresh, Realtime por invalidación y lifecycle mínimo leave/close.
-* Presence básica privada de lobby cerrada en 5.1, separando disponibilidad efímera, pertenencia persistida y host autoritativo.
-* liveness autoritativo mínimo cerrado en 5.2 con timestamp server-side, heartbeat proporcional y smoke productivo específico.
-* sucesión autoritativa de host cerrada en 5.3 con `reassign_room_host_if_stale()`, selección server-side, concurrencia consistente, feedback breve y smoke productivo multi-cliente.
-* Incremento 6 cerrado técnicamente: host inicia tanda con `start_session()`, roster congelado en `SessionPlayers`, palabra e impostor server-side, Round 1 en `role_reveal`, Room `playing`, lectura privada con `get_my_game_state()` y UI tap-to-reveal sin filtrar secretos.
-* Incremento 7 cerrado técnicamente: `GameSession.state` admite `role_reveal → discussion`, `start_round_discussion()` lo ejecuta con autoridad del host actual, los clientes convergen por polling lento de `get_my_game_state()` y la UI de `discussion` mantiene la vista privada oculta por defecto con reveal/hide local.
-* Incremento 8.0 cerrado documentalmente: contrato de primera votación `discussion → voting_first`, voto secreto de todos los `SessionPlayers`, resolución automática y ramas `tie_discussion | impostor_guess | round_result`.
+* Room + Lobby completado localmente con creación, join por código/enlace, reconstrucción tras refresh, Realtime por invalidación y lifecycle mínimo leave/close;
+* Presence básica privada de lobby cerrada en 5.1, separando disponibilidad efímera, pertenencia persistida y host autoritativo;
+* liveness autoritativo mínimo cerrado en 5.2 con timestamp server-side, heartbeat proporcional y smoke productivo específico;
+* sucesión autoritativa de host cerrada en 5.3 con `reassign_room_host_if_stale()`, selección server-side, concurrencia consistente, feedback breve y smoke productivo multi-cliente;
+* Incremento 6 cerrado técnicamente:
+  * `start_session()`;
+  * `GameSession`;
+  * `SessionPlayers` como roster congelado;
+  * Round 1;
+  * palabra e impostor seleccionados server-side;
+  * `get_my_game_state()`;
+  * privacidad real: el impostor no recibe la palabra;
+  * UI role reveal tap-to-reveal.
+* Incremento 7 cerrado técnicamente:
+  * `role_reveal → discussion`;
+  * `start_round_discussion()`;
+  * autoridad por host actual;
+  * polling lento de `get_my_game_state()`;
+  * discusión presencial sin digitalizar conversación;
+  * reveal/hide local en `discussion`.
+* Incremento 8 cerrado técnicamente:
+  * `discussion → voting_first`;
+  * `round_votes`;
+  * `start_round_voting()`;
+  * `submit_round_vote(target_player_id)`;
+  * voto secreto e inmutable de todos los `SessionPlayers`;
+  * no auto-voto;
+  * host e impostor también votan;
+  * resolución automática al último voto;
+  * `tie_discussion | impostor_guess | round_result`;
+  * read model privado de voting/result;
+  * UI vertical para votar;
+  * resultado agregado básico;
+  * hardening de polling, lost-response, refresh/reconnect, concurrencia y privacidad.
 
 ## PENDIENTE
 
-* producto jugable;
+* validación manual multi-dispositivo de gameplay 6-8;
 * playtesting real;
-* métricas;
-* hardening mobile/concurrencia de 5.4, en suspenso hasta validación física;
-* validación manual multi-dispositivo del Incremento 6;
-* validación manual multi-dispositivo del Incremento 7;
-* tests de dominio de juego;
-* UI final;
+* segunda votación;
+* intento final del impostor;
+* reveal de palabra;
+* scoring;
+* scoreboard;
+* nueva ronda;
+* historial;
+* maduración PWA iOS/Android;
 * evidencia visual;
 * resultados de uso.
 
@@ -127,9 +156,9 @@ Retos asociados:
 
 Estado: `IMPLEMENTACIÓN PARCIAL`.
 
-La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras, Room + Lobby, Presence básica privada, liveness autoritativo mínimo y sucesión de host validados en producción, más el primer tramo de gameplay privado cerrado técnicamente hasta `discussion`.
+La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras, Room + Lobby, Presence básica privada, liveness autoritativo mínimo y sucesión de host validados en producción, más gameplay privado implementado técnicamente hasta la resolución de la primera votación.
 
-El juego jugable todavía está pendiente: primera votación funcional, segunda votación, intento final del impostor, scoring e historial siguen en incrementos futuros.
+Todavía no hay tanda completa jugable. La segunda votación, el intento final del impostor, el reveal de palabra, scoring, scoreboard, nueva ronda e historial siguen en incrementos futuros, y falta validación manual multi-dispositivo del tramo 6-8.
 
 ---
 
@@ -256,16 +285,21 @@ Completado:
   * locking y revalidación resuelven callers concurrentes;
   * host original no recupera rol automáticamente;
   * smoke productivo multi-cliente confirmó la progresión completa y cleanup sin residuos.
+* gameplay privado implementado hasta primera votación:
+  * diseño e implementación de flujo autoritativo de tanda, rol privado, discusión y primera votación;
+  * modelado de privacidad por caller;
+  * validación de seguridad de palabra e impostor;
+  * votación secreta y resolución backend.
 
 PENDIENTE:
 
-* gameplay de Impostor;
-* privacidad de palabra y rol;
-* votación, scoring e historial;
-* testing práctico;
+* validación manual multi-dispositivo de gameplay 6-8;
+* segunda votación;
+* intento final del impostor;
+* reveal de palabra;
+* scoring, scoreboard, nueva ronda e historial;
 * diseño UI final;
 * hardening mobile/concurrencia de 5.4, en suspenso hasta validación física;
-* validación ampliada en dispositivos reales;
 * playtesting;
 * iteración sobre uso real.
 
@@ -292,7 +326,8 @@ PENDIENTE:
 | Banco de palabras de Impostor | COMPLETADA LOCAL |
 | Room + Lobby | COMPLETADA LOCAL |
 | Contrato documental de Presence y sucesión | COMPLETADA DOCUMENTAL |
-| Gameplay de Impostor | PENDIENTE |
+| Gameplay privado hasta primera votación | COMPLETADA TÉCNICAMENTE |
+| Segunda votación / intento final / scoring | PENDIENTE |
 | Playtesting | PENDIENTE |
 | Iteración | PENDIENTE |
 
@@ -663,9 +698,9 @@ Estado: REGISTRADA.
 
 # 10. Arquitectura resumida
 
-La arquitectura está definida conceptualmente. La primera capa de plataforma ya está implementada para identidad, grupo, jugador, invitación y bootstrap, y la capa específica de Impostor ya tiene banco de palabras, Room + Lobby y Presence básica privada.
+La arquitectura está definida conceptualmente. La primera capa de plataforma ya está implementada para identidad, grupo, jugador, invitación y bootstrap. La capa específica de Impostor ya tiene banco de palabras, Room + Lobby, Presence/liveness/host succession, `GameSession`, `SessionPlayers`, `Round`, read model privado y primera votación.
 
-El juego jugable todavía no está cerrado: sucesión de host, tandas, rondas, votos, marcador e historial permanecen en incrementos futuros.
+La tanda completa todavía no está cerrada: segunda votación, intento final del impostor, reveal de palabra, scoring, scoreboard, nueva ronda, historial, maduración PWA y validación física multi-dispositivo permanecen pendientes.
 
 Decisión preparada para el Incremento 3: el banco persistente se modelará como `GroupWord`, una entrada propia del grupo y distinta de la futura palabra seleccionada para una ronda. Esto permite alimentar el contenido entre partidas sin adelantar `Room`, `GameSession`, selección aleatoria ni registro de palabras usadas.
 
@@ -687,12 +722,12 @@ Platform
         ▼
 Impostor
 - banco de palabras
-- salas
-- tandas
-- rondas
-- votos
-- marcador
-- historial
+- Room + Lobby
+- Presence / liveness / host succession
+- GameSession / SessionPlayers / Round
+- read model privado
+- primera votación
+- scoring e historial futuros
 
         │
         ▼
@@ -716,7 +751,7 @@ Responsabilidad principal:
 
 Estado general: `IMPLEMENTACIÓN PARCIAL`.
 
-Resuelto en el Incremento 2:
+Resuelto técnicamente:
 
 * identidad técnica anónima sin cuentas tradicionales;
 * separación entre `AuthIdentity`, `Player`, `Group` y `LocalIdentity`;
@@ -728,25 +763,32 @@ Resuelto en el Incremento 2:
 * RLS mínima para que un jugador sólo lea su grupo;
 * escrituras remotas a través de RPCs autoritativas;
 * bootstrap de contexto reconocido al reabrir;
-* manejo defensivo de `LocalIdentity` manipulada o sesión perdida.
-
-Pendiente para el juego:
-
-* varios dispositivos sincronizados en una misma sala;
+* manejo defensivo de `LocalIdentity` manipulada o sesión perdida;
+* banco de palabras con privacidad count/contenido;
+* Room + Lobby con Realtime usado como invalidación;
+* Presence privada separada de pertenencia persistida;
+* liveness server-side y sucesión autoritativa de host;
 * información privada distinta por jugador;
 * impedir que la palabra llegue al impostor;
-* votos secretos sin resultados parciales;
-* concurrencia del último voto;
-* doble toque del host en acciones críticas;
-* host desconectado y reasignación;
-* reconexión después de refresh o segundo plano;
+* estado compartido de fases;
+* host actual como autoridad;
+* voto secreto sin parciales;
+* concurrencia básica del último voto;
+* lost-response recovery por read model;
+* `round_votes` sin grants cliente ni Realtime.
+
+Pendiente:
+
+* validación física multi-dispositivo;
+* segunda votación;
+* intento final;
+* scoring/historial;
 * lifecycle PWA en mobile;
 * diferencias iOS/Safari y Android/Chrome;
 * cache sin exponer datos sensibles;
-* RLS para banco de palabras, sala, rondas, votos y permisos específicos de Impostor;
-* separación real entre dominio e infraestructura.
+* playtesting real.
 
-La parte resuelta todavía no implica que Impostor sea jugable. Cierra la base transversal de identidad, grupo y jugador, más banco de palabras y Room + Lobby para preparar la partida.
+La parte resuelta no implica una tanda completa jugable. Sí cierra técnicamente la base transversal, la sala, el primer tramo de gameplay privado y la primera votación.
 
 ---
 
@@ -769,7 +811,11 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 6 | Iniciar tanda y preparar ronda privada | CERRADO TÉCNICAMENTE | 6.0-6.5 cerrados: GameSession/SessionPlayer/Round, lifecycle `playing`, `start_session()` atómico, snapshot de activos, palabra e impostor server-side, `get_my_game_state()`, privacidad por caller, UI role reveal y hardening de refetch; validación manual multi-dispositivo pendiente |
 | 7 | Transición de role reveal a discussion | CERRADO TÉCNICAMENTE | 7.0-7.4 cerrados: sin acknowledgement persistido, `start_round_discussion()` 0-args, autoridad por host actual, sucesión de host vigente en `playing`, read model privado `role_reveal | discussion`, polling lento sin gameplay Realtime/Broadcast, UI `Empezar ronda` host-only y reveal/hide local en `discussion`; validación manual multi-dispositivo pendiente |
 | 8.0 | Contrato documental de primera votación | CERRADO DOCUMENTAL | `discussion → voting_first`, `start_round_voting()` 0-args por host actual, `RoundVote/round_votes`, voto secreto e inmutable de todos los `SessionPlayers`, sin resultados parciales, completion sin Presence/liveness, resolución automática a `tie_discussion | impostor_guess | round_result`, polling lento y segunda votación fuera |
-| 8 | Primera votación | PENDIENTE | Slicing 8.1-8.4 pendiente: persistencia/RPC de inicio, submit+resolución, read model+UI, hardening de sync/recovery/concurrencia/privacidad |
+| 8.1 | Persistencia de votos + voting_first + start_round_voting() | CERRADO | `round_votes`, estado `voting_first`, inicio host-only desde `discussion` e idempotencia de transición |
+| 8.2 | submit_round_vote() + resolución autoritativa | CERRADO | voto secreto de todos los `SessionPlayers`, no auto-voto, inmutabilidad, resolución automática al último voto y ramas `tie_discussion | impostor_guess | round_result` |
+| 8.3 | get_my_game_state() voting/result + UI vertical | CERRADO | read model privado para voting/result, candidatos derivados de `SessionPlayers`, voto propio, resultado agregado básico y UI vertical de votación |
+| 8.4 | Polling, recovery, concurrencia, privacidad y cierre | CERRADO | hardening de polling lento, lost-response, refresh/reconnect, carrera del último voto, privacidad de votos y cierre técnico |
+| 8 | Primera votación | CERRADO TÉCNICAMENTE | 8.0-8.4 cerrados; validadores 8.1-8.4, tests UI/backend, lint/build/diff; sin playtesting real ni validación física multi-dispositivo completa |
 | 9 | Empate y segunda votación | PENDIENTE | Parte desde `tie_discussion`: host actual continúa a `voting_second`, candidatos limitados a empatados, segundo voto secreto y resolución definitiva sin tercera votación |
 | 10 | Intento final del impostor | PENDIENTE | PENDIENTE |
 | 11 | Puntuación, marcador y nueva ronda | PENDIENTE | PENDIENTE |
@@ -945,6 +991,111 @@ Incremento 5.2 cerró liveness autoritativo mínimo: `room_participants.last_see
 Incremento 5.3 cerró la sucesión real: el cliente puede disparar una evaluación, pero la decisión queda centralizada en Postgres. La RPC no acepta ownership enviado por cliente, revalida host/liveness dentro de la operación protegida y elige un único sucesor por `joined_at ASC, player_id ASC`. El smoke productivo confirmó que Presence desconectada con liveness active no cambia host, que un host stale transfiere el rol, que el host original vuelve como participante normal y que sin candidatos active no se cierra la Room ni se borra el host persistido.
 
 Incremento 6 cerró el primer tramo de gameplay privado. El aprendizaje principal fue mantener dos lecturas separadas: `get_my_active_room()` para Room, participantes y host sin secretos, y `get_my_game_state()` para la vista privada del caller. `start_session()` quedó como operación 0-args y autoritativa: deriva identidad desde `auth.uid()`, refresca liveness del host antes del snapshot, congela `SessionPlayers`, elige palabra e impostor en servidor y cambia la Room a `playing`. El frontend no fabrica estado privado desde START; usa Realtime de Room solo como invalidación y reconstruye todo autoritativamente antes de mostrar el tap-to-reveal.
+
+---
+
+## Incremento 6 — Ronda privada / role reveal
+
+Estado: `CERRADO TÉCNICAMENTE`.
+
+### Problema
+
+El producto necesitaba pasar de lobby a una tanda real sin filtrar la palabra al impostor, sin confiar en el cliente para elegir palabra/rol y sin perder la autoridad del host actual.
+
+### Qué implementamos
+
+Se implementó `start_session()` como operación autoritativa de inicio de tanda. La operación congela el roster en `SessionPlayers`, crea `GameSession`, prepara Round 1, selecciona palabra e impostor server-side, cambia la Room a `playing` y permite reconstruir la vista privada con `get_my_game_state()`.
+
+### Decisiones relevantes
+
+`RoomParticipant` y `SessionPlayer` quedaron separados: Presence/liveness ayudan a armar el snapshot inicial, pero una vez iniciada la tanda el roster de gameplay es estable. La privacidad no se dejó en manos de la UI: el impostor no recibe la palabra en el read model privado.
+
+### Cómo lo validamos
+
+El cierre técnico incluyó validadores 6.1-6.4, tests backend/frontend, lint, build y revisión de diff. Quedó pendiente la validación manual multi-dispositivo del flujo completo de inicio de tanda y revelación privada.
+
+### Qué aprendí
+
+El momento de revelar rol mostró que la privacidad real depende de diseñar qué datos llegan al cliente. La UI puede ocultar para evitar exposición física, pero no debe ser la frontera de seguridad.
+
+---
+
+## Incremento 7 — Discusión presencial sincronizada
+
+Estado: `CERRADO TÉCNICAMENTE`.
+
+### Problema
+
+Después de revelar roles, la aplicación tenía que avanzar a la conversación presencial sin digitalizar confirmaciones individuales ni convertir la app en moderadora de la charla.
+
+### Qué implementamos
+
+Se implementó `start_round_discussion()` como transición host-driven `role_reveal → discussion`, con autoridad del host actual, read model privado compatible con ambas fases, polling lento de `get_my_game_state()` y UI de `discussion` con reveal/hide local de la información privada.
+
+### Decisiones relevantes
+
+No se persistieron `roleAcknowledged`, `role_acknowledged_at` ni `allRolesSeen`. El grupo coordina verbalmente si todos vieron su rol. Tampoco se introdujo Broadcast ni Realtime de gameplay para tablas privadas.
+
+### Cómo lo validamos
+
+El cierre técnico cubrió backend, wrappers cliente, polling, UI, refresh/reconnect, host succession y privacidad. Quedó pendiente la validación manual multi-dispositivo de Incremento 7.
+
+### Qué aprendí
+
+La app no tiene que digitalizar todo para sincronizar bien. En un juego presencial pequeño, polling lento sobre un read model autoritativo puede ser más proporcional que abrir canales realtime para cada fase.
+
+---
+
+## Incremento 8 — Primera votación
+
+Estado: `CERRADO TÉCNICAMENTE`.
+
+### Problema
+
+Había que coordinar una votación secreta multi-dispositivo sin filtrar votos, sin confiar en el cliente, sin usar Presence como membership y sin dejar un estado intermedio donde todos votaron pero otra acción manual todavía debe cerrar la primera votación.
+
+### Qué implementamos
+
+Se implementó el vertical:
+
+```text
+discussion
+→ voting_first
+→ voto secreto de todos los SessionPlayers
+→ resolución automática
+→ tie_discussion | impostor_guess | round_result
+```
+
+El host actual inicia con `start_round_voting()`. Cada participante emite un voto secreto con `submit_round_vote(target_player_id)`. El read model privado muestra candidatos, voto propio y resultado agregado cuando corresponde, sin votos individuales ni parciales.
+
+### Decisiones relevantes
+
+`SessionPlayers` es el denominador de la votación. `round_votes` permanece privada, sin grants cliente ni Realtime. El último voto resuelve automáticamente. El host y el impostor también votan, no existe auto-voto y no se puede cambiar el voto. El polling lento sigue siendo la estrategia de sincronización del gameplay.
+
+### Trade-offs
+
+Si un `SessionPlayer` no vuelve, la votación puede esperar. No se implementan todavía timeouts, override del host, expulsión ni votación solo con conectados. Tampoco se introduce Broadcast/Realtime para una escala inicial de 3 a 8 jugadores.
+
+### Cómo lo validamos
+
+Validación registrada:
+
+```text
+validate-8-1 PASS
+validate-8-2 PASS
+validate-8-3 PASS
+validate-8-4 PASS
+npm test PASS
+npm run lint PASS con warning preexistente
+npm run build PASS
+git diff --check PASS
+```
+
+La validación cubrió tests UI/backend, polling, lost-response recovery, refresh/reconnect, concurrencia básica del último voto y privacidad. No hubo playtesting real ni validación física multi-dispositivo completa documentada.
+
+### Qué aprendí
+
+La privacidad no se resuelve ocultando UI, sino diseñando qué datos llegan al cliente. Polling puede ser una decisión deliberada y proporcional cuando el dominio es pequeño y la autoridad está en RPC/read model.
 
 ---
 
@@ -1208,6 +1359,28 @@ El futuro case study público probablemente debería condensarse en:
 Este documento es más extenso porque funciona como fuente interna para esa pieza final.
 
 La versión pública deberá ser más breve, visual y selectiva.
+
+## Estado del case study como fuente
+
+Fortalezas actuales:
+
+* buena trazabilidad de decisiones;
+* muestra progresión incremental;
+* captura trade-offs de privacidad/autorización;
+* evidencia de validación técnica.
+
+Faltantes para pieza pública:
+
+* screenshots actuales del flujo;
+* video multi-dispositivo;
+* playtesting real;
+* métricas o resultados reales;
+* diagrama simple de arquitectura/fases;
+* ejemplos seleccionados de prompts/diffs sin datos sensibles.
+
+Riesgo:
+
+* demasiado largo para portfolio público; debe condensarse luego en narrativa visual.
 
 ---
 
