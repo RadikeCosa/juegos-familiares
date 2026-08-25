@@ -873,6 +873,18 @@ Esto incluye:
 
 No hay más rondas de desempate.
 
+Los candidatos empatados no se persisten como una lista separada.
+
+La fuente autoritativa para reconstruirlos es la primera votación de la ronda:
+
+```text
+round_votes
+WHERE round_id = ronda actual
+AND voting_round = 1
+```
+
+El sistema calcula quiénes comparten la cantidad máxima de votos. Esta decisión evita duplicar estado derivable y mantiene una sola fuente de verdad para la segunda votación.
+
 ---
 
 # Contrato documental de Incremento 8
@@ -912,6 +924,59 @@ Incremento 8 no implementa:
 * scoring;
 * scoreboard;
 * nueva ronda;
+* fin de tanda;
+* Realtime/Broadcast de gameplay.
+
+---
+
+# Contrato documental de Incremento 9
+
+## Decisión
+
+El Incremento 9 cubre exclusivamente la rama de empate:
+
+```text
+tie_discussion
+→ voting_second
+→ voto secreto de todos los SessionPlayers
+→ resolución automática definitiva
+→ impostor_guess | round_result
+```
+
+El host actual inicia la segunda votación con:
+
+```text
+start_second_round_voting()
+```
+
+La RPC no recibe identificadores de ownership. La autoridad se deriva desde `auth.uid()` hacia `Player`, Room activa, `rooms.host_player_id` actual y GameSession.
+
+Durante `voting_second`, `submit_round_vote(target_player_id)` registra `voting_round = 2`. El target debe pertenecer al conjunto de empatados reconstruido desde `voting_round = 1` y no puede ser el propio caller.
+
+Todos los `SessionPlayers` votan también en segunda votación. El impostor vota, el host vota sin voto especial y los jugadores empatados votan. Presence y liveness no cambian el denominador.
+
+La segunda votación no abre otra rama de desempate:
+
+* si el impostor queda como único jugador más votado, la ronda pasa a `impostor_guess`;
+* cualquier otro resultado pasa a `round_result` con victoria conceptual del impostor.
+
+## Motivo
+
+El empate necesita una segunda conversación presencial y una nueva decisión secreta, pero no necesita una entidad persistida adicional para candidatos.
+
+Como la primera votación ya quedó registrada y completa antes de `tie_discussion`, reconstruir los empatados desde `round_votes` evita que dos representaciones del mismo dato se desincronicen.
+
+## Alcance excluido
+
+Incremento 9 no implementa:
+
+* intento final del impostor;
+* guess input;
+* reveal de palabra;
+* scoring;
+* scoreboard;
+* nueva ronda;
+* historial;
 * fin de tanda;
 * Realtime/Broadcast de gameplay.
 

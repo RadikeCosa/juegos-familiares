@@ -27,7 +27,7 @@ El case study futuro debe mostrar tanto el resultado como el razonamiento que ll
 
 ```text
 Estado:
-Incremento 8 cerrado técnicamente: primera votación completa implementada, validada y hardenizada localmente.
+Incremento 9 cerrado técnicamente: empate y segunda votación completos; faltan intento final, reveal, scoring, scoreboard, nueva ronda, historial, deploy y validación física multi-dispositivo completa.
 ```
 
 ## Ya existe
@@ -96,12 +96,43 @@ Incremento 8 cerrado técnicamente: primera votación completa implementada, val
   * UI vertical para votar;
   * resultado agregado básico;
   * hardening de polling, lost-response, refresh/reconnect, concurrencia y privacidad.
+* Incremento 9.0 cerrado documentalmente:
+  * `tie_discussion → voting_second`;
+  * candidatos empatados derivados desde `round_votes` de `voting_round = 1`;
+  * `start_second_round_voting()` como RPC host-only;
+  * extensión de `submit_round_vote(target_player_id)` para `voting_round = 2`;
+  * contrato de read model para `tie_discussion`, `voting_second` y resultado posterior;
+  * resolución definitiva sin tercera votación.
+* Incremento 9.1 cerrado técnicamente:
+  * `voting_second` como estado físico válido;
+  * `start_second_round_voting()` 0-args;
+  * transición autoritativa `tie_discussion → voting_second`;
+  * host actual derivado desde `rooms.host_player_id`;
+  * idempotencia frente a retry;
+  * read model mínimo compatible con polling.
+* Incremento 9.2 cerrado técnicamente:
+  * `submit_round_vote(target_player_id)` registra `voting_round = 2` durante `voting_second`;
+  * candidatos empatados reconstruidos desde `round_votes` de primera votación;
+  * validación de target restringido al empate;
+  * voto inmutable e independiente por etapa;
+  * resolución definitiva a `impostor_guess | round_result`;
+  * concurrencia del último voto validada.
+* Incremento 9.3 cerrado técnicamente:
+  * `get_my_game_state()` expone candidatos empatados en `tie_discussion`;
+  * durante `voting_second`, muestra candidatos votables y voto propio de `voting_round = 2` sin parciales;
+  * los estados finales usan `vote_results` de la ronda que resolvió efectivamente;
+  * UI con CTA host-only para segunda votación, candidatos restringidos y espera post-voto.
+* Incremento 9.4 cerrado técnicamente:
+  * concurrencia de inicio y últimos votos validada;
+  * retries, idempotencia, lost-response recovery y refresh/reconnect cubiertos;
+  * privacidad de read model/RPCs y `round_votes` endurecida;
+  * ausencia de tercera votación y estados inválidos cubiertos;
+  * `validate-9-4.mjs` PASS repetido y regresiones compatibles 8.1/8.3/8.4 PASS.
 
 ## PENDIENTE
 
-* validación manual multi-dispositivo de gameplay 6-8;
+* validación manual multi-dispositivo completa;
 * playtesting real;
-* segunda votación;
 * intento final del impostor;
 * reveal de palabra;
 * scoring;
@@ -156,9 +187,9 @@ Retos asociados:
 
 Estado: `IMPLEMENTACIÓN PARCIAL`.
 
-La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras, Room + Lobby, Presence básica privada, liveness autoritativo mínimo y sucesión de host validados en producción, más gameplay privado implementado técnicamente hasta la resolución de la primera votación.
+La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras, Room + Lobby, Presence básica privada, liveness autoritativo mínimo y sucesión de host validados en producción, más gameplay privado implementado técnicamente hasta la resolución autoritativa de la segunda votación.
 
-Todavía no hay tanda completa jugable. La segunda votación, el intento final del impostor, el reveal de palabra, scoring, scoreboard, nueva ronda e historial siguen en incrementos futuros, y falta validación manual multi-dispositivo del tramo 6-8.
+Todavía no hay tanda completa jugable. El intento final del impostor, el reveal de palabra, scoring, scoreboard, nueva ronda e historial siguen en incrementos futuros, y falta deploy y validación física multi-dispositivo completa.
 
 ---
 
@@ -285,16 +316,15 @@ Completado:
   * locking y revalidación resuelven callers concurrentes;
   * host original no recupera rol automáticamente;
   * smoke productivo multi-cliente confirmó la progresión completa y cleanup sin residuos.
-* gameplay privado implementado hasta primera votación:
-  * diseño e implementación de flujo autoritativo de tanda, rol privado, discusión y primera votación;
+* gameplay privado implementado hasta segunda votación:
+  * diseño e implementación de flujo autoritativo de tanda, rol privado, discusión, primera votación, empate y segunda votación;
   * modelado de privacidad por caller;
   * validación de seguridad de palabra e impostor;
-  * votación secreta y resolución backend.
+  * votación secreta y resolución backend sin tercera votación.
 
 PENDIENTE:
 
-* validación manual multi-dispositivo de gameplay 6-8;
-* segunda votación;
+* validación manual multi-dispositivo completa;
 * intento final del impostor;
 * reveal de palabra;
 * scoring, scoreboard, nueva ronda e historial;
@@ -326,8 +356,9 @@ PENDIENTE:
 | Banco de palabras de Impostor | COMPLETADA LOCAL |
 | Room + Lobby | COMPLETADA LOCAL |
 | Contrato documental de Presence y sucesión | COMPLETADA DOCUMENTAL |
-| Gameplay privado hasta primera votación | COMPLETADA TÉCNICAMENTE |
-| Segunda votación / intento final / scoring | PENDIENTE |
+| Gameplay privado hasta segunda votación | COMPLETADA TÉCNICAMENTE |
+| Segunda votación | COMPLETADA TÉCNICAMENTE |
+| Intento final / scoring | PENDIENTE |
 | Playtesting | PENDIENTE |
 | Iteración | PENDIENTE |
 
@@ -698,9 +729,9 @@ Estado: REGISTRADA.
 
 # 10. Arquitectura resumida
 
-La arquitectura está definida conceptualmente. La primera capa de plataforma ya está implementada para identidad, grupo, jugador, invitación y bootstrap. La capa específica de Impostor ya tiene banco de palabras, Room + Lobby, Presence/liveness/host succession, `GameSession`, `SessionPlayers`, `Round`, read model privado y primera votación.
+La arquitectura está definida conceptualmente. La primera capa de plataforma ya está implementada para identidad, grupo, jugador, invitación y bootstrap. La capa específica de Impostor ya tiene banco de palabras, Room + Lobby, Presence/liveness/host succession, `GameSession`, `SessionPlayers`, `Round`, read model privado, primera votación y segunda votación.
 
-La tanda completa todavía no está cerrada: segunda votación, intento final del impostor, reveal de palabra, scoring, scoreboard, nueva ronda, historial, maduración PWA y validación física multi-dispositivo permanecen pendientes.
+La tanda completa todavía no está cerrada: intento final del impostor, reveal de palabra, scoring, scoreboard, nueva ronda, historial, maduración PWA, deploy y validación física multi-dispositivo permanecen pendientes.
 
 Decisión preparada para el Incremento 3: el banco persistente se modelará como `GroupWord`, una entrada propia del grupo y distinta de la futura palabra seleccionada para una ronda. Esto permite alimentar el contenido entre partidas sin adelantar `Room`, `GameSession`, selección aleatoria ni registro de palabras usadas.
 
@@ -775,12 +806,13 @@ Resuelto técnicamente:
 * voto secreto sin parciales;
 * concurrencia básica del último voto;
 * lost-response recovery por read model;
+* segunda votación con candidatos empatados reconstruidos desde `voting_round = 1`;
+* ausencia de tercera votación;
 * `round_votes` sin grants cliente ni Realtime.
 
 Pendiente:
 
 * validación física multi-dispositivo;
-* segunda votación;
 * intento final;
 * scoring/historial;
 * lifecycle PWA en mobile;
@@ -816,7 +848,12 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 8.3 | get_my_game_state() voting/result + UI vertical | CERRADO | read model privado para voting/result, candidatos derivados de `SessionPlayers`, voto propio, resultado agregado básico y UI vertical de votación |
 | 8.4 | Polling, recovery, concurrencia, privacidad y cierre | CERRADO | hardening de polling lento, lost-response, refresh/reconnect, carrera del último voto, privacidad de votos y cierre técnico |
 | 8 | Primera votación | CERRADO TÉCNICAMENTE | 8.0-8.4 cerrados; validadores 8.1-8.4, tests UI/backend, lint/build/diff; sin playtesting real ni validación física multi-dispositivo completa |
-| 9 | Empate y segunda votación | PENDIENTE | Parte desde `tie_discussion`: host actual continúa a `voting_second`, candidatos limitados a empatados, segundo voto secreto y resolución definitiva sin tercera votación |
+| 9.0 | Contrato documental de empate y segunda votación | CERRADO DOCUMENTAL | Candidatos empatados derivados desde `round_votes` de `voting_round = 1`, `start_second_round_voting()` host-only futuro, `voting_second`, segundo voto secreto con `voting_round = 2`, read model de empate/segunda votación/resultado final y resolución definitiva sin tercera votación |
+| 9.1 | Entrada a segunda votación | CERRADO TÉCNICAMENTE | `voting_second` físico, `start_second_round_voting()` host-only desde `tie_discussion`, idempotencia, sin crear votos ni persistir candidatos; `validate-9-1.mjs` PASS |
+| 9.2 | Voto y resolución de segunda vuelta | CERRADO TÉCNICAMENTE | `submit_round_vote()` extendida para `voting_round = 2`, candidatos empatados reconstruidos, auto-voto/cambio rechazados, resolución a `impostor_guess | round_result`, concurrencia validada; `validate-9-2.mjs` PASS |
+| 9.3 | Read model + UI de segunda votación | CERRADO TÉCNICAMENTE | `get_my_game_state()` extendido para candidatos empatados, voto propio de `voting_round = 2`, sin parciales durante `voting_second`, resultado agregado final correcto y UI con CTA host-only; `validate-9-3.mjs` PASS repetido |
+| 9.4 | Hardening de segunda votación | CERRADO TÉCNICAMENTE | Concurrencia, retries, recovery, privacidad, estados inválidos, ausencia de tercera votación y tests adversariales; `validate-9-4.mjs` PASS repetido; regresiones compatibles 8.1/8.3/8.4 PASS |
+| 9 | Empate y segunda votación | CERRADO TÉCNICAMENTE | 9.0 cerrado documentalmente; 9.1-9.4 cerrados técnicamente; validadores 9.1-9.4 PASS, `npm test`, lint, build y `git diff --check` PASS |
 | 10 | Intento final del impostor | PENDIENTE | PENDIENTE |
 | 11 | Puntuación, marcador y nueva ronda | PENDIENTE | PENDIENTE |
 | 12 | Terminar tanda e historial mínimo | PENDIENTE | PENDIENTE |

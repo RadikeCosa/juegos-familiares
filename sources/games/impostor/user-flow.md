@@ -704,6 +704,44 @@ La aplicación indica:
 
 En Incremento 8, la aplicación llega hasta `tie_discussion`: muestra el resultado agregado y el empate. La acción del host para continuar a una segunda votación, la pantalla `voting_second` y su resolución pertenecen al Incremento 9.
 
+En Incremento 9, todos ven además quiénes son los candidatos empatados. Esa lista se deriva de la primera votación registrada, no de una lista persistida aparte.
+
+El host actual ve:
+
+`Ir a segunda votación`
+
+Cuando el host toca esa acción, todos los dispositivos pasan a:
+
+```text
+voting_second
+```
+
+La segunda votación usa la misma pantalla vertical de voto, pero solo muestra como candidatos votables a los jugadores empatados. Si el jugador actual también está empatado, no aparece como opción para sí mismo porque nadie puede votarse a sí mismo.
+
+Todos los `SessionPlayers` votan otra vez. El impostor vota, el host vota sin voto especial y Presence/liveness no cambia quién debe votar.
+
+Después de votar:
+
+> Voto registrado
+
+> Esperando al resto...
+
+No se muestran resultados parciales.
+
+Cuando votaron todos, la aplicación muestra el resultado agregado de la segunda votación, no el de la primera.
+
+Si el impostor fue el único más votado:
+
+> El impostor fue señalado
+
+La ronda pasa al intento final del impostor, que pertenece al Incremento 10.
+
+Si hubo un nuevo empate o fue más votado cualquier otro jugador:
+
+> La ronda quedó resuelta
+
+No hay tercera votación. La victoria conceptual es del impostor, aunque scoring y marcador quedan para incrementos posteriores.
+
 ---
 
 # Finalizar tanda

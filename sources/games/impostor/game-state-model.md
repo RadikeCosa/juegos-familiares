@@ -691,6 +691,16 @@ El grupo puede discutir nuevamente presencialmente.
 
 Solamente los jugadores empatados pueden recibir votos en la segunda votación.
 
+El conjunto de empatados no se guarda como entidad separada. Se reconstruye autoritativamente desde los votos de primera votación de la ronda actual:
+
+```text
+round_votes
+WHERE round_id = ronda actual
+AND voting_round = 1
+```
+
+Los candidatos son quienes comparten la cantidad máxima de votos. Como `tie_discussion` solamente existe después de una primera votación completa, esa tabla ya contiene la información necesaria.
+
 ## Acción
 
 Evento:
@@ -700,6 +710,16 @@ Evento:
 Actor autorizado:
 
 `host`
+
+RPC prevista:
+
+```text
+start_second_round_voting()
+```
+
+La operación no recibe parámetros de ownership, deriva identidad y autoridad desde `auth.uid()`, valida el host actual persistido en `rooms.host_player_id`, no crea votos, no persiste candidatos de empate y no revela secretos.
+
+Debe ser idempotente frente a retry si la GameSession ya está en `voting_second`.
 
 ## Transición
 
@@ -730,6 +750,14 @@ Datos:
 votingRound = 2
 ```
 
+RPC:
+
+```text
+submit_round_vote(target_player_id)
+```
+
+Durante `voting_second`, esta RPC registra el voto como `voting_round = 2`. La misma RPC sigue usando `voting_round = 1` durante `voting_first`.
+
 ## Guards
 
 Además de las restricciones normales:
@@ -740,9 +768,13 @@ targetPlayerId pertenece al conjunto de empatados
 
 Un participante tampoco puede votarse a sí mismo.
 
+Todos los `SessionPlayers` votan en segunda votación. No se usa Presence, liveness ni conexión actual como denominador. El impostor vota, el host vota sin voto especial y los jugadores empatados también votan.
+
 ## Cuando todos votaron
 
 El sistema cuenta los votos.
+
+No muestra resultados parciales ni votos individuales ajenos.
 
 ---
 
@@ -783,6 +815,28 @@ VOTING_SECOND
 ```
 
 No existe una tercera votación.
+
+## Read model
+
+`get_my_game_state()` durante `tie_discussion` debe exponer:
+
+* resultado agregado completo de la primera votación;
+* `candidates` como jugadores empatados en el máximo de la primera votación;
+* información suficiente para que la UI determine si el caller puede iniciar la segunda votación;
+* ningún secreto adicional.
+
+Durante `voting_second` debe exponer:
+
+* `candidates` como candidatos empatados autorizados para recibir votos;
+* si el caller forma parte del empate, su propio Player queda excluido de sus opciones votables;
+* `has_voted`;
+* `my_vote_target_player_id` solamente para el voto propio de `voting_round = 2`;
+* ningún resultado parcial.
+
+Después de la resolución, `vote_results` representa la votación que produjo el estado vigente:
+
+* resolución en primera votación → resultados de `voting_round = 1`;
+* resolución después de segunda votación → resultados de `voting_round = 2`.
 
 ---
 
