@@ -5,8 +5,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { PlatformBootstrapState } from "../../../../lib/supabase/platform-bootstrap";
 import type { MyGameState, RoomLobby } from "../../../../lib/supabase/impostor-rooms";
 import {
+    createGameplayPollLoop,
     formatPlayerCount,
-    renderRoomLobbyContent
+    renderRoomLobbyContent,
+    runStartDiscussionCommand,
+    toGameplayDataState
 } from "./room-lobby-shell";
 
 vi.mock("../../../../lib/supabase/browser-client", () => ({
@@ -77,6 +80,35 @@ const impostorGameState: MyGameState = {
     privateView: { role: "impostor", word: null }
 };
 
+const discussionGameState: MyGameState = {
+    state: "discussion",
+    roundNumber: 1,
+    privateView: { role: "player", word: "Casa" }
+};
+
+const impostorDiscussionGameState: MyGameState = {
+    state: "discussion",
+    roundNumber: 1,
+    privateView: { role: "impostor", word: null }
+};
+
+const secondRoundDiscussionGameState: MyGameState = {
+    state: "discussion",
+    roundNumber: 2,
+    privateView: { role: "player", word: "Mesa" }
+};
+
+function createDeferred<T>() {
+    let resolve!: (value: T | PromiseLike<T>) => void;
+    let reject!: (reason?: unknown) => void;
+    const promise = new Promise<T>((promiseResolve, promiseReject) => {
+        resolve = promiseResolve;
+        reject = promiseReject;
+    });
+
+    return { promise, resolve, reject };
+}
+
 describe("formatPlayerCount", () => {
     it("uses singular for exactly one player", () => {
         expect(formatPlayerCount(1)).toBe("1 jugador");
@@ -85,6 +117,213 @@ describe("formatPlayerCount", () => {
     it("uses plural otherwise", () => {
         expect(formatPlayerCount(0)).toBe("0 jugadores");
         expect(formatPlayerCount(3)).toBe("3 jugadores");
+    });
+});
+
+describe("toGameplayDataState", () => {
+    it("resets private reveal when role_reveal advances to discussion", () => {
+        const previousState = {
+            status: "role-reveal" as const,
+            lobby: playingHostLobby,
+            gameState: playerGameState,
+            isPrivateViewRevealed: true
+        };
+
+        const nextState = toGameplayDataState(
+            playingHostLobby,
+            discussionGameState,
+            previousState
+        );
+
+        expect(nextState).toMatchObject({
+            status: "discussion",
+            isPrivateViewRevealed: false
+        });
+    });
+
+    it("preserves private reveal during same discussion payload polling", () => {
+        const previousState = {
+            status: "discussion" as const,
+            lobby: playingHostLobby,
+            gameState: discussionGameState,
+            isPrivateViewRevealed: true
+        };
+
+        const nextState = toGameplayDataState(
+            playingHostLobby,
+            discussionGameState,
+            previousState
+        );
+
+        expect(nextState).toMatchObject({
+            status: "discussion",
+            isPrivateViewRevealed: true
+        });
+    });
+
+    it("hides private view on discussion round changes", () => {
+        const previousState = {
+            status: "discussion" as const,
+            lobby: playingHostLobby,
+            gameState: discussionGameState,
+            isPrivateViewRevealed: true
+        };
+
+        const nextState = toGameplayDataState(
+            playingHostLobby,
+            secondRoundDiscussionGameState,
+            previousState
+        );
+
+        expect(nextState).toMatchObject({
+            status: "discussion",
+            isPrivateViewRevealed: false
+        });
+    });
+
+    it("starts hidden on direct bootstrap into discussion", () => {
+        const nextState = toGameplayDataState(playingHostLobby, discussionGameState);
+
+        expect(nextState).toMatchObject({
+            status: "discussion",
+            isPrivateViewRevealed: false
+        });
+    });
+});
+
+describe("runStartDiscussionCommand", () => {
+    it("treats normal success as success and refreshes gameplay", async () => {
+        const start = vi.fn(async () => ({ advanced: true }));
+        const refreshGameplay = vi.fn(async () => discussionGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartDiscussionCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(start).toHaveBeenCalledTimes(1);
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(refreshAuthoritative).not.toHaveBeenCalled();
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it("treats idempotent already-in-phase success as success", async () => {
+        const start = vi.fn(async () => ({ alreadyInPhase: true }));
+        const refreshGameplay = vi.fn(async () => discussionGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartDiscussionCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(refreshAuthoritative).not.toHaveBeenCalled();
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it("recovers a lost command response by accepting discussion from manual refresh", async () => {
+        const start = vi.fn(async () => {
+            throw new Error("NetworkError");
+        });
+        const refreshGameplay = vi.fn(async () => discussionGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartDiscussionCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(refreshAuthoritative).not.toHaveBeenCalled();
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it("keeps a genuine network failure local when manual refresh remains role_reveal", async () => {
+        const start = vi.fn(async () => {
+            throw new Error("No pudimos empezar la ronda. Intentá de nuevo.");
+        });
+        const refreshGameplay = vi.fn(async () => playerGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartDiscussionCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(refreshAuthoritative).not.toHaveBeenCalled();
+        expect(setError).toHaveBeenLastCalledWith("No pudimos empezar la ronda. Intentá de nuevo.");
+    });
+
+    it("reconciles P0019 with host-lost feedback and full authority refresh", async () => {
+        const start = vi.fn(async () => {
+            throw new Error("Solo el host actual puede empezar la ronda.");
+        });
+        const refreshGameplay = vi.fn(async () => playerGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartDiscussionCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(setError).toHaveBeenLastCalledWith("Ya no sos el host actual.");
+        expect(refreshAuthoritative).toHaveBeenCalledTimes(1);
+    });
+
+    it("reconciles P0022 with full authority refresh", async () => {
+        const start = vi.fn(async () => {
+            throw new Error("No pudimos reconstruir la tanda para empezar la ronda.");
+        });
+        const refreshGameplay = vi.fn(async () => null);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartDiscussionCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(refreshAuthoritative).toHaveBeenCalledTimes(1);
+    });
+
+    it("reconciles P0023 without showing stale private feedback", async () => {
+        const start = vi.fn(async () => {
+            throw new Error("No participás de la tanda actual.");
+        });
+        const refreshGameplay = vi.fn(async () => null);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartDiscussionCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(refreshAuthoritative).toHaveBeenCalledTimes(1);
+        expect(setError).toHaveBeenCalledTimes(1);
+        expect(setError).toHaveBeenCalledWith(undefined);
     });
 });
 
@@ -409,7 +648,7 @@ describe("renderRoomLobbyContent", () => {
                     status: "role-reveal",
                     lobby: playingHostLobby,
                     gameState: playerGameState,
-                    isRoleRevealed: false
+                    isPrivateViewRevealed: false
                 },
                 { roomCode: "AB7KQ2M4" }
             )
@@ -422,6 +661,139 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).not.toContain("Sala AB7KQ2M4");
     });
 
+    it("shows Empezar ronda to the current host during role reveal without requiring local reveal", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "role-reveal",
+                    lobby: playingHostLobby,
+                    gameState: playerGameState,
+                    isPrivateViewRevealed: false
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Ver mi rol");
+        expect(markup).toContain("Empezar ronda");
+        expect(markup).not.toContain("Casa");
+        expect(markup).not.toContain("Ir a votación");
+    });
+
+    it("does not render the start discussion CTA for non-hosts during role reveal", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "role-reveal",
+                    lobby: { ...playingHostLobby, participants: nonHostLobby.participants },
+                    gameState: playerGameState,
+                    isPrivateViewRevealed: true
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Tu palabra");
+        expect(markup).toContain("Casa");
+        expect(markup).not.toContain("Empezar ronda");
+        expect(markup).not.toMatch(/esperando permiso|disabled/i);
+    });
+
+    it("keeps P0019 feedback visible after authoritative refresh removes the stale CTA", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "role-reveal",
+                    lobby: { ...playingHostLobby, participants: nonHostLobby.participants },
+                    gameState: playerGameState,
+                    isPrivateViewRevealed: true
+                },
+                {
+                    roomCode: "AB7KQ2M4",
+                    startDiscussionError: "Ya no sos el host actual."
+                }
+            )
+        );
+
+        expect(markup).toContain("Ya no sos el host actual.");
+        expect(markup).not.toContain("Empezar ronda");
+    });
+
+    it("moves the start discussion CTA with authoritative host succession", () => {
+        const previousHostMarkup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "role-reveal",
+                    lobby: { ...playingHostLobby, participants: nonHostLobby.participants },
+                    gameState: playerGameState,
+                    isPrivateViewRevealed: true
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+        const successorHostMarkup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "role-reveal",
+                    lobby: { ...playingHostLobby, participants: hostLobby.participants },
+                    gameState: playerGameState,
+                    isPrivateViewRevealed: true
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(previousHostMarkup).not.toContain("Empezar ronda");
+        expect(successorHostMarkup).toContain("Empezar ronda");
+    });
+
+    it("disables start discussion while the command is in flight and keeps the private view visible", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "role-reveal",
+                    lobby: playingHostLobby,
+                    gameState: playerGameState,
+                    isPrivateViewRevealed: true
+                },
+                { roomCode: "AB7KQ2M4", isStartingDiscussion: true }
+            )
+        );
+
+        expect(markup).toContain("Tu palabra");
+        expect(markup).toContain("Casa");
+        expect(markup).toContain("Empezando ronda...");
+        expect(markup).toContain("disabled=\"\"");
+    });
+
+    it("shows product feedback next to start discussion errors without leaving role reveal", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "role-reveal",
+                    lobby: playingHostLobby,
+                    gameState: impostorGameState,
+                    isPrivateViewRevealed: true
+                },
+                {
+                    roomCode: "AB7KQ2M4",
+                    startDiscussionError: "No pudimos empezar la ronda. Intentá de nuevo."
+                }
+            )
+        );
+
+        expect(markup).toContain("SOS EL IMPOSTOR");
+        expect(markup).toContain("Empezar ronda");
+        expect(markup).toContain("No pudimos empezar la ronda. Intentá de nuevo.");
+    });
+
     it("reveals the normal player's word without exposing impostor internals", () => {
         const markup = renderToStaticMarkup(
             renderRoomLobbyContent(
@@ -430,7 +802,7 @@ describe("renderRoomLobbyContent", () => {
                     status: "role-reveal",
                     lobby: playingHostLobby,
                     gameState: playerGameState,
-                    isRoleRevealed: true
+                    isPrivateViewRevealed: true
                 },
                 { roomCode: "AB7KQ2M4" }
             )
@@ -450,7 +822,7 @@ describe("renderRoomLobbyContent", () => {
                     status: "role-reveal",
                     lobby: playingHostLobby,
                     gameState: impostorGameState,
-                    isRoleRevealed: true
+                    isPrivateViewRevealed: true
                 },
                 { roomCode: "AB7KQ2M4" }
             )
@@ -459,6 +831,130 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("SOS EL IMPOSTOR");
         expect(markup).not.toContain("Casa");
         expect(markup).not.toContain("Tu palabra");
+    });
+
+    it("renders normal discussion hidden without exposing the private word anywhere in markup", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "discussion",
+                    lobby: playingHostLobby,
+                    gameState: discussionGameState,
+                    isPrivateViewRevealed: false
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Ronda en juego");
+        expect(markup).toContain("Ronda 1");
+        expect(markup).toContain("Ver mi palabra");
+        expect(markup).toContain("Host actual: Ramiro");
+        expect(markup).not.toContain("Casa");
+        expect(markup).not.toContain("Empezar ronda");
+        expect(markup).not.toContain("Ir a votación");
+    });
+
+    it("reveals and hides a normal player's word in discussion by removing it from DOM", () => {
+        const revealedMarkup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "discussion",
+                    lobby: playingHostLobby,
+                    gameState: discussionGameState,
+                    isPrivateViewRevealed: true
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+        const hiddenMarkup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "discussion",
+                    lobby: playingHostLobby,
+                    gameState: discussionGameState,
+                    isPrivateViewRevealed: false
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(revealedMarkup).toContain("Tu palabra");
+        expect(revealedMarkup).toContain("Casa");
+        expect(revealedMarkup).toContain("Ocultar");
+        expect(hiddenMarkup).not.toContain("Casa");
+    });
+
+    it("renders impostor discussion hidden before reveal and never renders a word", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "discussion",
+                    lobby: playingHostLobby,
+                    gameState: impostorDiscussionGameState,
+                    isPrivateViewRevealed: false
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Ronda en juego");
+        expect(markup).toContain("Ver mi rol");
+        expect(markup).not.toContain("SOS EL IMPOSTOR");
+        expect(markup).not.toContain("Casa");
+    });
+
+    it("reveals and hides impostor role in discussion by removing it from DOM", () => {
+        const revealedMarkup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "discussion",
+                    lobby: playingHostLobby,
+                    gameState: impostorDiscussionGameState,
+                    isPrivateViewRevealed: true
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+        const hiddenMarkup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "discussion",
+                    lobby: playingHostLobby,
+                    gameState: impostorDiscussionGameState,
+                    isPrivateViewRevealed: false
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(revealedMarkup).toContain("SOS EL IMPOSTOR");
+        expect(revealedMarkup).toContain("Ocultar");
+        expect(revealedMarkup).not.toContain("Casa");
+        expect(hiddenMarkup).not.toContain("SOS EL IMPOSTOR");
+    });
+
+    it("keeps discussion separate from voting", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "discussion",
+                    lobby: playingHostLobby,
+                    gameState: discussionGameState,
+                    isPrivateViewRevealed: false
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).not.toMatch(/Ir a votación|Votar|Elegir jugador|Finalizar ronda/);
     });
 
     it("renders excluded state without role, word, participants or Start", () => {
@@ -633,10 +1129,14 @@ describe("renderRoomLobbyContent", () => {
         );
 
         expect(source).toContain("const refreshSequenceRef = useRef(0)");
+        expect(source).toContain("const authoritativeRefreshInFlightCountRef = useRef(0)");
+        expect(source).toContain("const gameStatePollTimeoutRef = useRef");
         expect(source).toContain("const requestId = refreshSequenceRef.current + 1");
         expect(source).toContain("refreshSequenceRef.current = requestId");
         expect(source).toContain("refreshSequenceRef.current === requestId");
         expect(source).toContain("isMountedRef.current");
+        expect(source).toContain("authoritativeRefreshInFlightCountRef.current += 1");
+        expect(source).toContain("clearGameStatePollTimeout()");
         expect(source).toContain("refreshSequenceRef.current += 1");
     });
 
@@ -652,5 +1152,241 @@ describe("renderRoomLobbyContent", () => {
         expect(source).toContain("status: \"excluded\"");
         expect(source).toContain("status: \"error\"");
         expect(source).not.toMatch(/localStorage|sessionStorage|document\.cookie|searchParams|console\.log\(.*gameState/i);
+    });
+
+    it("uses a local slow recursive gameplay poll instead of gameplay Realtime or interval", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("const GAME_STATE_POLL_INTERVAL_MS = 3_000");
+        expect(source).toContain("createGameplayPollLoop({");
+        expect(source).toContain("setTimeoutFn(() =>");
+        expect(source).toContain("void run(\"poll\")");
+        expect(source).toContain("scheduleNextPoll()");
+        expect(source).not.toContain("setInterval(");
+        expect(source).not.toMatch(/broadcast|game_sessions|postgres_changes.*GameSession/i);
+    });
+
+    it("polls only the private game-state RPC in the normal gameplay sync path", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+        const gameplayRefresh = source.slice(
+            source.indexOf("const refreshGameplayStateNow = useCallback("),
+            source.indexOf("async function runBootstrap()")
+        );
+
+        expect(gameplayRefresh).toContain("getMyGameState(createImpostorRoomsClient())");
+        expect(gameplayRefresh).not.toContain("getMyActiveRoom(");
+        expect(gameplayRefresh).toContain("refreshAuthoritativeRoomState(\"poll-reconcile\")");
+    });
+
+    it("starts gameplay polling only after a reconstructed playing state and stops outside gameplay", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("!isGameplayDataState(dataState)");
+        expect(source).toContain("clearGameStatePollTimeout()");
+        expect(source).toContain("bootstrapState.status !== \"recognized\"");
+        expect(source).toContain("!activeRoomId");
+        expect(source).toContain("!currentRoomPlayerId");
+    });
+
+    it("keeps polling silent and preserves reveal for equivalent private payloads", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("function isSamePrivateGameState(");
+        expect(source).toContain("previousState?.status === \"role-reveal\"");
+        expect(source).toContain("previousState.isPrivateViewRevealed");
+        expect(source).toContain("setDataState(toGameplayDataState(activeLobby, gameState))");
+        expect(source).not.toContain("setDataState({ status: \"loading-game-state\", lobby: currentState.lobby })");
+    });
+
+    it("handles terminal gameplay errors without infinite polling or stale secret resurrection", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("isExcludedGameStateError(error)");
+        expect(source).toContain("status: \"excluded\"");
+        expect(source).toContain("isInconsistentGameStateError(error)");
+        expect(source).toContain("refreshAuthoritativeRoomState(\"poll-reconcile\")");
+        expect(source).toContain("if (!gameState) {");
+        expect(source).toContain("currentState.lobby.room.id !== requestRoomId");
+    });
+
+    it("keeps transient gameplay poll errors from clearing the last valid private state", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+        const gameplayRefresh = source.slice(
+            source.indexOf("const refreshGameplayStateNow = useCallback("),
+            source.indexOf("async function runBootstrap()")
+        );
+
+        expect(gameplayRefresh).toContain("return null;");
+        expect(gameplayRefresh).not.toContain("setDataState({ status: \"error\"");
+        expect(gameplayRefresh).not.toContain("console.log");
+    });
+
+    it("pauses gameplay polling while hidden and refreshes immediately on foreground", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("document.visibilityState !== \"hidden\"");
+        expect(source).toContain("document.addEventListener(\"visibilitychange\", handleVisibilityChange)");
+        expect(source).toContain("document.removeEventListener(\"visibilitychange\", handleVisibilityChange)");
+        expect(source).toContain("void run(\"foreground\")");
+    });
+});
+
+describe("createGameplayPollLoop", () => {
+    it("uses recursive timeouts and never overlaps polling requests", async () => {
+        vi.useFakeTimers();
+
+        try {
+            const first = createDeferred<void>();
+            const refresh = vi.fn(() => first.promise);
+            const timeoutRef = { current: null as ReturnType<typeof setTimeout> | null };
+            const loop = createGameplayPollLoop({
+                intervalMs: 3_000,
+                timeoutRef,
+                refresh,
+                isEligible: () => true,
+                isVisible: () => true
+            });
+
+            loop.start();
+            expect(refresh).not.toHaveBeenCalled();
+
+            await vi.advanceTimersByTimeAsync(3_000);
+            expect(refresh).toHaveBeenCalledTimes(1);
+            expect(refresh).toHaveBeenLastCalledWith("poll");
+
+            await vi.advanceTimersByTimeAsync(9_000);
+            expect(refresh).toHaveBeenCalledTimes(1);
+
+            first.resolve();
+            await vi.runOnlyPendingTimersAsync();
+            expect(refresh).toHaveBeenCalledTimes(2);
+
+            loop.stop();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("keeps transient polling failures on the normal interval", async () => {
+        vi.useFakeTimers();
+
+        try {
+            const refresh = vi
+                .fn<() => Promise<void>>()
+                .mockRejectedValueOnce(new Error("network"))
+                .mockResolvedValue(undefined);
+            const timeoutRef = { current: null as ReturnType<typeof setTimeout> | null };
+            const loop = createGameplayPollLoop({
+                intervalMs: 3_000,
+                timeoutRef,
+                refresh,
+                isEligible: () => true,
+                isVisible: () => true
+            });
+
+            loop.start();
+            await vi.advanceTimersByTimeAsync(3_000);
+            expect(refresh).toHaveBeenCalledTimes(1);
+
+            await vi.advanceTimersByTimeAsync(2_999);
+            expect(refresh).toHaveBeenCalledTimes(1);
+
+            await vi.advanceTimersByTimeAsync(1);
+            expect(refresh).toHaveBeenCalledTimes(2);
+
+            loop.stop();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("stops polling without scheduling terminal gameplay retries", async () => {
+        vi.useFakeTimers();
+
+        try {
+            const loopRef: { current?: ReturnType<typeof createGameplayPollLoop> } = {};
+            const refresh = vi.fn(async () => {
+                loopRef.current?.stop();
+            });
+            const timeoutRef = { current: null as ReturnType<typeof setTimeout> | null };
+            const loop = createGameplayPollLoop({
+                intervalMs: 3_000,
+                timeoutRef,
+                refresh,
+                isEligible: () => true,
+                isVisible: () => true
+            });
+            loopRef.current = loop;
+
+            loop.start();
+            await vi.advanceTimersByTimeAsync(3_000);
+            expect(refresh).toHaveBeenCalledTimes(1);
+            expect(timeoutRef.current).toBeNull();
+
+            await vi.advanceTimersByTimeAsync(9_000);
+            expect(refresh).toHaveBeenCalledTimes(1);
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it("pauses hidden tabs and refreshes immediately when foregrounded", async () => {
+        vi.useFakeTimers();
+
+        try {
+            let visible = true;
+            const refresh = vi.fn(async () => undefined);
+            const timeoutRef = { current: null as ReturnType<typeof setTimeout> | null };
+            const loop = createGameplayPollLoop({
+                intervalMs: 3_000,
+                timeoutRef,
+                refresh,
+                isEligible: () => true,
+                isVisible: () => visible
+            });
+
+            loop.start();
+            visible = false;
+            loop.handleVisibilityChange();
+
+            await vi.advanceTimersByTimeAsync(3_000);
+            expect(refresh).not.toHaveBeenCalled();
+            expect(timeoutRef.current).toBeNull();
+
+            visible = true;
+            loop.handleVisibilityChange();
+            await Promise.resolve();
+
+            expect(refresh).toHaveBeenCalledTimes(1);
+            expect(refresh).toHaveBeenLastCalledWith("foreground");
+
+            await vi.advanceTimersByTimeAsync(3_000);
+            expect(refresh).toHaveBeenCalledTimes(2);
+
+            loop.stop();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });

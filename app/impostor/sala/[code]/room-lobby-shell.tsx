@@ -22,6 +22,7 @@ import {
   refreshMyRoomLiveness,
   subscribeToRoomPresence,
   recordRoomJoinIntent,
+  startRoundDiscussion,
   startRoomHostSuccessionRecheck,
   startRoomLivenessHeartbeat,
   subscribeToRoomChanges,
@@ -48,7 +49,13 @@ type RoomLobbyDataState =
       status: "role-reveal";
       lobby: RoomLobby;
       gameState: MyGameState;
-      isRoleRevealed: boolean;
+      isPrivateViewRevealed: boolean;
+    }
+  | {
+      status: "discussion";
+      lobby: RoomLobby;
+      gameState: MyGameState;
+      isPrivateViewRevealed: boolean;
     }
   | { status: "excluded"; lobby: RoomLobby; message: string }
   | { status: "error"; message: string }
@@ -67,9 +74,18 @@ const GENERIC_START_AUTH_ERROR =
   "No pudimos empezar. Revisá tu conexión e intentá de nuevo.";
 const START_NOT_HOST_MESSAGE = "Solo el host actual puede iniciar la tanda.";
 const START_NOT_HOST_UI_MESSAGE = "Ya no sos el host actual.";
+const START_DISCUSSION_NOT_HOST_MESSAGE =
+  "Solo el host actual puede empezar la ronda.";
+const START_DISCUSSION_NOT_HOST_UI_MESSAGE = "Ya no sos el host actual.";
+const START_DISCUSSION_INCONSISTENT_MESSAGE =
+  "No pudimos reconstruir la tanda para empezar la ronda.";
+const START_DISCUSSION_EXCLUDED_MESSAGE = "No participás de la tanda actual.";
 const EXCLUDED_GAME_STATE_MESSAGE = "No participás de la tanda actual.";
 const ROOM_LIVENESS_LOG_MESSAGE = "No pudimos refrescar liveness de sala.";
 const ROOM_HOST_SUCCESSION_LOG_MESSAGE = "No pudimos revisar sucesión de host.";
+const INCONSISTENT_GAME_STATE_MESSAGE =
+  "No pudimos reconstruir la tanda. Volvé a intentar más tarde.";
+const GAME_STATE_POLL_INTERVAL_MS = 3_000;
 
 function createPlatformBootstrapClient(): PlatformBootstrapClient {
   return createBrowserSupabaseClient() as unknown as PlatformBootstrapClient;
@@ -121,8 +137,218 @@ function isExcludedGameStateError(error: unknown) {
   return error instanceof Error && error.message === EXCLUDED_GAME_STATE_MESSAGE;
 }
 
+function isInconsistentGameStateError(error: unknown) {
+  return error instanceof Error && error.message === INCONSISTENT_GAME_STATE_MESSAGE;
+}
+
 function isNotHostStartError(error: unknown) {
   return error instanceof Error && error.message === START_NOT_HOST_MESSAGE;
+}
+
+function isNotHostStartDiscussionError(error: unknown) {
+  return (
+    error instanceof Error && error.message === START_DISCUSSION_NOT_HOST_MESSAGE
+  );
+}
+
+function isInconsistentStartDiscussionError(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message === START_DISCUSSION_INCONSISTENT_MESSAGE
+  );
+}
+
+function isExcludedStartDiscussionError(error: unknown) {
+  return (
+    error instanceof Error && error.message === START_DISCUSSION_EXCLUDED_MESSAGE
+  );
+}
+
+function isGameplayDataState(
+  state: RoomLobbyDataState,
+): state is Extract<RoomLobbyDataState, { status: "role-reveal" | "discussion" }> {
+  return state.status === "role-reveal" || state.status === "discussion";
+}
+
+function isSamePrivateGameState(left: MyGameState, right: MyGameState) {
+  return (
+    left.roundNumber === right.roundNumber &&
+    left.privateView.role === right.privateView.role &&
+    left.privateView.word === right.privateView.word
+  );
+}
+
+function isSameGameState(left: MyGameState, right: MyGameState) {
+  return left.state === right.state && isSamePrivateGameState(left, right);
+}
+
+export function toGameplayDataState(
+  lobby: RoomLobby,
+  gameState: MyGameState,
+  previousState?: RoomLobbyDataState,
+): RoomLobbyDataState {
+  if (gameState.state === "discussion") {
+    const isPrivateViewRevealed =
+      previousState?.status === "discussion" &&
+      isSamePrivateGameState(previousState.gameState, gameState)
+        ? previousState.isPrivateViewRevealed
+        : false;
+
+    return { status: "discussion", lobby, gameState, isPrivateViewRevealed };
+  }
+
+  const isPrivateViewRevealed =
+    previousState?.status === "role-reveal" &&
+    isSamePrivateGameState(previousState.gameState, gameState)
+      ? previousState.isPrivateViewRevealed
+      : false;
+
+  return {
+    status: "role-reveal",
+    lobby,
+    gameState,
+    isPrivateViewRevealed,
+  };
+}
+
+type GameplayPollLoopOptions = {
+  intervalMs: number;
+  timeoutRef: { current: ReturnType<typeof setTimeout> | null };
+  refresh: (reason: "poll" | "foreground") => Promise<unknown>;
+  isEligible: () => boolean;
+  isVisible: () => boolean;
+  setTimeoutFn?: typeof setTimeout;
+  clearTimeoutFn?: typeof clearTimeout;
+};
+
+export function createGameplayPollLoop(options: GameplayPollLoopOptions) {
+  const setTimeoutFn = options.setTimeoutFn ?? setTimeout;
+  const clearTimeoutFn = options.clearTimeoutFn ?? clearTimeout;
+  let isActive = false;
+  let isInFlight = false;
+
+  function clearScheduledPoll() {
+    if (options.timeoutRef.current) {
+      clearTimeoutFn(options.timeoutRef.current);
+      options.timeoutRef.current = null;
+    }
+  }
+
+  function canRun() {
+    return isActive && options.isEligible() && options.isVisible();
+  }
+
+  function scheduleNextPoll() {
+    clearScheduledPoll();
+
+    if (!canRun() || isInFlight) {
+      return;
+    }
+
+    options.timeoutRef.current = setTimeoutFn(() => {
+      options.timeoutRef.current = null;
+      void run("poll");
+    }, options.intervalMs);
+  }
+
+  async function run(reason: "poll" | "foreground") {
+    if (!canRun() || isInFlight) {
+      return;
+    }
+
+    isInFlight = true;
+
+    try {
+      await options.refresh(reason);
+    } catch {
+      // Transient background sync failures keep the last valid gameplay state.
+    } finally {
+      isInFlight = false;
+      scheduleNextPoll();
+    }
+  }
+
+  return {
+    start() {
+      isActive = true;
+      scheduleNextPoll();
+    },
+    stop() {
+      isActive = false;
+      clearScheduledPoll();
+    },
+    handleVisibilityChange() {
+      if (!options.isVisible()) {
+        clearScheduledPoll();
+        return;
+      }
+
+      void run("foreground");
+    },
+  };
+}
+
+type StartDiscussionCommandOptions = {
+  start: () => Promise<unknown>;
+  refreshGameplay: () => Promise<MyGameState | null>;
+  refreshAuthoritative: () => Promise<void>;
+  setError: (message: string | undefined) => void;
+};
+
+export async function runStartDiscussionCommand(
+  options: StartDiscussionCommandOptions,
+) {
+  async function refreshAuthoritatively() {
+    try {
+      await options.refreshAuthoritative();
+    } catch (reconcileError) {
+      options.setError(
+        getFriendlyError(
+          reconcileError,
+          "No pudimos reconstruir la sala. Intentá de nuevo.",
+        ),
+      );
+    }
+  }
+
+  options.setError(undefined);
+
+  try {
+    await options.start();
+    await options.refreshGameplay();
+    return;
+  } catch (error) {
+    let recoveredGameState: MyGameState | null = null;
+
+    try {
+      recoveredGameState = await options.refreshGameplay();
+    } catch {
+      recoveredGameState = null;
+    }
+
+    if (recoveredGameState?.state === "discussion") {
+      options.setError(undefined);
+      return;
+    }
+
+    if (isNotHostStartDiscussionError(error)) {
+      options.setError(START_DISCUSSION_NOT_HOST_UI_MESSAGE);
+      await refreshAuthoritatively();
+      return;
+    }
+
+    if (
+      isInconsistentStartDiscussionError(error) ||
+      isExcludedStartDiscussionError(error)
+    ) {
+      await refreshAuthoritatively();
+      return;
+    }
+
+    options.setError(
+      getFriendlyError(error, "No pudimos empezar la ronda. Intentá de nuevo."),
+    );
+  }
 }
 
 export function formatPlayerCount(count: number) {
@@ -170,11 +396,15 @@ export function renderRoomLobbyContent(
     onLeaveRoom?: () => void;
     onCloseRoom?: () => void;
     onStartSession?: () => void;
-    onRevealRole?: () => void;
+    onRevealPrivateView?: () => void;
+    onHidePrivateView?: () => void;
+    onStartDiscussion?: () => void;
     onStartAnonymousAuth?: () => void;
     lifecycleActionState?: RoomLifecycleActionState;
     isStartingAuth?: boolean;
     startAuthError?: string;
+    isStartingDiscussion?: boolean;
+    startDiscussionError?: string;
     connectedPlayerIds?: Set<string>;
     hostSuccessionNotice?: string;
   },
@@ -330,10 +560,32 @@ export function renderRoomLobbyContent(
   if (
     dataState.status === "loading-game-state" ||
     dataState.status === "excluded" ||
-    dataState.status === "role-reveal"
+    isGameplayDataState(dataState)
   ) {
     const { lobby } = dataState;
     const hostParticipant = getHostParticipant(lobby);
+    const selfParticipant = getSelfParticipant(lobby);
+    const canStartDiscussion =
+      dataState.status === "role-reveal" && selfParticipant?.isHost === true;
+    const startDiscussionErrorFeedback =
+      dataState.status === "role-reveal" && options.startDiscussionError ? (
+        <div className="impostor-group-error" aria-live="polite">
+          <p>{options.startDiscussionError}</p>
+        </div>
+      ) : null;
+    const startDiscussionAction = canStartDiscussion ? (
+      <div className="impostor-room-round-actions">
+        <button
+          className="impostor-action impostor-action--primary"
+          type="button"
+          disabled={options.isStartingDiscussion}
+          onClick={options.onStartDiscussion}
+        >
+          {options.isStartingDiscussion ? "Empezando ronda..." : "Empezar ronda"}
+        </button>
+        {startDiscussionErrorFeedback}
+      </div>
+    ) : null;
 
     if (dataState.status === "loading-game-state") {
       return (
@@ -363,7 +615,58 @@ export function renderRoomLobbyContent(
       );
     }
 
-    if (!dataState.isRoleRevealed) {
+    if (dataState.status === "discussion") {
+      if (!dataState.isPrivateViewRevealed) {
+        return (
+          <section
+            className="impostor-group-card impostor-room-role-reveal"
+            aria-labelledby="impostor-room-discussion-title"
+          >
+            <p className="impostor-kicker">Ronda {dataState.gameState.roundNumber}</p>
+            <h1 id="impostor-room-discussion-title">Ronda en juego</h1>
+            {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
+            <button
+              className="impostor-action impostor-action--primary"
+              type="button"
+              onClick={options.onRevealPrivateView}
+            >
+              {dataState.gameState.privateView.role === "player"
+                ? "Ver mi palabra"
+                : "Ver mi rol"}
+            </button>
+          </section>
+        );
+      }
+
+      return (
+        <section
+          className="impostor-group-card impostor-room-role-reveal"
+          aria-labelledby="impostor-room-discussion-title"
+        >
+          <p className="impostor-kicker">Ronda {dataState.gameState.roundNumber}</p>
+          {dataState.gameState.privateView.role === "player" ? (
+            <>
+              <h1 id="impostor-room-discussion-title">Tu palabra</h1>
+              <p className="impostor-room-secret-word">
+                {dataState.gameState.privateView.word}
+              </p>
+            </>
+          ) : (
+            <h1 id="impostor-room-discussion-title">SOS EL IMPOSTOR</h1>
+          )}
+          {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
+          <button
+            className="impostor-action impostor-action--primary"
+            type="button"
+            onClick={options.onHidePrivateView}
+          >
+            Ocultar
+          </button>
+        </section>
+      );
+    }
+
+    if (!dataState.isPrivateViewRevealed) {
       return (
         <section
           className="impostor-group-card impostor-room-role-reveal"
@@ -375,10 +678,12 @@ export function renderRoomLobbyContent(
           <button
             className="impostor-action impostor-action--primary"
             type="button"
-            onClick={options.onRevealRole}
+            onClick={options.onRevealPrivateView}
           >
             Ver mi rol
           </button>
+          {startDiscussionAction}
+          {!canStartDiscussion ? startDiscussionErrorFeedback : null}
         </section>
       );
     }
@@ -392,6 +697,8 @@ export function renderRoomLobbyContent(
           <p className="impostor-kicker">Ronda {dataState.gameState.roundNumber}</p>
           <h1 id="impostor-role-impostor-title">SOS EL IMPOSTOR</h1>
           {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
+          {startDiscussionAction}
+          {!canStartDiscussion ? startDiscussionErrorFeedback : null}
         </section>
       );
     }
@@ -407,6 +714,8 @@ export function renderRoomLobbyContent(
           {dataState.gameState.privateView.word}
         </p>
         {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
+        {startDiscussionAction}
+        {!canStartDiscussion ? startDiscussionErrorFeedback : null}
       </section>
     );
   }
@@ -521,6 +830,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   const [startAuthError, setStartAuthError] = useState<string | undefined>();
   const [lifecycleActionState, setLifecycleActionState] =
     useState<RoomLifecycleActionState>({ status: "idle" });
+  const [isStartingDiscussion, setIsStartingDiscussion] = useState(false);
+  const [startDiscussionError, setStartDiscussionError] = useState<
+    string | undefined
+  >();
   const [roomPresenceSnapshot, setRoomPresenceSnapshot] = useState<{
     roomId?: string;
     state: RoomPresenceState;
@@ -531,6 +844,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   const isActiveHostMissingRef = useRef(false);
   const isMountedRef = useRef(false);
   const refreshSequenceRef = useRef(0);
+  const authoritativeRefreshInFlightCountRef = useRef(0);
+  const gameStatePollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
   const [, setPreviousHostPlayerId] = useState<string | undefined>();
   const joinRoomController = useState(() =>
     createJoinRoomByCodeController(),
@@ -573,11 +890,26 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     setDataState({ status: "success", lobby, startError });
   }, [recordActiveRoomHost]);
 
+  const clearGameStatePollTimeout = useCallback(() => {
+    if (gameStatePollTimeoutRef.current) {
+      clearTimeout(gameStatePollTimeoutRef.current);
+      gameStatePollTimeoutRef.current = null;
+    }
+  }, []);
+
   const refreshAuthoritativeRoomState = useCallback(
     async (
-      reason: "bootstrap" | "start" | "realtime" | "retry" | "authority",
+      reason:
+        | "bootstrap"
+        | "start"
+        | "realtime"
+        | "retry"
+        | "authority"
+        | "poll-reconcile",
       options: { startError?: string; absentDestination?: "join" | "group" } = {},
     ) => {
+      authoritativeRefreshInFlightCountRef.current += 1;
+      clearGameStatePollTimeout();
       const requestId = refreshSequenceRef.current + 1;
       refreshSequenceRef.current = requestId;
 
@@ -662,12 +994,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
           return;
         }
 
-        setDataState({
-          status: "role-reveal",
-          lobby: activeLobby,
-          gameState,
-          isRoleRevealed: false,
-        });
+        setDataState(toGameplayDataState(activeLobby, gameState));
       } catch (error) {
         if (!isLatestRefresh()) {
           return;
@@ -677,9 +1004,137 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
           status: "error",
           message: getFriendlyError(error, GENERIC_ROOM_LOBBY_ERROR),
         });
+      } finally {
+        authoritativeRefreshInFlightCountRef.current = Math.max(
+          0,
+          authoritativeRefreshInFlightCountRef.current - 1,
+        );
       }
     },
-    [acceptActiveRoom, recordActiveRoomHost, roomCode, router],
+    [
+      acceptActiveRoom,
+      clearGameStatePollTimeout,
+      recordActiveRoomHost,
+      roomCode,
+      router,
+    ],
+  );
+
+  const refreshGameplayStateNow = useCallback(
+    async (reason: "poll" | "foreground" | "manual") => {
+      void reason;
+
+      if (
+        authoritativeRefreshInFlightCountRef.current > 0 ||
+        !isMountedRef.current ||
+        bootstrapState.status !== "recognized" ||
+        !activeRoomId ||
+        !currentRoomPlayerId ||
+        !isGameplayDataState(dataState)
+      ) {
+        return null;
+      }
+
+      const requestRoomId = activeRoomId;
+      const requestId = refreshSequenceRef.current + 1;
+      refreshSequenceRef.current = requestId;
+
+      function isLatestGameplayRefresh() {
+        return (
+          isMountedRef.current &&
+          refreshSequenceRef.current === requestId &&
+          activeRoomId === requestRoomId
+        );
+      }
+
+      let gameState: MyGameState | null;
+
+      try {
+        gameState = await getMyGameState(createImpostorRoomsClient());
+      } catch (error) {
+        if (!isLatestGameplayRefresh()) {
+          return null;
+        }
+
+        if (isExcludedGameStateError(error)) {
+          clearGameStatePollTimeout();
+          setDataState((currentState) => {
+            if (
+              !isGameplayDataState(currentState) ||
+              currentState.lobby.room.id !== requestRoomId
+            ) {
+              return currentState;
+            }
+
+            return {
+              status: "excluded",
+              lobby: currentState.lobby,
+              message: "Esperá a la próxima tanda para volver a jugar.",
+            };
+          });
+          return null;
+        }
+
+        if (isInconsistentGameStateError(error)) {
+          clearGameStatePollTimeout();
+          await refreshAuthoritativeRoomState("poll-reconcile");
+        }
+
+        return null;
+      }
+
+      if (!isLatestGameplayRefresh()) {
+        return null;
+      }
+
+      if (!gameState) {
+        clearGameStatePollTimeout();
+        await refreshAuthoritativeRoomState("poll-reconcile");
+        return null;
+      }
+
+      setDataState((currentState) => {
+        if (
+          !isGameplayDataState(currentState) ||
+          currentState.lobby.room.id !== requestRoomId
+        ) {
+          return currentState;
+        }
+
+        const nextState = toGameplayDataState(
+          currentState.lobby,
+          gameState,
+          currentState,
+        );
+
+        if (
+          nextState.status === currentState.status &&
+          isSameGameState(nextState.gameState, currentState.gameState) &&
+          ((nextState.status === "role-reveal" &&
+            currentState.status === "role-reveal" &&
+            nextState.isPrivateViewRevealed ===
+              currentState.isPrivateViewRevealed) ||
+            (nextState.status === "discussion" &&
+              currentState.status === "discussion" &&
+              nextState.isPrivateViewRevealed ===
+                currentState.isPrivateViewRevealed))
+        ) {
+          return currentState;
+        }
+
+        return nextState;
+      });
+
+      return gameState;
+    },
+    [
+      activeRoomId,
+      bootstrapState.status,
+      clearGameStatePollTimeout,
+      currentRoomPlayerId,
+      dataState,
+      refreshAuthoritativeRoomState,
+    ],
   );
 
   async function runBootstrap() {
@@ -826,17 +1281,52 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     }
   }
 
-  function handleRevealRole() {
+  function handleRevealPrivateView() {
     setDataState((currentState) => {
-      if (currentState.status !== "role-reveal") {
+      if (!isGameplayDataState(currentState)) {
         return currentState;
       }
 
       return {
         ...currentState,
-        isRoleRevealed: true,
+        isPrivateViewRevealed: true,
       };
     });
+  }
+
+  function handleHidePrivateView() {
+    setDataState((currentState) => {
+      if (!isGameplayDataState(currentState)) {
+        return currentState;
+      }
+
+      return {
+        ...currentState,
+        isPrivateViewRevealed: false,
+      };
+    });
+  }
+
+  async function handleStartDiscussion() {
+    if (isStartingDiscussion || !isMountedRef.current) {
+      return;
+    }
+
+    setStartDiscussionError(undefined);
+    setIsStartingDiscussion(true);
+
+    try {
+      await runStartDiscussionCommand({
+        start: () => startRoundDiscussion(createImpostorRoomsClient()),
+        refreshGameplay: () => refreshGameplayStateNow("manual"),
+        refreshAuthoritative: () => refreshAuthoritativeRoomState("authority"),
+        setError: setStartDiscussionError,
+      });
+    } finally {
+      if (isMountedRef.current) {
+        setIsStartingDiscussion(false);
+      }
+    }
   }
 
   useEffect(() => {
@@ -854,9 +1344,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     return () => {
       isActive = false;
       isMountedRef.current = false;
+      clearGameStatePollTimeout();
       refreshSequenceRef.current += 1;
     };
-  }, []);
+  }, [clearGameStatePollTimeout]);
 
   useEffect(() => {
     if (bootstrapState.status !== "recognized") {
@@ -939,6 +1430,54 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     };
   }, [bootstrapState.status, activeRoomId, currentRoomPlayerId]);
 
+  useEffect(() => {
+    if (
+      bootstrapState.status !== "recognized" ||
+      !activeRoomId ||
+      !currentRoomPlayerId ||
+      !isGameplayDataState(dataState)
+    ) {
+      clearGameStatePollTimeout();
+      return;
+    }
+
+    const pollLoop = createGameplayPollLoop({
+      intervalMs: GAME_STATE_POLL_INTERVAL_MS,
+      timeoutRef: gameStatePollTimeoutRef,
+      refresh: refreshGameplayStateNow,
+      isEligible: () =>
+        isMountedRef.current &&
+        authoritativeRefreshInFlightCountRef.current === 0,
+      isVisible: () =>
+        typeof document === "undefined" || document.visibilityState !== "hidden",
+    });
+
+    function handleVisibilityChange() {
+      pollLoop.handleVisibilityChange();
+    }
+
+    pollLoop.start();
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+
+    return () => {
+      pollLoop.stop();
+
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+    };
+  }, [
+    bootstrapState.status,
+    activeRoomId,
+    currentRoomPlayerId,
+    dataState,
+    clearGameStatePollTimeout,
+    refreshGameplayStateNow,
+  ]);
+
   const activePresenceState =
     roomPresenceSnapshot.roomId === activeRoomId ? roomPresenceSnapshot.state : {};
   const activeLobby = getLobbyFromDataState(dataState);
@@ -997,11 +1536,15 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     onLeaveRoom: () => void handleLeaveRoom(),
     onCloseRoom: () => void handleCloseRoom(),
     onStartSession: () => void handleStartSession(),
-    onRevealRole: () => void handleRevealRole(),
+    onRevealPrivateView: () => void handleRevealPrivateView(),
+    onHidePrivateView: () => void handleHidePrivateView(),
+    onStartDiscussion: () => void handleStartDiscussion(),
     onStartAnonymousAuth: () => void handleStartAnonymousAuth(),
     lifecycleActionState,
     isStartingAuth,
     startAuthError,
+    isStartingDiscussion,
+    startDiscussionError,
     connectedPlayerIds,
     hostSuccessionNotice,
   });
