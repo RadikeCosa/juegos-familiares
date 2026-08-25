@@ -16,6 +16,7 @@ export type ImpostorRoomsClient = {
             | "start_session"
             | "start_round_discussion"
             | "start_round_voting"
+            | "start_second_round_voting"
             | "submit_round_vote"
             | "get_my_game_state",
         params?: { room_code: string } | { target_player_id: string }
@@ -302,6 +303,22 @@ const NOT_SESSION_PLAYER_START_VOTING_ERROR =
     "No participás de la tanda actual.";
 const GENERIC_START_VOTING_ERROR =
     "No pudimos ir a votación. Intentá de nuevo.";
+const UNAUTHENTICATED_START_SECOND_VOTING_ERROR =
+    "Necesitás entrar a tu grupo antes de ir a segunda votación.";
+const MISSING_PLAYER_START_SECOND_VOTING_ERROR =
+    "No pudimos reconocer tu jugador para ir a segunda votación.";
+const NO_ACTIVE_ROOM_START_SECOND_VOTING_ERROR =
+    "No tenés una sala activa para ir a segunda votación.";
+const ROOM_NOT_SECOND_VOTABLE_ERROR =
+    "Esta ronda no se puede llevar a segunda votación ahora.";
+const NOT_ROOM_HOST_START_SECOND_VOTING_ERROR =
+    "Solo el host actual puede ir a segunda votación.";
+const INCONSISTENT_START_SECOND_VOTING_ERROR =
+    "No pudimos reconstruir la tanda para ir a segunda votación.";
+const NOT_SESSION_PLAYER_START_SECOND_VOTING_ERROR =
+    "No participás de la tanda actual.";
+const GENERIC_START_SECOND_VOTING_ERROR =
+    "No pudimos ir a segunda votación. Intentá de nuevo.";
 const UNAUTHENTICATED_SUBMIT_VOTE_ERROR =
     "Necesitás entrar a tu grupo antes de votar.";
 const MISSING_PLAYER_SUBMIT_VOTE_ERROR =
@@ -394,10 +411,22 @@ type StartRoundVotingRow = {
     round_number: number;
 };
 
+type StartSecondRoundVotingRow = {
+    advanced: boolean;
+    already_in_phase: boolean;
+    state: "voting_second";
+    round_number: number;
+};
+
 type SubmitRoundVoteRow = {
     accepted: boolean;
     already_recorded: boolean;
-    state: "voting_first" | "tie_discussion" | "impostor_guess" | "round_result";
+    state:
+        | "voting_first"
+        | "tie_discussion"
+        | "voting_second"
+        | "impostor_guess"
+        | "round_result";
     round_number: number;
 };
 
@@ -415,10 +444,22 @@ export type StartRoundVotingResult = {
     roundNumber: number;
 };
 
+export type StartSecondRoundVotingResult = {
+    advanced: boolean;
+    alreadyInPhase: boolean;
+    state: "voting_second";
+    roundNumber: number;
+};
+
 export type SubmitRoundVoteResult = {
     accepted: boolean;
     alreadyRecorded: boolean;
-    state: "voting_first" | "tie_discussion" | "impostor_guess" | "round_result";
+    state:
+        | "voting_first"
+        | "tie_discussion"
+        | "voting_second"
+        | "impostor_guess"
+        | "round_result";
     roundNumber: number;
 };
 
@@ -427,6 +468,7 @@ export type GameSessionState =
     | "discussion"
     | "voting_first"
     | "tie_discussion"
+    | "voting_second"
     | "impostor_guess"
     | "round_result";
 
@@ -480,6 +522,7 @@ export type MyGameState = {
     state: GameSessionState;
     roundNumber: number;
     privateView: MyPrivateRoundView;
+    candidates: VoteCandidate[] | null;
     voting: {
         candidates: VoteCandidate[];
         myVoteTargetPlayerId: string | null;
@@ -717,6 +760,40 @@ function getStartVotingErrorMessage(error: unknown) {
     return GENERIC_START_VOTING_ERROR;
 }
 
+function getStartSecondVotingErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "28000" || error.code === "42501") {
+            return UNAUTHENTICATED_START_SECOND_VOTING_ERROR;
+        }
+
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_START_SECOND_VOTING_ERROR;
+        }
+
+        if (error.code === "P0017") {
+            return NO_ACTIVE_ROOM_START_SECOND_VOTING_ERROR;
+        }
+
+        if (error.code === "P0018") {
+            return ROOM_NOT_SECOND_VOTABLE_ERROR;
+        }
+
+        if (error.code === "P0019") {
+            return NOT_ROOM_HOST_START_SECOND_VOTING_ERROR;
+        }
+
+        if (error.code === "P0022") {
+            return INCONSISTENT_START_SECOND_VOTING_ERROR;
+        }
+
+        if (error.code === "P0023") {
+            return NOT_SESSION_PLAYER_START_SECOND_VOTING_ERROR;
+        }
+    }
+
+    return GENERIC_START_SECOND_VOTING_ERROR;
+}
+
 function getSubmitVoteErrorMessage(error: unknown) {
     if (isSupabaseErrorLike(error)) {
         if (error.code === "28000" || error.code === "42501") {
@@ -831,6 +908,21 @@ function isStartRoundVotingRow(value: unknown): value is StartRoundVotingRow {
     );
 }
 
+function isStartSecondRoundVotingRow(
+    value: unknown
+): value is StartSecondRoundVotingRow {
+    const row = value as Partial<StartSecondRoundVotingRow>;
+
+    return (
+        typeof row.advanced === "boolean" &&
+        typeof row.already_in_phase === "boolean" &&
+        row.state === "voting_second" &&
+        typeof row.round_number === "number" &&
+        Number.isInteger(row.round_number) &&
+        row.round_number >= 1
+    );
+}
+
 function isSubmitRoundVoteRow(value: unknown): value is SubmitRoundVoteRow {
     const row = value as Partial<SubmitRoundVoteRow>;
 
@@ -840,6 +932,7 @@ function isSubmitRoundVoteRow(value: unknown): value is SubmitRoundVoteRow {
         (
             row.state === "voting_first" ||
             row.state === "tie_discussion" ||
+            row.state === "voting_second" ||
             row.state === "impostor_guess" ||
             row.state === "round_result"
         ) &&
@@ -858,6 +951,7 @@ function isMyGameStateRow(value: unknown): value is MyGameStateRow {
             row.state !== "discussion" &&
             row.state !== "voting_first" &&
             row.state !== "tie_discussion" &&
+            row.state !== "voting_second" &&
             row.state !== "impostor_guess" &&
             row.state !== "round_result"
         ) ||
@@ -876,7 +970,7 @@ function isMyGameStateRow(value: unknown): value is MyGameStateRow {
         return false;
     }
 
-    if (row.state === "voting_first") {
+    if (row.state === "voting_first" || row.state === "voting_second") {
         return (
             Array.isArray(row.candidates) &&
             row.candidates.every(isVoteCandidateRow) &&
@@ -889,11 +983,21 @@ function isMyGameStateRow(value: unknown): value is MyGameStateRow {
         );
     }
 
-    if (
-        row.state === "tie_discussion" ||
-        row.state === "impostor_guess" ||
-        row.state === "round_result"
-    ) {
+    if (row.state === "tie_discussion") {
+        return (
+            Array.isArray(row.candidates) &&
+            row.candidates.every(isVoteCandidateRow) &&
+            (
+                typeof row.my_vote_target_player_id === "string" ||
+                row.my_vote_target_player_id === null
+            ) &&
+            typeof row.has_voted === "boolean" &&
+            Array.isArray(row.vote_results) &&
+            row.vote_results.every(isVoteResultRow)
+        );
+    }
+
+    if (row.state === "impostor_guess" || row.state === "round_result") {
         return (
             (row.candidates === null || typeof row.candidates === "undefined") &&
             Array.isArray(row.vote_results) &&
@@ -989,6 +1093,17 @@ function toStartRoundVotingResult(row: StartRoundVotingRow): StartRoundVotingRes
     };
 }
 
+function toStartSecondRoundVotingResult(
+    row: StartSecondRoundVotingRow
+): StartSecondRoundVotingResult {
+    return {
+        advanced: row.advanced,
+        alreadyInPhase: row.already_in_phase,
+        state: row.state,
+        roundNumber: row.round_number
+    };
+}
+
 function toSubmitRoundVoteResult(row: SubmitRoundVoteRow): SubmitRoundVoteResult {
     return {
         accepted: row.accepted,
@@ -1002,7 +1117,7 @@ function toMyGameState(row: MyGameStateRow): MyGameState {
     const voteResults = toVoteResults(row.vote_results);
     const candidates = toVoteCandidates(row.candidates);
     const voting =
-        row.state === "voting_first"
+        row.state === "voting_first" || row.state === "voting_second"
             ? {
                 candidates: candidates ?? [],
                 myVoteTargetPlayerId: row.my_vote_target_player_id ?? null,
@@ -1015,6 +1130,7 @@ function toMyGameState(row: MyGameStateRow): MyGameState {
             state: row.state,
             roundNumber: row.round_number,
             privateView: { role: "player", word: row.word },
+            candidates,
             voting,
             voteResults
         };
@@ -1024,6 +1140,7 @@ function toMyGameState(row: MyGameStateRow): MyGameState {
         state: row.state,
         roundNumber: row.round_number,
         privateView: { role: "impostor", word: null },
+        candidates,
         voting,
         voteResults
     };
@@ -1551,6 +1668,24 @@ export async function startRoundVoting(
     }
 
     return toStartRoundVotingResult(rows[0]);
+}
+
+export async function startSecondRoundVoting(
+    supabase: ImpostorRoomsClient
+): Promise<StartSecondRoundVotingResult> {
+    const result = await supabase.rpc("start_second_round_voting");
+
+    if (result.error) {
+        throw new Error(getStartSecondVotingErrorMessage(result.error));
+    }
+
+    const rows = Array.isArray(result.data) ? result.data : [];
+
+    if (rows.length !== 1 || !isStartSecondRoundVotingRow(rows[0])) {
+        throw new Error("No pudimos confirmar el inicio de la segunda votación.");
+    }
+
+    return toStartSecondRoundVotingResult(rows[0]);
 }
 
 export async function submitRoundVote(

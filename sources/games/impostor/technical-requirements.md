@@ -838,6 +838,8 @@ Debe soportar:
 
 La segunda votación es definitiva: el grupo solamente identifica al impostor si el impostor queda como único jugador con mayor cantidad de votos.
 
+Los candidatos empatados de la segunda votación son estado derivado. No se agrega una tabla, columna ni array JSON persistido para `tie_candidates`. La autoridad los reconstruye desde `round_votes` de la ronda actual con `voting_round = 1`, calculando quiénes comparten la cantidad máxima de votos.
+
 ## Requisito de Incremento 8
 
 El Incremento 8 cubre exclusivamente la primera votación como vertical completo:
@@ -1009,7 +1011,7 @@ Después del último voto requerido, el sistema cuenta votos autoritativamente:
 * impostor único más votado → `impostor_guess`;
 * otro jugador único más votado → `round_result`.
 
-En `tie_discussion`, debe conservarse o poder reconstruirse el conjunto de candidatos empatados necesario para Incremento 9. En `impostor_guess`, puede revelarse quién era el impostor, pero no la palabra secreta. En `round_result`, conceptualmente `winner = impostor`, sin implementar todavía puntos, scoreboard, historial, next round ni fin de tanda.
+En `tie_discussion`, el conjunto de candidatos empatados necesario para Incremento 9 se reconstruye desde `round_votes` de `voting_round = 1`. En `impostor_guess`, puede revelarse quién era el impostor, pero no la palabra secreta. En `round_result`, conceptualmente `winner = impostor`, sin implementar todavía puntos, scoreboard, historial, next round ni fin de tanda.
 
 ## Privacy y read model de voting
 
@@ -1119,6 +1121,154 @@ invalid_vote_target
 already_voted
 inconsistent_game_state
 ```
+
+## Requisito de Incremento 9
+
+El Incremento 9 cubre exclusivamente la rama posterior a un empate de primera votación:
+
+```text
+tie_discussion
+→ start_second_round_voting()
+→ voting_second
+→ submit_round_vote(target_player_id)
+→ resolución automática
+→ impostor_guess | round_result
+```
+
+### Estado durable
+
+`GameSession.state` debe incorporar:
+
+```text
+voting_second
+```
+
+No se introduce `Round.status`.
+
+### Candidatos empatados
+
+La lista de candidatos de segunda votación se reconstruye autoritativamente desde:
+
+```text
+round_votes
+WHERE round_id = ronda actual
+AND voting_round = 1
+```
+
+El sistema agrupa por `target_player_id`, calcula la cantidad máxima de votos y considera empatados a todos los jugadores con esa cantidad.
+
+No se persiste una lista separada porque duplicaría información derivable y podría desincronizarse con los votos reales.
+
+### start_second_round_voting()
+
+RPC prevista:
+
+```text
+start_second_round_voting()
+```
+
+Contrato:
+
+```text
+sin argumentos
+authenticated only
+host actual only
+estado requerido = tie_discussion
+estado resultante = voting_second
+```
+
+La autoridad deriva server-side desde:
+
+```text
+auth.uid()
+→ Player
+→ active Room
+→ rooms.host_player_id actual
+→ GameSession actual
+```
+
+La operación:
+
+* no acepta `room_id`, `game_session_id`, `player_id`, `host_player_id`, `group_id` ni lista de candidatos;
+* valida que existe una GameSession consistente en `tie_discussion`;
+* valida que el empate puede reconstruirse desde `voting_round = 1`;
+* no crea votos;
+* no persiste candidatos;
+* no revela `secret_word`, `normalized_secret_word`, `impostor_player_id`, votos individuales ni palabra al impostor;
+* puede ser idempotente si el estado ya es `voting_second`.
+
+### submit_round_vote() extendida
+
+`submit_round_vote(target_player_id uuid)` mantiene un único contrato público y determina internamente la etapa:
+
+```text
+GameSession.state = voting_first  → voting_round = 1
+GameSession.state = voting_second → voting_round = 2
+```
+
+Durante `voting_second`, guards adicionales:
+
+```text
+caller ∈ SessionPlayers
+target ∈ candidatos empatados reconstruidos desde voting_round = 1
+target != caller
+sin voto previo distinto para round_id/voting_round=2/voter
+```
+
+Los votantes requeridos siguen siendo todos los `SessionPlayers`. Presence, liveness, `RoomParticipants` conectados o disponibilidad actual no modifican el denominador.
+
+### Resolución de segunda votación
+
+Cuando todos los `SessionPlayers` registraron voto con `voting_round = 2`, el último voto dispara el conteo autoritativo.
+
+Regla:
+
+* impostor único más votado → `impostor_guess`;
+* cualquier otro resultado → `round_result` con victoria conceptual del impostor.
+
+`Cualquier otro resultado` incluye:
+
+* nuevo empate;
+* jugador no impostor como único más votado;
+* cualquier caso donde el impostor no sea el único jugador con mayor cantidad de votos.
+
+No existe tercera votación.
+
+### Read model
+
+`get_my_game_state()` debe discriminar la etapa vigente.
+
+Durante `tie_discussion`:
+
+* `vote_results` muestra el agregado completo de `voting_round = 1`;
+* `candidates` muestra los jugadores empatados en el máximo de `voting_round = 1`;
+* la respuesta contiene información suficiente para que el cliente determine si el caller puede mostrar el CTA host-only de segunda votación;
+* no se exponen votos individuales, palabra secreta adicional ni secretos de host.
+
+Durante `voting_second`:
+
+* `candidates` muestra candidatos empatados autorizados para recibir votos;
+* si el caller está entre los empatados, se excluye su propio Player por no auto-voto;
+* `has_voted` y `my_vote_target_player_id` se calculan únicamente desde `voting_round = 2`;
+* `vote_results = null` mientras la votación está abierta;
+* no se exponen parciales, votos individuales ajenos ni `impostor_player_id`.
+
+Después de resolver:
+
+```text
+vote_results representa la votación que produjo la resolución vigente de la ronda
+```
+
+Por lo tanto:
+
+* resolución en primera votación → resultados de `voting_round = 1`;
+* resolución después de segunda votación → resultados de `voting_round = 2`.
+
+### Sync y recovery
+
+Incremento 9 mantiene polling lento de `get_my_game_state()` como mecanismo de gameplay. No introduce Broadcast, Realtime de gameplay ni publicación de `round_votes`.
+
+Refresh, respuesta perdida o retry deben reconstruirse desde el estado autoritativo y el voto propio persistido.
 
 No se exponen errores SQL internos al usuario. Self-vote puede agruparse como `invalid_vote_target`, pero debe tener validación específica.
 

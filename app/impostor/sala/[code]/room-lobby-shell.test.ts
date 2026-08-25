@@ -9,6 +9,7 @@ import {
     formatPlayerCount,
     renderRoomLobbyContent,
     runStartDiscussionCommand,
+    runStartSecondVotingCommand,
     runStartVotingCommand,
     runSubmitVoteCommand,
     toGameplayDataState
@@ -74,6 +75,7 @@ const playerGameState: MyGameState = {
     state: "role_reveal",
     roundNumber: 1,
     privateView: { role: "player", word: "Casa" },
+    candidates: null,
     voting: null,
     voteResults: null
 };
@@ -82,6 +84,7 @@ const impostorGameState: MyGameState = {
     state: "role_reveal",
     roundNumber: 1,
     privateView: { role: "impostor", word: null },
+    candidates: null,
     voting: null,
     voteResults: null
 };
@@ -90,6 +93,7 @@ const discussionGameState: MyGameState = {
     state: "discussion",
     roundNumber: 1,
     privateView: { role: "player", word: "Casa" },
+    candidates: null,
     voting: null,
     voteResults: null
 };
@@ -98,6 +102,7 @@ const impostorDiscussionGameState: MyGameState = {
     state: "discussion",
     roundNumber: 1,
     privateView: { role: "impostor", word: null },
+    candidates: null,
     voting: null,
     voteResults: null
 };
@@ -106,6 +111,7 @@ const secondRoundDiscussionGameState: MyGameState = {
     state: "discussion",
     roundNumber: 2,
     privateView: { role: "player", word: "Mesa" },
+    candidates: null,
     voting: null,
     voteResults: null
 };
@@ -114,6 +120,10 @@ const votingGameState: MyGameState = {
     state: "voting_first",
     roundNumber: 1,
     privateView: { role: "player", word: "Casa" },
+    candidates: [
+        { playerId: "player-2", nickname: "Pedro" },
+        { playerId: "player-3", nickname: "Ana" }
+    ],
     voting: {
         candidates: [
             { playerId: "player-2", nickname: "Pedro" },
@@ -138,6 +148,10 @@ const tieDiscussionGameState: MyGameState = {
     state: "tie_discussion",
     roundNumber: 1,
     privateView: { role: "player", word: "Casa" },
+    candidates: [
+        { playerId: "player-2", nickname: "Pedro" },
+        { playerId: "player-3", nickname: "Ana" }
+    ],
     voting: null,
     voteResults: [
         { playerId: "player-2", nickname: "Pedro", voteCount: 2 },
@@ -145,10 +159,28 @@ const tieDiscussionGameState: MyGameState = {
     ]
 };
 
+const secondVotingGameState: MyGameState = {
+    state: "voting_second",
+    roundNumber: 1,
+    privateView: { role: "player", word: "Casa" },
+    candidates: [
+        { playerId: "player-3", nickname: "Ana" }
+    ],
+    voting: {
+        candidates: [
+            { playerId: "player-3", nickname: "Ana" }
+        ],
+        myVoteTargetPlayerId: null,
+        hasVoted: false
+    },
+    voteResults: null
+};
+
 const impostorGuessGameState: MyGameState = {
     state: "impostor_guess",
     roundNumber: 1,
     privateView: { role: "impostor", word: null },
+    candidates: null,
     voting: null,
     voteResults: [{ playerId: "player-2", nickname: "Pedro", voteCount: 3 }]
 };
@@ -157,6 +189,7 @@ const roundResultGameState: MyGameState = {
     state: "round_result",
     roundNumber: 1,
     privateView: { role: "player", word: "Casa" },
+    candidates: null,
     voting: null,
     voteResults: [{ playerId: "player-3", nickname: "Ana", voteCount: 2 }]
 };
@@ -259,6 +292,9 @@ describe("toGameplayDataState", () => {
         });
         expect(toGameplayDataState(playingHostLobby, tieDiscussionGameState)).toMatchObject({
             status: "tie-discussion"
+        });
+        expect(toGameplayDataState(playingHostLobby, secondVotingGameState)).toMatchObject({
+            status: "voting-second"
         });
         expect(toGameplayDataState(playingHostLobby, impostorGuessGameState)).toMatchObject({
             status: "impostor-guess"
@@ -436,6 +472,48 @@ describe("runStartVotingCommand", () => {
         const setError = vi.fn();
 
         await runStartVotingCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(setError).toHaveBeenLastCalledWith("Ya no sos el host actual.");
+        expect(refreshAuthoritative).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("runStartSecondVotingCommand", () => {
+    it("recovers a lost command response by accepting voting_second from manual refresh", async () => {
+        const start = vi.fn(async () => {
+            throw new Error("NetworkError");
+        });
+        const refreshGameplay = vi.fn(async () => secondVotingGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartSecondVotingCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(start).toHaveBeenCalledTimes(1);
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(refreshAuthoritative).not.toHaveBeenCalled();
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it("reconciles host loss through the authoritative room path", async () => {
+        const start = vi.fn(async () => {
+            throw new Error("Solo el host actual puede ir a segunda votación.");
+        });
+        const refreshGameplay = vi.fn(async () => tieDiscussionGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartSecondVotingCommand({
             start,
             refreshGameplay,
             refreshAuthoritative,
@@ -1223,7 +1301,7 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).not.toContain("Registrando voto");
     });
 
-    it("renders tie discussion with aggregate results only", () => {
+    it("renders tie discussion with aggregate results and host-only second voting CTA", () => {
         const markup = renderToStaticMarkup(
             renderRoomLobbyContent(
                 recognizedState,
@@ -1237,10 +1315,53 @@ describe("renderRoomLobbyContent", () => {
         );
 
         expect(markup).toContain("Hubo empate");
+        expect(markup).toContain("Empatados");
         expect(markup).toContain("Pedro");
         expect(markup).toContain("2 votos");
-        expect(markup).not.toContain("segunda votación");
+        expect(markup).toContain("Ir a segunda votación");
         expect(markup).not.toMatch(/Ramiro.*Pedro|Pedro.*Ana.*Ramiro|player-\d/);
+    });
+
+    it("does not render the second voting CTA for non-hosts during tie discussion", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "tie-discussion",
+                    lobby: { ...playingHostLobby, participants: nonHostLobby.participants },
+                    gameState: tieDiscussionGameState
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Hubo empate");
+        expect(markup).not.toContain("Ir a segunda votación");
+    });
+
+    it("renders second voting candidates without aggregate results", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "voting-second",
+                    lobby: playingHostLobby,
+                    gameState: secondVotingGameState
+                },
+                {
+                    roomCode: "AB7KQ2M4",
+                    selectedVoteTargetPlayerId: "player-3"
+                }
+            )
+        );
+
+        expect(markup).toContain("Segunda votación");
+        expect(markup).toContain("Elegí entre quienes empataron.");
+        expect(markup).toContain("Ana");
+        expect(markup).toContain("aria-pressed=\"true\"");
+        expect(markup).toContain("Votar");
+        expect(markup).not.toContain("Pedro");
+        expect(markup).not.toMatch(/votos|vote_count|player-\d/);
     });
 
     it("renders impostor guess pending state without word input or secret reveal", () => {

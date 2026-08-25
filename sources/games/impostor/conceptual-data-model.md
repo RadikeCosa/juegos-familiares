@@ -789,6 +789,18 @@ Inicialmente:
 
 La segunda corresponde a una eventual votación por empate.
 
+El conjunto de candidatos empatados para esa segunda votación no es una entidad persistida separada.
+
+Se deriva de los votos de la primera votación de la misma ronda:
+
+```text
+RoundVote
+WHERE roundId = ronda actual
+AND votingRound = 1
+```
+
+Los candidatos son los `targetPlayerId` que comparten la mayor cantidad de votos.
+
 ## Restricciones
 
 Un jugador:

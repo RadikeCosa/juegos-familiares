@@ -2341,7 +2341,7 @@ La resolución de la primera votación produce una de tres ramas:
 * impostor único más votado → `impostor_guess`;
 * otro jugador único más votado → `round_result`.
 
-En empate, Incremento 8 solo detecta el empate, muestra el agregado y conserva o permite reconstruir el conjunto de candidatos empatados necesario para el Incremento 9. No inicia ni resuelve todavía la segunda votación.
+En empate, Incremento 8 solo detecta el empate, muestra el agregado y deja registrados los votos de primera vuelta desde los que Incremento 9 reconstruye los candidatos empatados. No inicia ni resuelve todavía la segunda votación.
 
 ### Dominio involucrado
 
@@ -2493,22 +2493,68 @@ Impostor:
 
 ### Infraestructura necesaria
 
-* persistencia del conjunto de empatados;
+* reconstrucción autoritativa del conjunto de empatados desde los votos de primera vuelta;
 * votos con `votingRound = 2`;
 * autorización del host para iniciar segunda votación;
 * conteo autoritativo.
 
 ### Decisiones técnicas a cerrar
 
-* cómo se conserva o reconstruye el conjunto de empatados producido por Incremento 8;
-* cómo se evita votar por alguien fuera del empate;
-* cómo se reutiliza la entidad de votos con `voting_round = 2`.
+Decisiones cerradas para el contrato de Incremento 9:
+
+* no se persiste una tabla, columna, array JSON ni entidad separada de candidatos empatados;
+* los candidatos empatados se reconstruyen desde `round_votes` de la ronda actual con `voting_round = 1`, tomando quienes comparten la cantidad máxima de votos;
+* `tie_discussion` solo puede existir como resultado de una primera votación completa, por lo que `round_votes` ya contiene la fuente autoritativa necesaria;
+* `GameSession.state` incorpora `voting_second`;
+* la transición `tie_discussion → voting_second` la solicita el host actual mediante `start_second_round_voting()`;
+* `start_second_round_voting()` no recibe argumentos de ownership, deriva identidad y autoridad desde `auth.uid()`, no crea votos, no persiste candidatos y no revela secretos;
+* `submit_round_vote(target_player_id)` se extiende para usar `voting_round = 1` cuando `GameSession.state = voting_first` y `voting_round = 2` cuando `GameSession.state = voting_second`;
+* en segunda votación, `target_player_id` debe pertenecer al conjunto de empatados reconstruido desde la primera votación;
+* todos los `SessionPlayers` votan también en segunda votación; Presence/liveness no cambia el denominador;
+* el impostor vota, el host vota sin voto especial y los jugadores empatados también votan;
+* nadie puede votarse a sí mismo, incluso si forma parte del empate;
+* no existe tercera votación;
+* si el impostor es el único jugador más votado en segunda votación, la transición es `voting_second → impostor_guess`;
+* cualquier otro resultado de segunda votación, incluido un nuevo empate o un jugador incorrecto como único más votado, produce `voting_second → round_result` con victoria conceptual del impostor.
+
+### Contrato de read model
+
+`get_my_game_state()` sigue siendo la vista autorizada del caller.
+
+Durante `tie_discussion` debe exponer:
+
+* resultado agregado completo de la primera votación;
+* `candidates` como jugadores empatados en el máximo de la primera votación;
+* información suficiente para que la UI sepa si el caller puede iniciar la segunda votación;
+* ninguna palabra secreta adicional, ningún voto individual y ningún privilegio informativo especial para el host.
+
+Durante `voting_second` debe exponer:
+
+* `candidates` como candidatos empatados autorizados para recibir votos;
+* si el caller está entre los empatados, su propio Player queda excluido de sus opciones votables por la regla de no auto-voto;
+* `has_voted`;
+* `my_vote_target_player_id` correspondiente solamente al voto propio de `voting_round = 2`;
+* ningún resultado parcial, ningún voto individual ajeno, `impostor_player_id` ni palabra secreta adicional.
+
+Después de una resolución, `vote_results` representa la votación que produjo la resolución vigente de la ronda:
+
+* si la ronda se resolvió en primera votación, muestra resultados de `voting_round = 1`;
+* si hubo segunda votación, muestra resultados finales de `voting_round = 2`;
+* no debe mostrar accidentalmente el tally de primera votación como resultado final después de una segunda votación.
 
 ### Tests / validación
 
 * unit tests de candidatos restringidos;
 * unit tests de regla definitiva de segunda votación;
 * integración: no hay tercera votación;
+* integración: `start_second_round_voting()` solo funciona para el host actual desde `tie_discussion` y es idempotente si ya está en `voting_second`;
+* integración: `submit_round_vote()` usa `voting_round = 2` durante `voting_second`;
+* integración: un target fuera del empate reconstruido es rechazado;
+* integración: todos los `SessionPlayers` deben votar aunque Presence/liveness indique otra disponibilidad;
+* integración: `vote_results` posterior a segunda votación usa `voting_round = 2`;
+* privacidad: sin parciales, votos individuales ajenos, palabra ni secretos extra;
+* concurrencia: últimos votos simultáneos resuelven una sola vez;
+* recovery: retries y respuesta perdida se reconstruyen con `get_my_game_state()`;
 * prueba manual con empate forzado.
 
 ### Riesgos
@@ -2521,12 +2567,18 @@ Impostor:
 ### Fuera de alcance
 
 * intento final del impostor;
-* scoring visual completo;
-* estadísticas.
+* guess input;
+* reveal de palabra;
+* scoring;
+* scoreboard;
+* nueva ronda;
+* historial;
+* fin de tanda;
+* Realtime/Broadcast de gameplay.
 
 ### Criterio de terminado
 
-La votación cubre casos con y sin empate según las reglas v0.
+La rama de empate queda resuelta de forma privada, autoritativa y definitiva: desde `tie_discussion`, el host actual puede iniciar `voting_second`, todos los `SessionPlayers` votan una vez por candidatos empatados, y el sistema transiciona automáticamente a `impostor_guess` o `round_result` sin tercera votación.
 
 ### Conceptos a aprender
 
@@ -2534,6 +2586,102 @@ La votación cubre casos con y sin empate según las reglas v0.
 * restricciones dependientes de fase;
 * reglas determinísticas;
 * tests de tablas de casos.
+
+### Slicing oficial
+
+#### Incremento 9.0 — Contrato documental
+
+Cerrar documentación de estado, candidatos derivados, RPCs, read model, privacidad, resolución definitiva y slicing. No incluye código funcional, SQL, migrations, tests ni UI.
+
+Estado:
+
+```text
+CERRADO DOCUMENTAL
+```
+
+#### Incremento 9.1 — Entrada a segunda votación
+
+Agregar `voting_second` como estado durable y `start_second_round_voting()` host-only desde `tie_discussion`, sin crear votos ni persistir candidatos.
+
+Estado:
+
+```text
+CERRADO TÉCNICAMENTE
+```
+
+Validación registrada:
+
+```text
+validate-9-1.mjs PASS
+```
+
+#### Incremento 9.2 — Voto y resolución de segunda vuelta
+
+Extender `submit_round_vote(target_player_id)` para `voting_second`, registrar `voting_round = 2`, validar candidatos empatados reconstruidos, impedir auto-voto/cambio de voto y resolver automáticamente al último voto.
+
+Estado:
+
+```text
+CERRADO TÉCNICAMENTE
+```
+
+Validación registrada:
+
+```text
+validate-9-2.mjs PASS
+regresiones compatibles 8.1, 8.3 y 8.4 PASS
+```
+
+Nota de regresión:
+
+```text
+validate-8-2.mjs queda obsoleto como regresión posterior a 9.x porque exige que no exista voting_second.
+```
+
+#### Incremento 9.3 — Read model + UI
+
+Extender `get_my_game_state()` y la UI para `tie_discussion`, CTA del host, `voting_second`, espera post-voto y resultado agregado final correcto.
+
+Estado:
+
+```text
+CERRADO TÉCNICAMENTE
+```
+
+Validación registrada:
+
+```text
+validate-9-3.mjs PASS repetido
+```
+
+#### Incremento 9.4 — Hardening
+
+Validar concurrencia, retries, lost-response recovery, refresh/reconnect, privacidad, estados inválidos y tests adversariales.
+
+Estado:
+
+```text
+CERRADO TÉCNICAMENTE
+```
+
+Validación registrada:
+
+```text
+validate-9-4.mjs PASS repetido
+regresiones compatibles 8.1, 8.3 y 8.4 PASS
+npm test PASS
+npm run lint PASS con warning preexistente en validate-6-2.mjs
+npm run build PASS
+git diff --check PASS
+```
+
+Estado global del Incremento 9:
+
+```text
+CERRADO TÉCNICAMENTE
+```
+
+9.0 está cerrado documentalmente. 9.1, 9.2, 9.3 y 9.4 están cerrados técnicamente. El incremento completo queda cerrado técnicamente: la segunda votación se inicia por host actual desde `tie_discussion`, se vota con candidatos empatados reconstruidos desde `voting_round = 1`, resuelve sin tercera votación y mantiene privacidad sin Realtime/Broadcast de gameplay.
 
 ---
 

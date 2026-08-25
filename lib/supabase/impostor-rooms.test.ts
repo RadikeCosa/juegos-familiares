@@ -29,6 +29,7 @@ import {
     startRoomLivenessHeartbeat,
     startRoundDiscussion,
     startRoundVoting,
+    startSecondRoundVoting,
     startSession,
     submitRoundVote,
     subscribeToRoomPresence,
@@ -106,13 +107,29 @@ const gameStateTieDiscussionRow = {
     round_number: 1,
     role: "player",
     word: "Tesoro Azul",
-    candidates: null,
-    my_vote_target_player_id: null,
+    candidates: [
+        { player_id: "player-2", nickname: "Pedro" },
+        { player_id: "player-3", nickname: "Ana" }
+    ],
+    my_vote_target_player_id: "player-2",
     has_voted: true,
     vote_results: [
         { player_id: "player-2", nickname: "Pedro", vote_count: 2 },
         { player_id: "player-3", nickname: "Ana", vote_count: 2 }
     ]
+};
+
+const gameStateSecondVotingRow = {
+    state: "voting_second",
+    round_number: 1,
+    role: "player",
+    word: "Tesoro Azul",
+    candidates: [
+        { player_id: "player-3", nickname: "Ana" }
+    ],
+    my_vote_target_player_id: null,
+    has_voted: false,
+    vote_results: null
 };
 
 const gameStateImpostorGuessRow = {
@@ -140,11 +157,23 @@ const startRoundVotingRow = {
     round_number: 1
 };
 
+const startSecondRoundVotingRow = {
+    advanced: true,
+    already_in_phase: false,
+    state: "voting_second",
+    round_number: 1
+};
+
 const submitRoundVoteRow = {
     accepted: true,
     already_recorded: false,
     state: "voting_first",
     round_number: 1
+};
+
+const submitSecondRoundVoteRow = {
+    ...submitRoundVoteRow,
+    state: "voting_second"
 };
 
 describe("createRoom", () => {
@@ -921,6 +950,7 @@ describe("getMyGameState", () => {
             state: "role_reveal",
             roundNumber: 1,
             privateView: { role: "player", word: "Tesoro Azul" },
+            candidates: null,
             voting: null,
             voteResults: null
         });
@@ -946,6 +976,7 @@ describe("getMyGameState", () => {
             state: "role_reveal",
             roundNumber: 1,
             privateView: { role: "impostor", word: null },
+            candidates: null,
             voting: null,
             voteResults: null
         });
@@ -963,6 +994,7 @@ describe("getMyGameState", () => {
             state: "discussion",
             roundNumber: 1,
             privateView: { role: "player", word: "Tesoro Azul" },
+            candidates: null,
             voting: null,
             voteResults: null
         });
@@ -977,6 +1009,10 @@ describe("getMyGameState", () => {
             state: "voting_first",
             roundNumber: 1,
             privateView: { role: "player", word: "Tesoro Azul" },
+            candidates: [
+                { playerId: "player-2", nickname: "Pedro" },
+                { playerId: "player-3", nickname: "Ana" }
+            ],
             voting: {
                 candidates: [
                     { playerId: "player-2", nickname: "Pedro" },
@@ -1004,6 +1040,10 @@ describe("getMyGameState", () => {
             myVoteTargetPlayerId: "player-2",
             hasVoted: true
         });
+        expect(state?.candidates).toEqual([
+            { playerId: "player-2", nickname: "Pedro" },
+            { playerId: "player-3", nickname: "Ana" }
+        ]);
         expect(state?.voteResults).toBeNull();
     });
 
@@ -1014,11 +1054,34 @@ describe("getMyGameState", () => {
 
         await expect(getMyGameState(supabase)).resolves.toMatchObject({
             state: "tie_discussion",
+            candidates: [
+                { playerId: "player-2", nickname: "Pedro" },
+                { playerId: "player-3", nickname: "Ana" }
+            ],
             voting: null,
             voteResults: [
                 { playerId: "player-2", nickname: "Pedro", voteCount: 2 },
                 { playerId: "player-3", nickname: "Ana", voteCount: 2 }
             ]
+        });
+    });
+
+    it("maps voting_second candidates and only the caller second-round vote status", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: [gameStateSecondVotingRow], error: null }))
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toEqual({
+            state: "voting_second",
+            roundNumber: 1,
+            privateView: { role: "player", word: "Tesoro Azul" },
+            candidates: [{ playerId: "player-3", nickname: "Ana" }],
+            voting: {
+                candidates: [{ playerId: "player-3", nickname: "Ana" }],
+                myVoteTargetPlayerId: null,
+                hasVoted: false
+            },
+            voteResults: null
         });
     });
 
@@ -1338,6 +1401,111 @@ describe("startRoundVoting", () => {
     });
 });
 
+describe("startSecondRoundVoting", () => {
+    it("calls the authoritative RPC without room, session, host, round or player arguments", async () => {
+        const supabase = {
+            rpc: vi.fn(async (_fn: string) => {
+                void _fn;
+
+                return { data: [startSecondRoundVotingRow], error: null };
+            })
+        };
+
+        await expect(startSecondRoundVoting(supabase)).resolves.toEqual({
+            advanced: true,
+            alreadyInPhase: false,
+            state: "voting_second",
+            roundNumber: 1
+        });
+
+        expect(supabase.rpc).toHaveBeenCalledWith("start_second_round_voting");
+        expect(supabase.rpc.mock.calls[0]).toHaveLength(1);
+    });
+
+    it("maps idempotent second voting responses", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...startSecondRoundVotingRow,
+                    advanced: false,
+                    already_in_phase: true
+                }],
+                error: null
+            }))
+        };
+
+        await expect(startSecondRoundVoting(supabase)).resolves.toEqual({
+            advanced: false,
+            alreadyInPhase: true,
+            state: "voting_second",
+            roundNumber: 1
+        });
+    });
+
+    it("maps start second voting failures to product-level feedback", async () => {
+        const notHost = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0019" } }))
+        };
+        const excluded = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0023" } }))
+        };
+        const invalidPhase = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0018" } }))
+        };
+
+        await expect(startSecondRoundVoting(notHost)).rejects.toThrow(
+            "Solo el host actual puede ir a segunda votación."
+        );
+        await expect(startSecondRoundVoting(excluded)).rejects.toThrow(
+            "No participás de la tanda actual."
+        );
+        await expect(startSecondRoundVoting(invalidPhase)).rejects.toThrow(
+            "Esta ronda no se puede llevar a segunda votación ahora."
+        );
+    });
+
+    it("rejects malformed second voting transition responses explicitly", async () => {
+        const wrongState = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...startSecondRoundVotingRow, state: "tie_discussion" }],
+                error: null
+            }))
+        };
+        const invalidRoundNumber = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...startSecondRoundVotingRow, round_number: 0 }],
+                error: null
+            }))
+        };
+
+        await expect(startSecondRoundVoting(wrongState)).rejects.toThrow(
+            "No pudimos confirmar el inicio de la segunda votación."
+        );
+        await expect(startSecondRoundVoting(invalidRoundNumber)).rejects.toThrow(
+            "No pudimos confirmar el inicio de la segunda votación."
+        );
+    });
+
+    it("does not expose secret internals in mapped results", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...startSecondRoundVotingRow,
+                    secret_word: "Tesoro",
+                    normalized_secret_word: "tesoro",
+                    impostor_player_id: "player-1",
+                    round_votes: [{ voter_player_id: "player-1" }]
+                }],
+                error: null
+            }))
+        };
+
+        const result = await startSecondRoundVoting(supabase);
+
+        expect(JSON.stringify(result)).not.toMatch(/secret_word|normalized_secret_word|impostor_player_id|round_votes|Tesoro|player-1/);
+    });
+});
+
 describe("submitRoundVote", () => {
     it("calls the authoritative RPC with only target_player_id", async () => {
         const supabase = {
@@ -1391,6 +1559,12 @@ describe("submitRoundVote", () => {
                 error: null
             }))
         };
+        const secondVoting = {
+            rpc: vi.fn(async () => ({
+                data: [submitSecondRoundVoteRow],
+                error: null
+            }))
+        };
 
         await expect(submitRoundVote(idempotent, "player-2")).resolves.toEqual({
             accepted: true,
@@ -1403,6 +1577,12 @@ describe("submitRoundVote", () => {
         });
         await expect(submitRoundVote(roundResult, "player-2")).resolves.toMatchObject({
             state: "round_result"
+        });
+        await expect(submitRoundVote(secondVoting, "player-2")).resolves.toEqual({
+            accepted: true,
+            alreadyRecorded: false,
+            state: "voting_second",
+            roundNumber: 1
         });
     });
 
