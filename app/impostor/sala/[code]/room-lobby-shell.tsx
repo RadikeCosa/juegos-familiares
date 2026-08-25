@@ -25,6 +25,7 @@ import {
   recordRoomJoinIntent,
   startRoundDiscussion,
   startRoundVoting,
+  startSecondRoundVoting,
   startRoomHostSuccessionRecheck,
   startRoomLivenessHeartbeat,
   subscribeToRoomChanges,
@@ -70,6 +71,11 @@ type RoomLobbyDataState =
       gameState: MyGameState;
     }
   | {
+      status: "voting-second";
+      lobby: RoomLobby;
+      gameState: MyGameState;
+    }
+  | {
       status: "impostor-guess";
       lobby: RoomLobby;
       gameState: MyGameState;
@@ -108,6 +114,12 @@ const START_VOTING_NOT_HOST_UI_MESSAGE = "Ya no sos el host actual.";
 const START_VOTING_INCONSISTENT_MESSAGE =
   "No pudimos reconstruir la tanda para ir a votación.";
 const START_VOTING_EXCLUDED_MESSAGE = "No participás de la tanda actual.";
+const START_SECOND_VOTING_NOT_HOST_MESSAGE =
+  "Solo el host actual puede ir a segunda votación.";
+const START_SECOND_VOTING_NOT_HOST_UI_MESSAGE = "Ya no sos el host actual.";
+const START_SECOND_VOTING_INCONSISTENT_MESSAGE =
+  "No pudimos reconstruir la tanda para ir a segunda votación.";
+const START_SECOND_VOTING_EXCLUDED_MESSAGE = "No participás de la tanda actual.";
 const EXCLUDED_GAME_STATE_MESSAGE = "No participás de la tanda actual.";
 const ROOM_LIVENESS_LOG_MESSAGE = "No pudimos refrescar liveness de sala.";
 const ROOM_HOST_SUCCESSION_LOG_MESSAGE = "No pudimos revisar sucesión de host.";
@@ -202,6 +214,7 @@ function isGameplayDataState(
       | "discussion"
       | "voting-first"
       | "tie-discussion"
+      | "voting-second"
       | "impostor-guess"
       | "round-result";
   }
@@ -211,6 +224,7 @@ function isGameplayDataState(
     state.status === "discussion" ||
     state.status === "voting-first" ||
     state.status === "tie-discussion" ||
+    state.status === "voting-second" ||
     state.status === "impostor-guess" ||
     state.status === "round-result"
   );
@@ -228,6 +242,10 @@ function isSameVoteResults(left: MyGameState, right: MyGameState) {
   return JSON.stringify(left.voteResults) === JSON.stringify(right.voteResults);
 }
 
+function isSameCandidates(left: MyGameState, right: MyGameState) {
+  return JSON.stringify(left.candidates) === JSON.stringify(right.candidates);
+}
+
 function isSameVotingState(left: MyGameState, right: MyGameState) {
   return JSON.stringify(left.voting) === JSON.stringify(right.voting);
 }
@@ -236,6 +254,7 @@ function isSameGameState(left: MyGameState, right: MyGameState) {
   return (
     left.state === right.state &&
     isSamePrivateGameState(left, right) &&
+    isSameCandidates(left, right) &&
     isSameVotingState(left, right) &&
     isSameVoteResults(left, right)
   );
@@ -244,6 +263,7 @@ function isSameGameState(left: MyGameState, right: MyGameState) {
 function isFirstVotingResolutionState(state: MyGameState["state"]) {
   return (
     state === "tie_discussion" ||
+    state === "voting_second" ||
     state === "impostor_guess" ||
     state === "round_result"
   );
@@ -260,6 +280,10 @@ export function toGameplayDataState(
 
   if (gameState.state === "tie_discussion") {
     return { status: "tie-discussion", lobby, gameState };
+  }
+
+  if (gameState.state === "voting_second") {
+    return { status: "voting-second", lobby, gameState };
   }
 
   if (gameState.state === "impostor_guess") {
@@ -304,6 +328,25 @@ function isInconsistentStartVotingError(error: unknown) {
 
 function isExcludedStartVotingError(error: unknown) {
   return error instanceof Error && error.message === START_VOTING_EXCLUDED_MESSAGE;
+}
+
+function isNotHostStartSecondVotingError(error: unknown) {
+  return (
+    error instanceof Error && error.message === START_SECOND_VOTING_NOT_HOST_MESSAGE
+  );
+}
+
+function isInconsistentStartSecondVotingError(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message === START_SECOND_VOTING_INCONSISTENT_MESSAGE
+  );
+}
+
+function isExcludedStartSecondVotingError(error: unknown) {
+  return (
+    error instanceof Error && error.message === START_SECOND_VOTING_EXCLUDED_MESSAGE
+  );
 }
 
 type GameplayPollLoopOptions = {
@@ -507,6 +550,72 @@ export async function runStartVotingCommand(options: StartVotingCommandOptions) 
   }
 }
 
+type StartSecondVotingCommandOptions = {
+  start: () => Promise<unknown>;
+  refreshGameplay: () => Promise<MyGameState | null>;
+  refreshAuthoritative: () => Promise<void>;
+  setError: (message: string | undefined) => void;
+};
+
+export async function runStartSecondVotingCommand(
+  options: StartSecondVotingCommandOptions,
+) {
+  async function refreshAuthoritatively() {
+    try {
+      await options.refreshAuthoritative();
+    } catch (reconcileError) {
+      options.setError(
+        getFriendlyError(
+          reconcileError,
+          "No pudimos reconstruir la sala. Intentá de nuevo.",
+        ),
+      );
+    }
+  }
+
+  options.setError(undefined);
+
+  try {
+    await options.start();
+    await options.refreshGameplay();
+    return;
+  } catch (error) {
+    let recoveredGameState: MyGameState | null = null;
+
+    try {
+      recoveredGameState = await options.refreshGameplay();
+    } catch {
+      recoveredGameState = null;
+    }
+
+    if (recoveredGameState?.state === "voting_second") {
+      options.setError(undefined);
+      return;
+    }
+
+    if (isNotHostStartSecondVotingError(error)) {
+      options.setError(START_SECOND_VOTING_NOT_HOST_UI_MESSAGE);
+      await refreshAuthoritatively();
+      return;
+    }
+
+    if (
+      isInconsistentStartSecondVotingError(error) ||
+      isExcludedStartSecondVotingError(error)
+    ) {
+      await refreshAuthoritatively();
+      return;
+    }
+
+    options.setError(
+      getFriendlyError(
+        error,
+        "No pudimos ir a segunda votación. Intentá de nuevo.",
+      ),
+    );
+  }
+}
+
 type SubmitVoteCommandOptions = {
   targetPlayerId: string | null;
   submit: (targetPlayerId: string) => Promise<unknown>;
@@ -600,6 +709,7 @@ export function renderRoomLobbyContent(
     onHidePrivateView?: () => void;
     onStartDiscussion?: () => void;
     onStartVoting?: () => void;
+    onStartSecondVoting?: () => void;
     onSelectVoteTarget?: (targetPlayerId: string) => void;
     onSubmitVote?: () => void;
     onStartAnonymousAuth?: () => void;
@@ -610,6 +720,8 @@ export function renderRoomLobbyContent(
     startDiscussionError?: string;
     isStartingVoting?: boolean;
     startVotingError?: string;
+    isStartingSecondVoting?: boolean;
+    startSecondVotingError?: string;
     selectedVoteTargetPlayerId?: string | null;
     isSubmittingVote?: boolean;
     submitVoteError?: string;
@@ -777,6 +889,8 @@ export function renderRoomLobbyContent(
       dataState.status === "role-reveal" && selfParticipant?.isHost === true;
     const canStartVoting =
       dataState.status === "discussion" && selfParticipant?.isHost === true;
+    const canStartSecondVoting =
+      dataState.status === "tie-discussion" && selfParticipant?.isHost === true;
     const startDiscussionErrorFeedback =
       dataState.status === "role-reveal" && options.startDiscussionError ? (
         <div className="impostor-group-error" aria-live="polite">
@@ -813,6 +927,27 @@ export function renderRoomLobbyContent(
           {options.isStartingVoting ? "Yendo a votación..." : "Ir a votación"}
         </button>
         {startVotingErrorFeedback}
+      </div>
+    ) : null;
+    const startSecondVotingErrorFeedback =
+      dataState.status === "tie-discussion" && options.startSecondVotingError ? (
+        <div className="impostor-group-error" aria-live="polite">
+          <p>{options.startSecondVotingError}</p>
+        </div>
+      ) : null;
+    const startSecondVotingAction = canStartSecondVoting ? (
+      <div className="impostor-room-round-actions">
+        <button
+          className="impostor-action impostor-action--primary"
+          type="button"
+          disabled={options.isStartingSecondVoting}
+          onClick={options.onStartSecondVoting}
+        >
+          {options.isStartingSecondVoting
+            ? "Yendo a segunda votación..."
+            : "Ir a segunda votación"}
+        </button>
+        {startSecondVotingErrorFeedback}
       </div>
     ) : null;
 
@@ -901,10 +1036,18 @@ export function renderRoomLobbyContent(
 
     if (dataState.status === "voting-first") {
       const voting = dataState.gameState.voting;
-      const selectedTargetPlayerId =
+      const visibleVoteTargetIds = new Set(
+        (voting?.candidates ?? []).map((candidate) => candidate.playerId),
+      );
+      const requestedSelectedTargetPlayerId =
         voting?.myVoteTargetPlayerId ??
         options.selectedVoteTargetPlayerId ??
         null;
+      const selectedTargetPlayerId =
+        requestedSelectedTargetPlayerId &&
+        visibleVoteTargetIds.has(requestedSelectedTargetPlayerId)
+          ? requestedSelectedTargetPlayerId
+          : null;
       const hasVoted = voting?.hasVoted === true;
 
       return (
@@ -917,6 +1060,77 @@ export function renderRoomLobbyContent(
           </p>
           <h1 id="impostor-room-voting-title">Votación</h1>
           <p>Elegí a quién acusa el grupo.</p>
+          <div className="impostor-vote-list" role="list">
+            {(voting?.candidates ?? []).map((candidate) => {
+              const isSelected = selectedTargetPlayerId === candidate.playerId;
+
+              return (
+                <button
+                  key={candidate.playerId}
+                  className={
+                    isSelected
+                      ? "impostor-vote-option impostor-vote-option--selected"
+                      : "impostor-vote-option"
+                  }
+                  type="button"
+                  disabled={hasVoted || options.isSubmittingVote}
+                  aria-pressed={isSelected}
+                  onClick={() => options.onSelectVoteTarget?.(candidate.playerId)}
+                >
+                  {candidate.nickname}
+                </button>
+              );
+            })}
+          </div>
+          {hasVoted ? (
+            <p className="impostor-room-notice" aria-live="polite">
+              Voto registrado. Esperando al resto.
+            </p>
+          ) : (
+            <button
+              className="impostor-action impostor-action--primary"
+              type="button"
+              disabled={!selectedTargetPlayerId || options.isSubmittingVote}
+              onClick={options.onSubmitVote}
+            >
+              {options.isSubmittingVote ? "Registrando voto..." : "Votar"}
+            </button>
+          )}
+          {options.submitVoteError ? (
+            <div className="impostor-group-error" aria-live="polite">
+              <p>{options.submitVoteError}</p>
+            </div>
+          ) : null}
+        </section>
+      );
+    }
+
+    if (dataState.status === "voting-second") {
+      const voting = dataState.gameState.voting;
+      const visibleVoteTargetIds = new Set(
+        (voting?.candidates ?? []).map((candidate) => candidate.playerId),
+      );
+      const requestedSelectedTargetPlayerId =
+        voting?.myVoteTargetPlayerId ??
+        options.selectedVoteTargetPlayerId ??
+        null;
+      const selectedTargetPlayerId =
+        requestedSelectedTargetPlayerId &&
+        visibleVoteTargetIds.has(requestedSelectedTargetPlayerId)
+          ? requestedSelectedTargetPlayerId
+          : null;
+      const hasVoted = voting?.hasVoted === true;
+
+      return (
+        <section
+          className="impostor-group-card impostor-room-role-reveal"
+          aria-labelledby="impostor-room-second-voting-title"
+        >
+          <p className="impostor-kicker">
+            Ronda {dataState.gameState.roundNumber}
+          </p>
+          <h1 id="impostor-room-second-voting-title">Segunda votación</h1>
+          <p>Elegí entre quienes empataron.</p>
           <div className="impostor-vote-list" role="list">
             {(voting?.candidates ?? []).map((candidate) => {
               const isSelected = selectedTargetPlayerId === candidate.playerId;
@@ -990,6 +1204,19 @@ export function renderRoomLobbyContent(
           </p>
           <h1 id="impostor-room-result-title">{title}</h1>
           <p>{message}</p>
+          {dataState.status === "tie-discussion" &&
+          (dataState.gameState.candidates?.length ?? 0) > 0 ? (
+            <div className="impostor-group-section">
+              <h2>Empatados</h2>
+              <ul className="impostor-vote-results">
+                {(dataState.gameState.candidates ?? []).map((candidate) => (
+                  <li key={candidate.playerId}>
+                    <span>{candidate.nickname}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <ol className="impostor-vote-results">
             {(dataState.gameState.voteResults ?? []).map((result) => (
               <li key={result.playerId}>
@@ -1002,6 +1229,10 @@ export function renderRoomLobbyContent(
               </li>
             ))}
           </ol>
+          {dataState.status === "tie-discussion" ? startSecondVotingAction : null}
+          {dataState.status === "tie-discussion" && !canStartSecondVoting
+            ? startSecondVotingErrorFeedback
+            : null}
         </section>
       );
     }
@@ -1176,6 +1407,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   >();
   const [isStartingVoting, setIsStartingVoting] = useState(false);
   const [startVotingError, setStartVotingError] = useState<string | undefined>();
+  const [isStartingSecondVoting, setIsStartingSecondVoting] = useState(false);
+  const [startSecondVotingError, setStartSecondVotingError] = useState<
+    string | undefined
+  >();
   const [selectedVoteTargetPlayerId, setSelectedVoteTargetPlayerId] = useState<
     string | null
   >(null);
@@ -1700,6 +1935,28 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     }
   }
 
+  async function handleStartSecondVoting() {
+    if (isStartingSecondVoting || !isMountedRef.current) {
+      return;
+    }
+
+    setStartSecondVotingError(undefined);
+    setIsStartingSecondVoting(true);
+
+    try {
+      await runStartSecondVotingCommand({
+        start: () => startSecondRoundVoting(createImpostorRoomsClient()),
+        refreshGameplay: () => refreshGameplayStateNow("manual"),
+        refreshAuthoritative: () => refreshAuthoritativeRoomState("authority"),
+        setError: setStartSecondVotingError,
+      });
+    } finally {
+      if (isMountedRef.current) {
+        setIsStartingSecondVoting(false);
+      }
+    }
+  }
+
   async function handleSubmitVote() {
     if (isSubmittingVote || !isMountedRef.current) {
       return;
@@ -1938,6 +2195,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     onHidePrivateView: () => void handleHidePrivateView(),
     onStartDiscussion: () => void handleStartDiscussion(),
     onStartVoting: () => void handleStartVoting(),
+    onStartSecondVoting: () => void handleStartSecondVoting(),
     onSelectVoteTarget: handleSelectVoteTarget,
     onSubmitVote: () => void handleSubmitVote(),
     onStartAnonymousAuth: () => void handleStartAnonymousAuth(),
@@ -1948,6 +2206,8 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     startDiscussionError,
     isStartingVoting,
     startVotingError,
+    isStartingSecondVoting,
+    startSecondVotingError,
     selectedVoteTargetPlayerId,
     isSubmittingVote,
     submitVoteError,
