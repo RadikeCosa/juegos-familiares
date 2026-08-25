@@ -410,6 +410,7 @@ async function main() {
   const aggregateAfterRefresh = await getMyGameState(lastVotes.host.client);
   assertEqual(aggregateAfterRefresh.state, "tie_discussion", "Refresh should reconstruct final aggregate state.");
   assert(Array.isArray(aggregateAfterRefresh.vote_results), "Final state should return aggregate results.");
+  assert(aggregateAfterRefresh.candidates === null || Array.isArray(aggregateAfterRefresh.candidates), "Later increments may expose structured tie candidates.");
   assert(resultTargets(aggregateAfterRefresh).includes(lastVotes.host.playerId), "Aggregate should include accused candidates.");
   assertNoForbiddenReadModelFields(aggregateAfterRefresh, "tie_discussion aggregate");
 
