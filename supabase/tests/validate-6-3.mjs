@@ -267,6 +267,26 @@ function hasColumn(tableName, columnName) {
   `) === "t";
 }
 
+function columnType(tableName, columnName) {
+  return psql(`
+    select data_type
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = ${sqlString(tableName)}
+      and column_name = ${sqlString(columnName)};
+  `);
+}
+
+function isColumnNotNull(tableName, columnName) {
+  return psql(`
+    select is_nullable = 'NO'
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = ${sqlString(tableName)}
+      and column_name = ${sqlString(columnName)};
+  `) === "t";
+}
+
 function hasTable(tableName) {
   return psql(`
     select exists (
@@ -406,10 +426,11 @@ async function buildRoomWithPlayers(label, playerNames) {
 
 async function main() {
   assert(hasColumn("game_sessions", "state"), "game_sessions.state should exist.");
-  assertEqual(
-    constraintDefinition("game_sessions", "game_sessions_state_check"),
-    "CHECK ((state = 'role_reveal'::text))",
-    "game_sessions.state check mismatch."
+  assertEqual(columnType("game_sessions", "state"), "text", "game_sessions.state type mismatch.");
+  assert(isColumnNotNull("game_sessions", "state"), "game_sessions.state should be NOT NULL.");
+  assert(
+    constraintDefinition("game_sessions", "game_sessions_state_check").includes("role_reveal"),
+    "game_sessions.state check should allow role_reveal."
   );
   assert(hasTable("rounds"), "rounds table should exist.");
   assertEqual(constraintDefinition("rounds", "rounds_pkey"), "PRIMARY KEY (id)", "rounds PK mismatch.");

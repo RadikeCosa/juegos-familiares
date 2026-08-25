@@ -27,6 +27,7 @@ import {
     ROOM_LIVENESS_HEARTBEAT_MS,
     startRoomHostSuccessionRecheck,
     startRoomLivenessHeartbeat,
+    startRoundDiscussion,
     startSession,
     subscribeToRoomPresence,
     subscribeToRoomChanges
@@ -58,11 +59,23 @@ const gameStatePlayerRow = {
     word: "Tesoro Azul"
 };
 
+const gameStateDiscussionPlayerRow = {
+    ...gameStatePlayerRow,
+    state: "discussion"
+};
+
 const gameStateImpostorRow = {
     state: "role_reveal",
     round_number: 1,
     role: "impostor",
     word: null
+};
+
+const startRoundDiscussionRow = {
+    advanced: true,
+    already_in_phase: false,
+    state: "discussion",
+    round_number: 1
 };
 
 describe("createRoom", () => {
@@ -862,6 +875,21 @@ describe("getMyGameState", () => {
         });
     });
 
+    it("maps discussion state without changing the private view contract", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [gameStateDiscussionPlayerRow],
+                error: null
+            }))
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toEqual({
+            state: "discussion",
+            roundNumber: 1,
+            privateView: { role: "player", word: "Tesoro Azul" }
+        });
+    });
+
     it("maps game-state domain failures to product-level feedback", async () => {
         const inconsistent = {
             rpc: vi.fn(async () => ({ data: null, error: { code: "P0022" } }))
@@ -903,6 +931,12 @@ describe("getMyGameState", () => {
                 error: null
             }))
         };
+        const unknownState = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...gameStatePlayerRow, state: "voting_first" }],
+                error: null
+            }))
+        };
 
         await expect(getMyGameState(impostorWithWord)).rejects.toThrow(
             "No pudimos confirmar el estado de la tanda."
@@ -914,6 +948,9 @@ describe("getMyGameState", () => {
             "No pudimos confirmar el estado de la tanda."
         );
         await expect(getMyGameState(invalidRoundNumber)).rejects.toThrow(
+            "No pudimos confirmar el estado de la tanda."
+        );
+        await expect(getMyGameState(unknownState)).rejects.toThrow(
             "No pudimos confirmar el estado de la tanda."
         );
     });
@@ -933,6 +970,104 @@ describe("getMyGameState", () => {
         const result = await getMyGameState(supabase);
 
         expect(JSON.stringify(result)).not.toMatch(/normalized_secret_word|impostor_player_id|player-3/);
+    });
+});
+
+describe("startRoundDiscussion", () => {
+    it("calls the authoritative RPC without room, session, host or round arguments", async () => {
+        const supabase = {
+            rpc: vi.fn(async (_fn: string) => {
+                void _fn;
+
+                return { data: [startRoundDiscussionRow], error: null };
+            })
+        };
+
+        await expect(startRoundDiscussion(supabase)).resolves.toEqual({
+            advanced: true,
+            alreadyInPhase: false,
+            state: "discussion",
+            roundNumber: 1
+        });
+
+        expect(supabase.rpc).toHaveBeenCalledWith("start_round_discussion");
+        expect(supabase.rpc.mock.calls[0]).toHaveLength(1);
+    });
+
+    it("maps idempotent discussion responses", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...startRoundDiscussionRow,
+                    advanced: false,
+                    already_in_phase: true
+                }],
+                error: null
+            }))
+        };
+
+        await expect(startRoundDiscussion(supabase)).resolves.toEqual({
+            advanced: false,
+            alreadyInPhase: true,
+            state: "discussion",
+            roundNumber: 1
+        });
+    });
+
+    it("maps start discussion failures to product-level feedback", async () => {
+        const notHost = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0019" } }))
+        };
+        const excluded = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0023" } }))
+        };
+
+        await expect(startRoundDiscussion(notHost)).rejects.toThrow(
+            "Solo el host actual puede empezar la ronda."
+        );
+        await expect(startRoundDiscussion(excluded)).rejects.toThrow(
+            "No participás de la tanda actual."
+        );
+    });
+
+    it("rejects malformed transition responses explicitly", async () => {
+        const wrongState = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...startRoundDiscussionRow, state: "role_reveal" }],
+                error: null
+            }))
+        };
+        const invalidRoundNumber = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...startRoundDiscussionRow, round_number: 0 }],
+                error: null
+            }))
+        };
+
+        await expect(startRoundDiscussion(wrongState)).rejects.toThrow(
+            "No pudimos confirmar el comienzo de la ronda."
+        );
+        await expect(startRoundDiscussion(invalidRoundNumber)).rejects.toThrow(
+            "No pudimos confirmar el comienzo de la ronda."
+        );
+    });
+
+    it("does not expose secret internals in mapped results", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...startRoundDiscussionRow,
+                    secret_word: "Tesoro",
+                    normalized_secret_word: "tesoro",
+                    impostor_player_id: "player-1"
+                }],
+                error: null
+            }))
+        };
+
+        const result = await startRoundDiscussion(supabase);
+
+        expect(JSON.stringify(result)).not.toMatch(/secret_word|normalized_secret_word|impostor_player_id|Tesoro/);
     });
 });
 
