@@ -67,6 +67,7 @@ Incremento 5.0 documental completado sobre Incremento 4 cerrado localmente
 * liveness autoritativo mínimo cerrado en 5.2 con timestamp server-side, heartbeat proporcional y smoke productivo específico.
 * sucesión autoritativa de host cerrada en 5.3 con `reassign_room_host_if_stale()`, selección server-side, concurrencia consistente, feedback breve y smoke productivo multi-cliente.
 * Incremento 6 cerrado técnicamente: host inicia tanda con `start_session()`, roster congelado en `SessionPlayers`, palabra e impostor server-side, Round 1 en `role_reveal`, Room `playing`, lectura privada con `get_my_game_state()` y UI tap-to-reveal sin filtrar secretos.
+* Incremento 7 cerrado técnicamente: `GameSession.state` admite `role_reveal → discussion`, `start_round_discussion()` lo ejecuta con autoridad del host actual, los clientes convergen por polling lento de `get_my_game_state()` y la UI de `discussion` mantiene la vista privada oculta por defecto con reveal/hide local.
 
 ## PENDIENTE
 
@@ -75,6 +76,7 @@ Incremento 5.0 documental completado sobre Incremento 4 cerrado localmente
 * métricas;
 * hardening mobile/concurrencia de 5.4, en suspenso hasta validación física;
 * validación manual multi-dispositivo del Incremento 6;
+* validación manual multi-dispositivo del Incremento 7;
 * tests de dominio de juego;
 * UI final;
 * evidencia visual;
@@ -764,7 +766,7 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 5.3 | Sucesión autoritativa de host | CERRADO | RPC `reassign_room_host_if_stale()`, autoridad desde `auth.uid()`, host stale por liveness, sucesor por `joined_at ASC, player_id ASC`, concurrencia, revival, no-op sin candidatos, feedback breve y smoke productivo PASS |
 | 5.4 | Hardening mobile/concurrencia | EN SUSPENSO / VALIDACIÓN PENDIENTE | La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios; falta validación física mobile/desktop de background, lock, reconnect, multiple connections y timings 30s/90s/30s antes del cierre final del MVP |
 | 6 | Iniciar tanda y preparar ronda privada | CERRADO TÉCNICAMENTE | 6.0-6.5 cerrados: GameSession/SessionPlayer/Round, lifecycle `playing`, `start_session()` atómico, snapshot de activos, palabra e impostor server-side, `get_my_game_state()`, privacidad por caller, UI role reveal y hardening de refetch; validación manual multi-dispositivo pendiente |
-| 7 | Confirmación de rol y estado PLAYING | PENDIENTE | PENDIENTE |
+| 7 | Transición de role reveal a discussion | CERRADO TÉCNICAMENTE | 7.0-7.4 cerrados: sin acknowledgement persistido, `start_round_discussion()` 0-args, autoridad por host actual, sucesión de host vigente en `playing`, read model privado `role_reveal | discussion`, polling lento sin gameplay Realtime/Broadcast, UI `Empezar ronda` host-only y reveal/hide local en `discussion`; validación manual multi-dispositivo pendiente |
 | 8 | Primera votación | PENDIENTE | PENDIENTE |
 | 9 | Empate y segunda votación | PENDIENTE | PENDIENTE |
 | 10 | Intento final del impostor | PENDIENTE | PENDIENTE |

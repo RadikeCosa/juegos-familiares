@@ -736,6 +736,20 @@ Los cambios persistidos de Room y RoomParticipants se usan como invalidación co
 
 No se agregó Realtime de gameplay ni Broadcast. `game_sessions`, `session_players` y `rounds` no se publican por Realtime, no tienen grants CRUD de cliente y se acceden mediante RPCs autoritativas. Los secretos nunca viajan por Realtime.
 
+En Incremento 7, la transición `role_reveal → discussion` no modifica `Room.status`, por lo que no existe un `rooms UPDATE` natural para invalidar a todos los clientes. La sincronización inicial de gameplay es polling lento de `get_my_game_state()` mientras `Room.status = playing`.
+
+El polling reconstruye estado autoritativo y no transporta secretos por un canal adicional. El valor inicial sugerido es aproximadamente cada 3 segundos, como detalle técnico configurable. Cuando el host ejecuta exitosamente la transición, su cliente hace refetch autoritativo inmediato.
+
+No se publica en Incremento 7:
+
+```text
+game_sessions
+session_players
+rounds
+```
+
+por Postgres Changes. Tampoco se usa Room como bus artificial ni se agrega Broadcast. Broadcast privado de invalidación, sin secretos, queda como posibilidad futura.
+
 ---
 
 # 20. Presence
@@ -869,7 +883,40 @@ Presence no se convierte en fuente de verdad del lobby persistente. El retorno d
 
 ---
 
-# 21. Ejemplo futuro: START_VOTING
+# 21. START_ROUND_DISCUSSION
+
+```text
+Host actual toca "Empezar ronda"
+        ↓
+PWA envía intención
+        ↓
+autoridad valida:
+- actor es host actual de Room
+- Room.status = playing
+- actor pertenece a SessionPlayers
+- GameSession.state = role_reveal
+- Round actual es coherente
+        ↓
+GameSession.state cambia a discussion
+        ↓
+host hace refetch inmediato
+        ↓
+demás participantes observan el cambio por polling
+        ↓
+cada participante muestra "Ronda en juego"
+```
+
+La RPC para esta transición es específica y sin argumentos:
+
+```text
+start_round_discussion()
+```
+
+No se utiliza una operación genérica como `advance_round_phase()`.
+
+---
+
+# 22. Ejemplo futuro: START_VOTING
 
 ```text
 Host toca "Ir a votación"
@@ -878,7 +925,7 @@ PWA envía intención
         ↓
 autoridad valida:
 - actor es host
-- ronda está en PLAYING
+- GameSession.state = discussion
         ↓
 estado cambia a VOTING_FIRST
         ↓
@@ -889,7 +936,7 @@ cada participante muestra UI de votación
 
 ---
 
-# 22. Ejemplo completo: START_SESSION + PREPARE_ROUND
+# 23. Ejemplo completo: START_SESSION + PREPARE_ROUND
 
 ```text
 Host actual toca "Iniciar tanda"

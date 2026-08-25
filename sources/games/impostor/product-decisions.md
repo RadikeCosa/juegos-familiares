@@ -417,6 +417,90 @@ No debe existir como estado durable exitoso una Room en `playing` sin Round 1, u
 
 Las operaciones de lifecycle de lobby no se interpretan automáticamente como salida o cierre de la tanda mientras `Room.status = playing`. El cierre normal futuro de gameplay será mediante `END_SESSION`; la política detallada de abandono durante gameplay queda fuera de Incremento 6.
 
+# Transición de role reveal a discussion
+
+## Decisión
+
+En Incremento 7, el MVP no persistirá confirmaciones individuales de rol.
+
+No se agregan:
+
+```text
+roleAcknowledged
+role_acknowledged_at
+allRolesSeen
+```
+
+La coordinación de que todos hayan visto su rol ocurre presencialmente. El host actual avanza la fase:
+
+```text
+role_reveal
+→ discussion
+```
+
+La acción visible implementada es:
+
+```text
+Empezar ronda
+```
+
+No se usa `playing` como `GameSession.state`, porque `Room.status = playing` ya significa que la Room está dentro de gameplay y no admite nuevos joins.
+
+`discussion` significa:
+
+```text
+la Round actual está en conversación/pistas presenciales
+la identidad del impostor sigue privada
+la palabra sigue privada
+la app no controla turnos
+la app no controla timer
+la votación todavía no comenzó
+```
+
+La autoridad es siempre el host actual persistido en:
+
+```text
+rooms.host_player_id
+```
+
+No el administrador del Group, el creador original de la Room ni el host que inició la GameSession si ya fue reemplazado por sucesión.
+
+La fase global continúa viviendo en `GameSession.state`. No se agrega `Round.status` mientras duplicaría el mismo estado.
+
+## Motivo
+
+Impostor es un juego social presencial. La aplicación debe digitalizar solo aquello que aporta coordinación real.
+
+El grupo puede resolver verbalmente:
+
+```text
+¿Estamos todos?
+```
+
+Persistir acknowledgements individuales agregaría más estado distribuido, casos de refresh, bloqueos por disconnect, reglas para jugadores offline y sincronización adicional sin aportar suficiente valor al MVP.
+
+## Sincronización inicial
+
+El cambio `role_reveal → discussion` no modifica `Room.status`. Por lo tanto, el `UPDATE rooms` usado por `START_SESSION` ya no sirve como invalidación natural.
+
+En Incremento 7 se usa polling lento de:
+
+```text
+get_my_game_state()
+```
+
+mientras:
+
+```text
+Room.status = playing
+```
+
+El polling reconstruye siempre estado autoritativo y no transporta secretos por un canal aparte. Un valor inicial sugerido es aproximadamente cada 3 segundos; es un detalle técnico configurable, no una regla de producto permanente.
+
+No se publican `game_sessions`, `session_players` ni `rounds` por Postgres Changes en Incremento 7. Tampoco se usa Room como bus artificial ni se agrega Broadcast.
+
+Broadcast privado queda como posibilidad futura de invalidación, por ejemplo `game-state-invalidated`, sin transportar nunca `word`, `role` ni `impostor`.
+
 ## Palabra, impostor y privacidad
 
 La palabra de la ronda se selecciona server-side, autoritativamente y de forma aleatoria entre palabras del banco del Group que no hayan sido utilizadas antes en la misma GameSession.

@@ -656,7 +656,9 @@ SessionPlayer
 
 Una desconexión no elimina `SessionPlayer` ni modifica automáticamente el roster.
 
-`score` pertenece a scoring posterior. `roleAcknowledged` pertenece al Incremento 7. `voteSubmitted` pertenece a votación. `impostorCount` puede derivarse de rondas anteriores y no se persiste conceptualmente como dato obligatorio en Incremento 6.
+`score` pertenece a scoring posterior. `voteSubmitted` pertenece a votación. `impostorCount` puede derivarse de rondas anteriores y no se persiste conceptualmente como dato obligatorio en Incremento 6.
+
+Al cierre técnico de Incremento 7 no se persisten `roleAcknowledged`, `role_acknowledged_at` ni `allRolesSeen` para el MVP. La coordinación de que todos vieron su rol ocurre presencialmente y el avance a conversación lo ejecuta el host actual mediante `start_round_discussion()`.
 
 ## Persistencia
 
@@ -698,7 +700,7 @@ En la forma mínima implementada por Incremento 6, `Round` guarda el snapshot de
 
 `winner`, `accusedPlayer`, `finishedAt`, `guessResult` y cambios de score quedan fuera de Incremento 6.
 
-Para Incremento 6 la fase global pertenece a `GameSession.state`; no se agrega `Round.status` si duplicaría esa misma fase.
+Para Incremento 6 la fase global pertenece a `GameSession.state`; no se agrega `Round.status` si duplicaría esa misma fase. Incremento 7 mantiene esa decisión para `role_reveal → discussion`.
 
 ## Persistencia
 

@@ -1583,7 +1583,7 @@ Impostor:
 
 ### Fuera de alcance
 
-* confirmación `Estoy listo`;
+* acknowledgement persistido de rol;
 * votación;
 * scoring;
 * nuevas rondas;
@@ -1792,7 +1792,7 @@ Fuera de alcance:
 * UI de gameplay;
 * Realtime de gameplay;
 * vista privada;
-* confirmación `Estoy listo`.
+* acknowledgement persistido de rol.
 
 Criterio de terminado:
 
@@ -1908,8 +1908,8 @@ Tests / validación futura:
 Fuera de alcance:
 
 * Broadcast específico;
-* ACK de rol;
-* transición a PLAYING;
+* ACK persistido de rol;
+* transición a `discussion`;
 * votación.
 
 Criterio de terminado:
@@ -1986,9 +1986,8 @@ Esto no cierra 5.4, que sigue `EN SUSPENSO`.
 
 Fuera de alcance:
 
-* `ACKNOWLEDGE_ROLE`;
-* `roleAcknowledged`;
-* transición `ROLE_REVEAL → PLAYING`;
+* acknowledgement persistido de rol;
+* transición `ROLE_REVEAL → DISCUSSION`;
 * votación;
 * scoring;
 * `END_SESSION`;
@@ -1996,78 +1995,310 @@ Fuera de alcance:
 
 Criterio de terminado:
 
-La primera ronda privada está preparada y visible para cada participante correcto, sin ampliar alcance hacia Incremento 7.
+La primera ronda privada está preparada y visible para cada participante correcto, sin ampliar alcance hacia la transición `role_reveal → discussion` del Incremento 7.
 
 ---
 
-## Incremento 7 — Confirmación de rol y estado PLAYING
+## Incremento 7 — Transición de role reveal a discussion
 
 ### Objetivo
 
-Permitir que cada jugador confirme que vio su información y avanzar a conversación presencial cuando todos estén listos.
+Permitir que el host actual avance la ronda desde la revelación privada de rol hacia la conversación presencial, sin persistir confirmaciones individuales.
+
+El Incremento 7 adopta explícitamente la decisión de no digitalizar el `ready` verbal del grupo para el MVP:
+
+```text
+role_reveal
+→ host pulsa "Empezar ronda"
+→ discussion
+```
+
+No se implementan:
+
+```text
+roleAcknowledged
+role_acknowledged_at
+allRolesSeen
+```
+
+La coordinación de que todos hayan visto su rol ocurre presencialmente. El grupo puede resolver verbalmente:
+
+```text
+¿Estamos todos?
+```
+
+Persistir acknowledgements individuales agregaría estado distribuido, casos de refresh, bloqueos por disconnect y sincronización adicional sin aportar suficiente valor al MVP presencial.
 
 ### Resultado observable
 
-Cada jugador toca `Estoy listo`.
+Durante `role_reveal`, cada jugador sigue usando el reveal local:
 
-La partida avanza automáticamente de `ROLE_REVEAL` a `PLAYING`.
+```text
+Tu rol está listo
+→ Ver mi rol
+```
 
-El host ve la acción `Ir a votación`.
+El host actual pulsa:
 
-Los demás ven que esperan al host.
+```text
+Empezar ronda
+```
+
+La GameSession pasa de:
+
+```text
+role_reveal
+→ discussion
+```
+
+Todos los SessionPlayers reconstruyen la fase mediante `get_my_game_state()`. En `discussion`, la UI comunica que la ronda está en juego y permite volver a consultar localmente la palabra o rol privado mediante una acción explícita.
 
 ### Dominio involucrado
 
 Impostor:
 
 * `ROLE_REVEAL`;
-* `roleAcknowledged`;
-* transición a `PLAYING`;
-* acción `START_VOTING` disponible para host.
+* `DISCUSSION`;
+* transición host-driven `role_reveal → discussion`;
+* privacidad de palabra/rol durante conversación presencial.
 
-### Infraestructura necesaria
+### Infraestructura implementada
 
-* persistencia de confirmaciones individuales;
-* sincronización de fase global;
-* autorización de participante para confirmar.
+* ampliación de `GameSession.state` para admitir `discussion`;
+* RPC autoritativa específica `start_round_discussion()`;
+* autorización de host actual;
+* read model privado compatible con `role_reveal | discussion`;
+* polling lento de `get_my_game_state()` mientras `Room.status = playing`.
 
-### Decisiones técnicas a cerrar
+### Decisiones técnicas cerradas
 
-* si la confirmación se guarda en `SessionPlayer` o entidad equivalente;
-* cómo evitar doble confirmación problemática;
-* cómo se recupera esta pantalla después de refresh.
+Decisiones cerradas por 7.0:
+
+* no persistir acknowledgement de rol;
+* no agregar `Round.status`;
+* mantener la fase global en `GameSession.state`;
+* usar `discussion`, no `playing`, como estado de GameSession;
+* usar RPC específica 0-args `start_round_discussion()`, no `advance_round_phase()`;
+* sincronizar inicialmente por polling autoritativo, no por Realtime de tablas privadas ni Broadcast.
+
+Contrato implementado de `start_round_discussion()`:
+
+```text
+authenticated caller
+Player válido
+active Room
+Room.status = playing
+caller = current rooms.host_player_id
+caller ∈ SessionPlayers
+GameSession coherente
+current GameSession.state = role_reveal
+current Round coherente
+```
+
+Semántica:
+
+```text
+state = role_reveal
+→ state = discussion
+→ advanced = true
+```
+
+Retry:
+
+```text
+state = discussion
+→ no-op exitoso
+→ already_in_phase = true
+```
+
+Otro estado debe tratarse como transición inválida.
+
+Orden conceptual de locking:
+
+```text
+resolver active Room
+→ lock Room FOR UPDATE
+→ validar current host
+→ resolver/lock GameSession
+→ transition
+```
+
+La fila de Room sigue siendo el lock principal para no invertir el orden vigente del lifecycle y la sucesión de host.
+
+La sincronización de 7 usa:
+
+```text
+polling lento
+→ get_my_game_state()
+→ authoritative state
+```
+
+Valor inicial sugerido:
+
+```text
+aproximadamente cada 3 segundos
+```
+
+Es detalle técnico configurable, no regla de producto permanente. Cuando el host ejecuta exitosamente `start_round_discussion()`, su cliente hace un refetch autoritativo inmediato en lugar de esperar al siguiente tick.
 
 ### Tests / validación
 
-* unit test de guard: todos confirmados;
-* integración: un jugador no participante no confirma;
-* integración: la fase no avanza hasta que todos confirmen;
-* prueba manual con varios teléfonos;
-* validación de refresh durante `ROLE_REVEAL`.
+* integración: solo el host actual puede iniciar `discussion`;
+* integración: un sucesor legítimo puede iniciar `discussion`;
+* integración: un RoomParticipant excluido no obtiene gameplay privado ni autoridad;
+* integración: doble click/retry en `discussion` es no-op exitoso;
+* integración: `get_my_game_state()` reconstruye `role_reveal | discussion`;
+* validación técnica automatizada de backend, wrapper, polling, UI y privacidad;
+* validación de refresh/reconnect durante `role_reveal` y `discussion`;
+* revisión de privacidad: no se expone `impostor_player_id`, `normalized_secret_word` ni roles de otros.
 
 ### Riesgos
 
-* avanzar de fase antes de tiempo;
-* mostrar accidentalmente información privada tras confirmar;
-* bloquear la ronda si un dispositivo se refresca.
+* avanzar de fase con un actor que ya no es host;
+* confundir `Room.status = playing` con `GameSession.state = discussion`;
+* mostrar accidentalmente información privada durante re-reveal local;
+* polling demasiado agresivo o demasiado lento;
+* introducir Realtime/Broadcast antes de necesitarlo.
 
 ### Fuera de alcance
 
+* `roleAcknowledged`;
+* `role_acknowledged_at`;
+* `allRolesSeen`;
 * temporizador;
 * orden de habla;
 * control digital de conversación;
+* botón funcional o falso de `Ir a votación`;
 * votación.
 
 ### Criterio de terminado
 
-La ronda puede pasar de información privada a conversación presencial con una única fase compartida y consistente.
+La ronda puede pasar de información privada a conversación presencial con una fase compartida consistente:
+
+```text
+role_reveal
+→ discussion
+```
+
+El host actual inicia la fase, todos los SessionPlayers la reconstruyen, reconnect reconstruye `discussion`, la vista privada sigue protegida y cada jugador puede volver a consultar localmente su palabra/rol sin persistir ese reveal.
 
 ### Conceptos a aprender
 
 * estado global vs estado individual;
-* guards de transición;
-* sincronización de fase;
+* transición host-driven;
+* idempotencia;
+* polling como sincronización simple;
 * recuperación simple de pantalla.
+
+#### Incremento 7.0 — Contrato documental
+
+Objetivo:
+
+```text
+documentar el contrato role_reveal → discussion
+```
+
+Debe cerrar:
+
+* sin persisted acknowledgement;
+* transición controlada por host actual;
+* `discussion` como estado de `GameSession`;
+* fase global en `GameSession.state`, sin `Round.status`;
+* RPC específica `start_round_discussion()`;
+* polling lento de `get_my_game_state()`;
+* sin Realtime de tablas privadas;
+* sin Broadcast;
+* sin voting.
+
+Estado:
+
+```text
+CERRADO
+```
+
+#### Incremento 7.1 — Backend role_reveal → discussion
+
+Incluye de forma coherente:
+
+* `GameSession.state` admite `discussion`;
+* `start_round_discussion()`;
+* `get_my_game_state()` puede leer `discussion`;
+* tests DB/security/idempotencia.
+
+No debe dejar un backend capaz de entrar en `discussion` que el read model vigente no pueda reconstruir.
+
+Estado:
+
+```text
+CERRADO
+```
+
+#### Incremento 7.2 — Client API + polling de estado
+
+Incluye:
+
+* wrapper cliente de transición;
+* tipos TypeScript para `discussion`;
+* polling autoritativo de `get_my_game_state()`;
+* refetch inmediato para el host tras transición exitosa;
+* hardening de race/unmount/stale response.
+
+Estado:
+
+```text
+CERRADO
+```
+
+#### Incremento 7.3 — UI vertical discussion
+
+Incluye:
+
+* acción host `Empezar ronda`;
+* pantalla `discussion`;
+* re-reveal privado local de palabra/rol;
+* ausencia de CTA funcional o falso de votación.
+
+Estado:
+
+```text
+CERRADO
+```
+
+#### Incremento 7.4 — Hardening, auditoría y validación
+
+Cubre:
+
+* host succession;
+* retry/doble click;
+* offline/reconnect;
+* RoomParticipant excluido;
+* polling;
+* privacidad;
+* validación técnica final.
+
+Estado:
+
+```text
+CERRADO
+```
+
+Pendiente fuera del cierre técnico:
+
+```text
+validación manual multi-dispositivo de Incremento 7
+```
+
+Estado final del Incremento 7:
+
+```text
+7.0 — CERRADO
+7.1 — CERRADO
+7.2 — CERRADO
+7.3 — CERRADO
+7.4 — CERRADO
+
+INCREMENTO 7 — CERRADO TÉCNICAMENTE
+```
 
 ---
 
@@ -2075,7 +2306,7 @@ La ronda puede pasar de información privada a conversación presencial con una 
 
 ### Objetivo
 
-Implementar la primera votación secreta y su resolución básica.
+Analizar e implementar la transición `discussion → voting` y la primera votación secreta con su resolución básica.
 
 ### Resultado observable
 
@@ -2810,7 +3041,7 @@ Se agregó Room + Lobby: creación de Room, join por código/enlace, reconstrucc
 
 Incremento 6 quedó cerrado técnicamente: inicio de tanda autoritativo, `GameSession`, `SessionPlayer`, Round 1, privacidad por caller y UI vertical hasta `role_reveal`.
 
-Incrementos 7 a 12 agregan confirmación de rol, conversación, votación, scoring e historial.
+Incrementos 7 a 12 agregan transición a conversación presencial, votación, scoring e historial.
 
 ## Incrementos 13 y 14
 
