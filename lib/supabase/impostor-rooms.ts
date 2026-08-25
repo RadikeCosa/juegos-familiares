@@ -422,11 +422,30 @@ export type SubmitRoundVoteResult = {
     roundNumber: number;
 };
 
-export type GameSessionState = "role_reveal" | "discussion";
+export type GameSessionState =
+    | "role_reveal"
+    | "discussion"
+    | "voting_first"
+    | "tie_discussion"
+    | "impostor_guess"
+    | "round_result";
+
+type VoteCandidateRow = {
+    player_id: string;
+    nickname: string;
+};
+
+type VoteResultRow = VoteCandidateRow & {
+    vote_count: number;
+};
 
 type MyGameStateRow = {
     state: GameSessionState;
     round_number: number;
+    candidates?: unknown;
+    my_vote_target_player_id?: string | null;
+    has_voted?: boolean;
+    vote_results?: unknown;
 } & (
     | {
         role: "player";
@@ -448,10 +467,25 @@ export type MyPrivateRoundView =
         word: null;
     };
 
+export type VoteCandidate = {
+    playerId: string;
+    nickname: string;
+};
+
+export type VoteResult = VoteCandidate & {
+    voteCount: number;
+};
+
 export type MyGameState = {
     state: GameSessionState;
     roundNumber: number;
     privateView: MyPrivateRoundView;
+    voting: {
+        candidates: VoteCandidate[];
+        myVoteTargetPlayerId: string | null;
+        hasVoted: boolean;
+    } | null;
+    voteResults: VoteResult[] | null;
 };
 
 function isSupabaseErrorLike(error: unknown): error is SupabaseErrorLike {
@@ -819,7 +853,14 @@ function isMyGameStateRow(value: unknown): value is MyGameStateRow {
     const row = value as Partial<MyGameStateRow>;
 
     if (
-        (row.state !== "role_reveal" && row.state !== "discussion") ||
+        (
+            row.state !== "role_reveal" &&
+            row.state !== "discussion" &&
+            row.state !== "voting_first" &&
+            row.state !== "tie_discussion" &&
+            row.state !== "impostor_guess" &&
+            row.state !== "round_result"
+        ) ||
         typeof row.round_number !== "number" ||
         !Number.isInteger(row.round_number) ||
         row.round_number < 1
@@ -828,10 +869,93 @@ function isMyGameStateRow(value: unknown): value is MyGameStateRow {
     }
 
     if (row.role === "player") {
-        return typeof row.word === "string";
+        if (typeof row.word !== "string") {
+            return false;
+        }
+    } else if (!(row.role === "impostor" && row.word === null)) {
+        return false;
     }
 
-    return row.role === "impostor" && row.word === null;
+    if (row.state === "voting_first") {
+        return (
+            Array.isArray(row.candidates) &&
+            row.candidates.every(isVoteCandidateRow) &&
+            (
+                typeof row.my_vote_target_player_id === "string" ||
+                row.my_vote_target_player_id === null
+            ) &&
+            typeof row.has_voted === "boolean" &&
+            (row.vote_results === null || typeof row.vote_results === "undefined")
+        );
+    }
+
+    if (
+        row.state === "tie_discussion" ||
+        row.state === "impostor_guess" ||
+        row.state === "round_result"
+    ) {
+        return (
+            (row.candidates === null || typeof row.candidates === "undefined") &&
+            Array.isArray(row.vote_results) &&
+            row.vote_results.every(isVoteResultRow)
+        );
+    }
+
+    return (
+        (row.candidates === null || typeof row.candidates === "undefined") &&
+        (row.my_vote_target_player_id === null ||
+            typeof row.my_vote_target_player_id === "undefined") &&
+        (row.has_voted === false || typeof row.has_voted === "undefined") &&
+        (row.vote_results === null || typeof row.vote_results === "undefined")
+    );
+}
+
+function isVoteCandidateRow(value: unknown): value is VoteCandidateRow {
+    const row = value as Partial<VoteCandidateRow>;
+
+    return typeof row.player_id === "string" && typeof row.nickname === "string";
+}
+
+function isVoteResultRow(value: unknown): value is VoteResultRow {
+    const row = value as Partial<VoteResultRow>;
+
+    return (
+        isVoteCandidateRow(value) &&
+        typeof row.vote_count === "number" &&
+        Number.isInteger(row.vote_count) &&
+        row.vote_count >= 0
+    );
+}
+
+function toVoteCandidates(value: unknown): VoteCandidate[] | null {
+    if (value === null || typeof value === "undefined") {
+        return null;
+    }
+
+    if (!Array.isArray(value) || !value.every(isVoteCandidateRow)) {
+        return null;
+    }
+
+    return value.map((candidate) => ({
+        playerId: candidate.player_id,
+        nickname: candidate.nickname
+    }));
+}
+
+function toVoteResults(value: unknown): VoteResult[] | null {
+    if (value === null || typeof value === "undefined") {
+        return null;
+    }
+
+    if (!Array.isArray(value) || !value.every(isVoteResultRow)) {
+        return null;
+    }
+
+    return value.map((result) => ({
+        playerId: result.player_id,
+        nickname: result.nickname,
+        voteCount: result.vote_count
+    }));
 }
 
 function toStartSessionResult(row: StartSessionRow): StartSessionResult {
@@ -875,18 +999,33 @@ function toSubmitRoundVoteResult(row: SubmitRoundVoteRow): SubmitRoundVoteResult
 }
 
 function toMyGameState(row: MyGameStateRow): MyGameState {
+    const voteResults = toVoteResults(row.vote_results);
+    const candidates = toVoteCandidates(row.candidates);
+    const voting =
+        row.state === "voting_first"
+            ? {
+                candidates: candidates ?? [],
+                myVoteTargetPlayerId: row.my_vote_target_player_id ?? null,
+                hasVoted: row.has_voted === true
+            }
+            : null;
+
     if (row.role === "player") {
         return {
             state: row.state,
             roundNumber: row.round_number,
-            privateView: { role: "player", word: row.word }
+            privateView: { role: "player", word: row.word },
+            voting,
+            voteResults
         };
     }
 
     return {
         state: row.state,
         roundNumber: row.round_number,
-        privateView: { role: "impostor", word: null }
+        privateView: { role: "impostor", word: null },
+        voting,
+        voteResults
     };
 }
 

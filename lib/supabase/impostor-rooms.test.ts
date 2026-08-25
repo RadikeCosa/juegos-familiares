@@ -58,7 +58,11 @@ const gameStatePlayerRow = {
     state: "role_reveal",
     round_number: 1,
     role: "player",
-    word: "Tesoro Azul"
+    word: "Tesoro Azul",
+    candidates: null,
+    my_vote_target_player_id: null,
+    has_voted: false,
+    vote_results: null
 };
 
 const gameStateDiscussionPlayerRow = {
@@ -70,7 +74,56 @@ const gameStateImpostorRow = {
     state: "role_reveal",
     round_number: 1,
     role: "impostor",
-    word: null
+    word: null,
+    candidates: null,
+    my_vote_target_player_id: null,
+    has_voted: false,
+    vote_results: null
+};
+
+const gameStateVotingRow = {
+    state: "voting_first",
+    round_number: 1,
+    role: "player",
+    word: "Tesoro Azul",
+    candidates: [
+        { player_id: "player-2", nickname: "Pedro" },
+        { player_id: "player-3", nickname: "Ana" }
+    ],
+    my_vote_target_player_id: null,
+    has_voted: false,
+    vote_results: null
+};
+
+const gameStateVotedRow = {
+    ...gameStateVotingRow,
+    my_vote_target_player_id: "player-2",
+    has_voted: true
+};
+
+const gameStateTieDiscussionRow = {
+    state: "tie_discussion",
+    round_number: 1,
+    role: "player",
+    word: "Tesoro Azul",
+    candidates: null,
+    my_vote_target_player_id: null,
+    has_voted: true,
+    vote_results: [
+        { player_id: "player-2", nickname: "Pedro", vote_count: 2 },
+        { player_id: "player-3", nickname: "Ana", vote_count: 2 }
+    ]
+};
+
+const gameStateImpostorGuessRow = {
+    state: "impostor_guess",
+    round_number: 1,
+    role: "impostor",
+    word: null,
+    candidates: null,
+    my_vote_target_player_id: "player-1",
+    has_voted: true,
+    vote_results: [{ player_id: "player-2", nickname: "Pedro", vote_count: 3 }]
 };
 
 const startRoundDiscussionRow = {
@@ -867,7 +920,9 @@ describe("getMyGameState", () => {
         await expect(getMyGameState(supabase)).resolves.toEqual({
             state: "role_reveal",
             roundNumber: 1,
-            privateView: { role: "player", word: "Tesoro Azul" }
+            privateView: { role: "player", word: "Tesoro Azul" },
+            voting: null,
+            voteResults: null
         });
 
         expect(supabase.rpc).toHaveBeenCalledWith("get_my_game_state");
@@ -890,7 +945,9 @@ describe("getMyGameState", () => {
         await expect(getMyGameState(supabase)).resolves.toEqual({
             state: "role_reveal",
             roundNumber: 1,
-            privateView: { role: "impostor", word: null }
+            privateView: { role: "impostor", word: null },
+            voting: null,
+            voteResults: null
         });
     });
 
@@ -905,7 +962,75 @@ describe("getMyGameState", () => {
         await expect(getMyGameState(supabase)).resolves.toEqual({
             state: "discussion",
             roundNumber: 1,
-            privateView: { role: "player", word: "Tesoro Azul" }
+            privateView: { role: "player", word: "Tesoro Azul" },
+            voting: null,
+            voteResults: null
+        });
+    });
+
+    it("maps voting_first candidates and only the caller vote status", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: [gameStateVotingRow], error: null }))
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toEqual({
+            state: "voting_first",
+            roundNumber: 1,
+            privateView: { role: "player", word: "Tesoro Azul" },
+            voting: {
+                candidates: [
+                    { playerId: "player-2", nickname: "Pedro" },
+                    { playerId: "player-3", nickname: "Ana" }
+                ],
+                myVoteTargetPlayerId: null,
+                hasVoted: false
+            },
+            voteResults: null
+        });
+    });
+
+    it("maps the caller's registered vote without exposing partial counts", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: [gameStateVotedRow], error: null }))
+        };
+
+        const state = await getMyGameState(supabase);
+
+        expect(state?.voting).toEqual({
+            candidates: [
+                { playerId: "player-2", nickname: "Pedro" },
+                { playerId: "player-3", nickname: "Ana" }
+            ],
+            myVoteTargetPlayerId: "player-2",
+            hasVoted: true
+        });
+        expect(state?.voteResults).toBeNull();
+    });
+
+    it("maps aggregate post-resolution vote results", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: [gameStateTieDiscussionRow], error: null }))
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toMatchObject({
+            state: "tie_discussion",
+            voting: null,
+            voteResults: [
+                { playerId: "player-2", nickname: "Pedro", voteCount: 2 },
+                { playerId: "player-3", nickname: "Ana", voteCount: 2 }
+            ]
+        });
+    });
+
+    it("maps impostor_guess without a secret word", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({ data: [gameStateImpostorGuessRow], error: null }))
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toMatchObject({
+            state: "impostor_guess",
+            privateView: { role: "impostor", word: null },
+            voteResults: [{ playerId: "player-2", nickname: "Pedro", voteCount: 3 }]
         });
     });
 
@@ -952,7 +1077,19 @@ describe("getMyGameState", () => {
         };
         const unknownState = {
             rpc: vi.fn(async () => ({
-                data: [{ ...gameStatePlayerRow, state: "voting_first" }],
+                data: [{ ...gameStatePlayerRow, state: "scoreboard" }],
+                error: null
+            }))
+        };
+        const votingWithoutCandidates = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...gameStateVotingRow, candidates: null }],
+                error: null
+            }))
+        };
+        const votingWithVoteResults = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...gameStateVotingRow, vote_results: [{ player_id: "player-2", nickname: "Pedro", vote_count: 1 }] }],
                 error: null
             }))
         };
@@ -970,6 +1107,12 @@ describe("getMyGameState", () => {
             "No pudimos confirmar el estado de la tanda."
         );
         await expect(getMyGameState(unknownState)).rejects.toThrow(
+            "No pudimos confirmar el estado de la tanda."
+        );
+        await expect(getMyGameState(votingWithoutCandidates)).rejects.toThrow(
+            "No pudimos confirmar el estado de la tanda."
+        );
+        await expect(getMyGameState(votingWithVoteResults)).rejects.toThrow(
             "No pudimos confirmar el estado de la tanda."
         );
     });

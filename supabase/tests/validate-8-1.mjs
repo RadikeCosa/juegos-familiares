@@ -441,11 +441,13 @@ function insertRoundVote({ roundId, gameSessionId, groupId, votingRound = 1, vot
 async function main() {
   assert(hasTable("round_votes"), "round_votes table should exist.");
   assert(!hasColumn("rounds", "status"), "rounds must not include status.");
-  assertEqual(
-    constraintDefinition("game_sessions", "game_sessions_state_check"),
-    "CHECK ((state = ANY (ARRAY['role_reveal'::text, 'discussion'::text, 'voting_first'::text])))",
-    "game_sessions.state check mismatch."
-  );
+  const gameSessionStateCheck = constraintDefinition("game_sessions", "game_sessions_state_check");
+  for (const expectedState of ["role_reveal", "discussion", "voting_first"]) {
+    assert(
+      gameSessionStateCheck.includes(expectedState),
+      `game_sessions.state should allow ${expectedState}.`
+    );
+  }
   assertEqual(
     constraintDefinition("round_votes", "round_votes_pkey"),
     "PRIMARY KEY (round_id, voting_round, voter_player_id)",
