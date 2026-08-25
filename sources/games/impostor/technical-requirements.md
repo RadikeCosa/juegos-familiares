@@ -734,6 +734,92 @@ Realtime no debe transmitir filas o payloads con `secretWord` o `impostorPlayerI
 
 En el cierre de Incremento 6 no se agregó Realtime de gameplay ni Broadcast. Las tablas `game_sessions`, `session_players` y `rounds` permanecen cerradas al cliente: RLS enabled, sin policies directas de cliente y sin grants CRUD de cliente.
 
+## Requisito de Incremento 7
+
+La transición siguiente de gameplay es:
+
+```text
+GameSession.state = role_reveal
+→ discussion
+```
+
+No se usa `playing` como `GameSession.state`, porque `Room.status = playing` ya representa que la Room está dentro de gameplay y no admite nuevos joins.
+
+El MVP no persiste:
+
+```text
+roleAcknowledged
+role_acknowledged_at
+allRolesSeen
+```
+
+La coordinación de que todos vieron su información ocurre presencialmente. La transición la solicita el host actual mediante una RPC específica:
+
+```text
+start_round_discussion()
+```
+
+La RPC es 0-args y deriva autoridad server-side:
+
+```text
+auth.uid()
+→ Player
+→ active Room
+→ current rooms.host_player_id
+→ SessionPlayer
+```
+
+Guards:
+
+```text
+authenticated caller
+Player válido
+active Room
+Room.status = playing
+caller = current Room host
+caller ∈ SessionPlayers
+GameSession coherente
+current GameSession.state = role_reveal
+current Round coherente
+```
+
+La transición es idempotente para retry:
+
+```text
+state = role_reveal → discussion, advanced = true
+state = discussion → no-op exitoso, already_in_phase = true
+otro state → transición inválida
+```
+
+El orden conceptual de locks mantiene Room como lock principal:
+
+```text
+resolver active Room
+→ lock Room FOR UPDATE
+→ validar current host
+→ resolver/lock GameSession
+→ transition
+```
+
+`get_my_game_state()` sigue siendo el read model autoritativo y admite:
+
+```text
+state = role_reveal | discussion
+```
+
+sin devolver datos públicos nuevos. La vista privada durante `discussion` permanece igual:
+
+```text
+normal → role = player, word = secret_word
+impostor → role = impostor, word = null
+```
+
+No debe devolver `impostor_player_id`, `normalized_secret_word` ni roles de otros.
+
+Como `role_reveal → discussion` no modifica `Room.status`, Incremento 7 sincroniza por polling lento de `get_my_game_state()` mientras `Room.status = playing`, con valor inicial de aproximadamente 3 segundos. El host que ejecuta la transición hace refetch autoritativo inmediato tras respuesta exitosa.
+
+No se publica `game_sessions`, `session_players` ni `rounds` por Postgres Changes en Incremento 7. No se usa Room como bus artificial y no se agrega Broadcast. Broadcast privado de invalidación puede reevaluarse en incrementos posteriores, sin transportar secretos.
+
 ---
 
 # 21. Votación

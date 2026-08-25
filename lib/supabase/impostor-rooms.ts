@@ -14,6 +14,7 @@ export type ImpostorRoomsClient = {
             | "refresh_my_room_liveness"
             | "reassign_room_host_if_stale"
             | "start_session"
+            | "start_round_discussion"
             | "get_my_game_state",
         params?: { room_code: string }
     ) => PromiseLike<SupabaseRpcResult<unknown>>;
@@ -267,6 +268,22 @@ const NO_ELIGIBLE_WORDS_ERROR =
     "Agregá al menos una palabra al banco antes de iniciar.";
 const GENERIC_START_SESSION_ERROR =
     "No pudimos iniciar la tanda. Intentá de nuevo.";
+const UNAUTHENTICATED_START_DISCUSSION_ERROR =
+    "Necesitás entrar a tu grupo antes de empezar la ronda.";
+const MISSING_PLAYER_START_DISCUSSION_ERROR =
+    "No pudimos reconocer tu jugador para empezar la ronda.";
+const NO_ACTIVE_ROOM_START_DISCUSSION_ERROR =
+    "No tenés una sala activa para empezar la ronda.";
+const ROOM_NOT_DISCUSSABLE_ERROR =
+    "Esta ronda no se puede empezar ahora.";
+const NOT_ROOM_HOST_START_DISCUSSION_ERROR =
+    "Solo el host actual puede empezar la ronda.";
+const INCONSISTENT_START_DISCUSSION_ERROR =
+    "No pudimos reconstruir la tanda para empezar la ronda.";
+const NOT_SESSION_PLAYER_START_DISCUSSION_ERROR =
+    "No participás de la tanda actual.";
+const GENERIC_START_DISCUSSION_ERROR =
+    "No pudimos empezar la ronda. Intentá de nuevo.";
 const UNAUTHENTICATED_GAME_STATE_ERROR =
     "Necesitás entrar a tu grupo antes de recuperar la tanda.";
 const MISSING_PLAYER_GAME_STATE_ERROR =
@@ -327,7 +344,21 @@ export type StartSessionResult = {
     participantCount: number;
 };
 
-export type GameSessionState = "role_reveal";
+type StartRoundDiscussionRow = {
+    advanced: boolean;
+    already_in_phase: boolean;
+    state: "discussion";
+    round_number: number;
+};
+
+export type StartRoundDiscussionResult = {
+    advanced: boolean;
+    alreadyInPhase: boolean;
+    state: "discussion";
+    roundNumber: number;
+};
+
+export type GameSessionState = "role_reveal" | "discussion";
 
 type MyGameStateRow = {
     state: GameSessionState;
@@ -520,6 +551,40 @@ function getStartSessionErrorMessage(error: unknown) {
     return GENERIC_START_SESSION_ERROR;
 }
 
+function getStartDiscussionErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "28000" || error.code === "42501") {
+            return UNAUTHENTICATED_START_DISCUSSION_ERROR;
+        }
+
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_START_DISCUSSION_ERROR;
+        }
+
+        if (error.code === "P0017") {
+            return NO_ACTIVE_ROOM_START_DISCUSSION_ERROR;
+        }
+
+        if (error.code === "P0018") {
+            return ROOM_NOT_DISCUSSABLE_ERROR;
+        }
+
+        if (error.code === "P0019") {
+            return NOT_ROOM_HOST_START_DISCUSSION_ERROR;
+        }
+
+        if (error.code === "P0022") {
+            return INCONSISTENT_START_DISCUSSION_ERROR;
+        }
+
+        if (error.code === "P0023") {
+            return NOT_SESSION_PLAYER_START_DISCUSSION_ERROR;
+        }
+    }
+
+    return GENERIC_START_DISCUSSION_ERROR;
+}
+
 function getGameStateErrorMessage(error: unknown) {
     if (isSupabaseErrorLike(error)) {
         if (error.code === "28000" || error.code === "42501") {
@@ -568,11 +633,26 @@ function isStartSessionRow(value: unknown): value is StartSessionRow {
     );
 }
 
+function isStartRoundDiscussionRow(
+    value: unknown
+): value is StartRoundDiscussionRow {
+    const row = value as Partial<StartRoundDiscussionRow>;
+
+    return (
+        typeof row.advanced === "boolean" &&
+        typeof row.already_in_phase === "boolean" &&
+        row.state === "discussion" &&
+        typeof row.round_number === "number" &&
+        Number.isInteger(row.round_number) &&
+        row.round_number >= 1
+    );
+}
+
 function isMyGameStateRow(value: unknown): value is MyGameStateRow {
     const row = value as Partial<MyGameStateRow>;
 
     if (
-        row.state !== "role_reveal" ||
+        (row.state !== "role_reveal" && row.state !== "discussion") ||
         typeof row.round_number !== "number" ||
         !Number.isInteger(row.round_number) ||
         row.round_number < 1
@@ -595,6 +675,17 @@ function toStartSessionResult(row: StartSessionRow): StartSessionResult {
         gameSessionState: row.game_session_state,
         roundNumber: row.round_number,
         participantCount: row.participant_count
+    };
+}
+
+function toStartRoundDiscussionResult(
+    row: StartRoundDiscussionRow
+): StartRoundDiscussionResult {
+    return {
+        advanced: row.advanced,
+        alreadyInPhase: row.already_in_phase,
+        state: row.state,
+        roundNumber: row.round_number
     };
 }
 
@@ -1100,6 +1191,24 @@ export async function startSession(
     }
 
     return toStartSessionResult(rows[0]);
+}
+
+export async function startRoundDiscussion(
+    supabase: ImpostorRoomsClient
+): Promise<StartRoundDiscussionResult> {
+    const result = await supabase.rpc("start_round_discussion");
+
+    if (result.error) {
+        throw new Error(getStartDiscussionErrorMessage(result.error));
+    }
+
+    const rows = Array.isArray(result.data) ? result.data : [];
+
+    if (rows.length !== 1 || !isStartRoundDiscussionRow(rows[0])) {
+        throw new Error("No pudimos confirmar el comienzo de la ronda.");
+    }
+
+    return toStartRoundDiscussionResult(rows[0]);
 }
 
 export async function getMyGameState(

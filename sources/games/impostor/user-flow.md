@@ -450,25 +450,33 @@ No muestra la palabra secreta.
 
 ---
 
-# Confirmación individual futura
+# Coordinación presencial
 
-La confirmación persistida de que cada jugador vio su información no forma parte del Incremento 6.
+La confirmación persistida de que cada jugador vio su información no forma parte del MVP.
 
-Ejemplo:
+No se persiste:
 
-`Estoy listo`
+```text
+roleAcknowledged
+role_acknowledged_at
+allRolesSeen
+```
 
-Ese flujo pertenece a Incremento 7. En 6.5, refrescar la pantalla vuelve a ocultar visualmente el rol y reconstruye la vista privada desde servidor.
+El grupo coordina verbalmente que todos estén listos. En 6.5, refrescar la pantalla vuelve a ocultar visualmente el rol y reconstruye la vista privada desde servidor.
 
 ---
 
-# Todos listos
+# Empezar ronda
 
-Cuando todos confirmaron:
+Cuando el grupo confirmó presencialmente que todos vieron su información, el host actual selecciona:
 
-> Todos están listos
+`Empezar ronda`
 
-> Empieza la ronda
+La fase pasa a:
+
+```text
+discussion
+```
 
 A partir de este momento el teléfono deja de ser protagonista.
 
@@ -484,19 +492,29 @@ La aplicación puede mostrar únicamente un estado discreto:
 
 > Ronda en juego
 
-Para el host:
+Los jugadores pueden volver a consultar localmente su información privada mediante una acción explícita:
 
-`Ir a votación`
+```text
+Ver mi palabra
+```
 
-Para los demás:
+o:
 
-> Cuando estén listos, el host iniciará la votación.
+```text
+Ver mi rol
+```
+
+La información queda oculta por defecto para reducir exposición física. Este reveal local no se persiste.
+
+En Incremento 7 no se muestra un botón funcional ni falso de votación. La acción del host `Ir a votación` pertenece al Incremento 8.
 
 No existe inicialmente temporizador obligatorio.
 
+Al cierre técnico del Incremento 7, el flujo implementado termina en esta conversación presencial con reveal/hide privado local.
+
 ---
 
-# Iniciar votación
+# Futuro: iniciar votación
 
 Cuando el grupo lo decide, el host toca:
 

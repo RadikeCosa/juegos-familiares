@@ -52,7 +52,7 @@ Ejemplos:
 ```text
 LOBBY
 ROLE_REVEAL
-PLAYING
+DISCUSSION
 VOTING
 ```
 
@@ -62,28 +62,17 @@ Todos los participantes pertenecen al mismo estado global.
 
 Describe el progreso particular de cada participante dentro de ese estado.
 
-En Incremento 6, la revelación visual del rol usa un tap local y no persiste estado individual. `roleAcknowledged` es un estado futuro de Incremento 7, no una capacidad implementada por 6.
+En Incremento 6, la revelación visual del rol usa un tap local y no persiste estado individual.
 
-Ejemplo:
+En el contrato vigente del Incremento 7, el MVP no persiste:
 
 ```text
-Estado global:
-ROLE_REVEAL
-
-Ramiro
-roleAcknowledged = true
-
-Pedro
-roleAcknowledged = true
-
-Camila
-roleAcknowledged = false
-
-Victoria
-roleAcknowledged = true
+roleAcknowledged
+role_acknowledged_at
+allRolesSeen
 ```
 
-La partida continúa globalmente en `ROLE_REVEAL` hasta que se cumpla la condición necesaria para avanzar.
+La coordinación de que todos vieron su rol ocurre presencialmente. El host actual avanza la fase cuando el grupo está listo.
 
 ---
 
@@ -95,7 +84,7 @@ El modelo completo previsto para el MVP utiliza los siguientes estados conceptua
 LOBBY
 PREPARING_ROUND
 ROLE_REVEAL
-PLAYING
+DISCUSSION
 VOTING_FIRST
 TIE_DISCUSSION
 VOTING_SECOND
@@ -105,13 +94,14 @@ SCOREBOARD
 FINISHED
 ```
 
-Al cierre de Incremento 6, el único estado durable de `GameSession` implementado es:
+Al cierre técnico de Incremento 7, los estados durables de `GameSession` implementados son:
 
 ```text
 role_reveal
+discussion
 ```
 
-`PREPARING_ROUND` existe solo como preparación transaccional interna de `start_session()`. `PLAYING`, votación, resultado, marcador y fin de tanda pertenecen a incrementos posteriores.
+`PREPARING_ROUND` existe solo como preparación transaccional interna de `start_session()`. Votación, resultado, marcador y fin de tanda pertenecen a incrementos posteriores.
 
 ---
 
@@ -128,9 +118,9 @@ PREPARING_ROUND
   ▼
 ROLE_REVEAL
   │
-  │ todos confirmaron
+  │ START_ROUND_DISCUSSION
   ▼
-PLAYING
+DISCUSSION
   │
   │ START_VOTING
   ▼
@@ -391,63 +381,86 @@ Tu rol está listo
 
 Esto no cambia `GameSession`, no escribe `SessionPlayer` y se reinicia visualmente al refrescar porque la vista privada vuelve a reconstruirse desde servidor.
 
-En Incremento 7, cada participante podrá poseer:
+En Incremento 7 se descarta para el MVP persistir:
 
 ```text
 roleAcknowledged
+role_acknowledged_at
+allRolesSeen
 ```
 
-Inicialmente:
+La decisión de producto es no digitalizar el `ready` verbal del grupo. Impostor es presencial y la coordinación:
 
 ```text
-false
+¿Estamos todos?
 ```
 
-Después de ver su información seleccionará:
+ocurre entre las personas.
 
-`Estoy listo`
+## Acción de transición
 
 Evento:
 
-`ACKNOWLEDGE_ROLE`
+`START_ROUND_DISCUSSION`
 
 Actor:
 
-`participante`
+`host actual`
 
 Resultado:
 
 ```text
-roleAcknowledged = true
+GameSession.state = discussion
 ```
 
 ## Guard de transición
 
-En Incremento 7, la partida solamente avanzará cuando:
+En Incremento 7, la partida avanza cuando el host actual decide que el grupo está listo:
 
 ```text
-todos los participantes activos
-tienen roleAcknowledged = true
+Room.status = playing
+GameSession.state = role_reveal
+caller = current rooms.host_player_id
+caller ∈ SessionPlayers
+Round actual coherente
 ```
 
 ## Transición
 
 ```text
 ROLE_REVEAL
-→ PLAYING
+→ DISCUSSION
 ```
-
-Actor:
-
-`system`
 
 ---
 
-# 4. PLAYING
+# 4. DISCUSSION
 
 ## Qué representa
 
 La conversación presencial está ocurriendo.
+
+Al cierre técnico del Incremento 7, `discussion` es un estado durable implementado de `GameSession.state`.
+
+Durante `discussion`, la vista privada no aparece por defecto en el DOM. Cada jugador puede pedir explícitamente:
+
+```text
+Ver mi palabra
+```
+
+o:
+
+```text
+Ver mi rol
+```
+
+Luego puede ocultarla con:
+
+```text
+Ocultar
+```
+
+Ese reveal/hide es local y no se persiste. Al entrar desde `role_reveal` a `discussion`, la vista privada vuelve a ocultarse. Si el polling reconstruye la misma ronda y el mismo payload mientras el componente sigue montado, se preserva el reveal local para evitar flicker. Si cambia la ronda o se reconstruye desde bootstrap, vuelve a ocultarse.
 
 Primero los jugadores realizan la vuelta inicial de pistas y después pueden conversar libremente.
 
@@ -475,7 +488,7 @@ Actor autorizado:
 ## Transición
 
 ```text
-PLAYING
+DISCUSSION
 → VOTING_FIRST
 ```
 
@@ -976,17 +989,16 @@ room_participants.last_seen_at
 
 `last_seen_at` no representa Presence, conexión, abandono, host, ready ni estado de juego. Se actualiza por autoridad backend para el RoomParticipant propio y con reloj server-side/Postgres.
 
-## Rol visto
+## Reveal visual de rol
 
-Durante `ROLE_REVEAL`:
+Durante `ROLE_REVEAL`, el reveal visual es local:
 
 ```text
-roleAcknowledged =
-true
-false
+Tu rol está listo
+→ Ver mi rol
 ```
 
-`roleAcknowledged` no existe todavía en el cierre de Incremento 6. El estado individual implementado en 6.5 es solamente visual/local.
+No se persiste `roleAcknowledged`, `role_acknowledged_at` ni `allRolesSeen` en el contrato vigente del MVP. Refrescar puede volver a ocultar visualmente la información, pero `get_my_game_state()` reconstruye la vista privada.
 
 ## Voto
 
@@ -1009,7 +1021,7 @@ Una desconexión no cambia automáticamente el estado global de la partida.
 Ejemplo:
 
 ```text
-PLAYING
+DISCUSSION
 
 Pedro.presence:
 connected → disconnected
@@ -1018,7 +1030,7 @@ connected → disconnected
 La partida puede continuar en:
 
 ```text
-PLAYING
+DISCUSSION
 ```
 
 En el lobby de Incremento 5, una ausencia breve no elimina `RoomParticipant` ni dispara por sí sola sucesión de host. Presence es una señal efímera para UI y para detectar candidatos, no una decisión autoritativa.
@@ -1058,12 +1070,12 @@ Esto no modifica necesariamente el estado global de la partida.
 Ejemplo:
 
 ```text
-PLAYING
+DISCUSSION
 host = Pedro
 
 Pedro se desconecta
 
-PLAYING
+DISCUSSION
 host = Camila
 ```
 
@@ -1123,7 +1135,6 @@ END_SESSION
 Puede producir:
 
 ```text
-ACKNOWLEDGE_ROLE
 SUBMIT_VOTE
 ```
 
@@ -1135,7 +1146,6 @@ Produce o resuelve:
 
 ```text
 ROUND_PREPARED
-ALL_ROLES_ACKNOWLEDGED
 VOTE_TALLY
 ROUND_RESOLUTION
 SCORE_UPDATE
@@ -1165,10 +1175,14 @@ availableUnusedWords >= 1
 ## Empezar conversación
 
 ```text
-allActivePlayers.roleAcknowledged = true
+Room.status = playing
+GameSession.state = role_reveal
+caller = rooms.host_player_id actual
+caller ∈ SessionPlayers
+Round actual coherente
 ```
 
-Este guard no está implementado en Incremento 6.
+Este guard pertenece a la RPC `start_round_discussion()`, cerrada en Incremento 7.
 
 ## Resolver votación
 
@@ -1328,7 +1342,6 @@ Ejemplos:
 * cambio de host;
 * inicio de tanda;
 * cambio de fase;
-* confirmación de roles;
 * comienzo de votación;
 * estado de “esperando votos”;
 * finalización de la votación;
@@ -1383,7 +1396,7 @@ PREPARING_ROUND
 ↓
 ROLE_REVEAL
 ↓
-PLAYING
+DISCUSSION
 ↓
 VOTING_FIRST
 ├── TIE_DISCUSSION → VOTING_SECOND

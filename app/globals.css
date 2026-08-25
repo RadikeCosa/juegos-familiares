@@ -861,6 +861,12 @@ body {
   align-content: start;
 }
 
+.impostor-room-round-actions {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
 .impostor-room-secret-word {
   color: var(--foreground);
   font-family:
