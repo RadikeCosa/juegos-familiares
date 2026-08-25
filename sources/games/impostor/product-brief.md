@@ -56,6 +56,8 @@ Durante `discussion`, cada jugador puede volver a revelar localmente su palabra 
 
 Todavía no están implementados timer, votación, scoring, ganador, `END_SESSION`, Realtime de gameplay ni Broadcast.
 
+El contrato documental de Incremento 8 deja preparada la primera votación: el host actual avanza `discussion → voting_first`, todos los `SessionPlayers` votan secretamente una vez, sin auto-voto ni resultados parciales, y el sistema resuelve automáticamente hacia `tie_discussion`, `impostor_guess` o `round_result`. Presence/liveness no cambian quién debe votar; solo el roster congelado de `SessionPlayers` define membership de la tanda.
+
 ---
 
 # Contexto inicial

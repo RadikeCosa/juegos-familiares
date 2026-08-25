@@ -879,6 +879,56 @@ body {
   overflow-wrap: anywhere;
 }
 
+.impostor-vote-list,
+.impostor-vote-results {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 28rem;
+  margin: 0;
+  padding: 0;
+}
+
+.impostor-vote-list {
+  list-style: none;
+}
+
+.impostor-vote-option {
+  min-height: 3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--foreground);
+  padding: var(--space-3);
+  text-align: left;
+  font: inherit;
+  font-weight: 700;
+}
+
+.impostor-vote-option--selected {
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+  background: color-mix(in srgb, var(--success) 10%, var(--surface));
+}
+
+.impostor-vote-results {
+  list-style: decimal inside;
+}
+
+.impostor-vote-results li {
+  display: flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+}
+
+.impostor-vote-results span,
+.impostor-vote-results strong {
+  overflow-wrap: anywhere;
+}
+
 .impostor-own-words {
   display: grid;
   gap: var(--space-2);

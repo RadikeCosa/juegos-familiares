@@ -838,6 +838,290 @@ Debe soportar:
 
 La segunda votación es definitiva: el grupo solamente identifica al impostor si el impostor queda como único jugador con mayor cantidad de votos.
 
+## Requisito de Incremento 8
+
+El Incremento 8 cubre exclusivamente la primera votación como vertical completo:
+
+```text
+discussion
+→ voting_first
+→ todos los SessionPlayers votan una vez
+→ resolución automática
+→ tie_discussion | impostor_guess | round_result
+```
+
+No introduce `Round.status`. Durante gameplay, `Room.status = playing` y la fase global pertenece a `GameSession.state`.
+
+Estados durables a admitir conceptualmente:
+
+```text
+voting_first
+tie_discussion
+impostor_guess
+round_result
+```
+
+`tie_discussion` pertenece a Incremento 8 como resultado posible de la primera resolución. La segunda votación, su resolución, el intento final del impostor, reveal de palabra, acierto/error, scoring, scoreboard, nueva ronda y fin de tanda quedan fuera.
+
+## Inicio de primera votación
+
+Durante:
+
+```text
+GameSession.state = discussion
+```
+
+el host actual puede ejecutar:
+
+```text
+start_round_voting()
+```
+
+La RPC no recibe parámetros. La autoridad deriva desde:
+
+```text
+auth.uid()
+→ Player
+→ Room activa
+→ rooms.host_player_id actual
+→ GameSession actual
+```
+
+No autoriza al administrador del Group, al creador original ni a un host anterior. Debe ser idempotente frente a retry o respuesta perdida cuando la transición `discussion → voting_first` ya ocurrió.
+
+## Quién vota
+
+Los votantes requeridos son todos los `SessionPlayers` de la GameSession.
+
+No se usa como denominador:
+
+```text
+RoomParticipants conectados
+Presence activos
+players active por liveness
+```
+
+Membership y availability permanecen separados. Presence/liveness pueden servir para UX o sucesión de host, pero no reemplazan el roster congelado ni deciden completion de votación.
+
+Un `SessionPlayer` desconectado sigue perteneciendo a la tanda, sigue siendo candidato, puede votar si vuelve y conserva su voto si ya votó. Si no votó y no vuelve, la primera versión puede quedar esperando. Timeouts, override del host, expulsión de SessionPlayer y votación solo con conectados son políticas pendientes de hardening.
+
+## Reglas del voto
+
+Cada `SessionPlayer` vota exactamente una vez por Round y etapa de votación. El impostor también vota. El host también vota y no tiene voto especial.
+
+No se puede votar a uno mismo. El voto es secreto, inmutable y no se puede cambiar una vez registrado. No se muestran resultados parciales.
+
+La persistencia prevista es `RoundVote` o futura tabla `round_votes`:
+
+```text
+round_id
+voting_round
+voter_player_id
+target_player_id
+created_at
+```
+
+`voting_round` admite conceptualmente `1` y `2`, aunque Incremento 8 solo utiliza `1`. Puede existir redundancia técnica como `game_session_id` si ayuda a integridad referencial, sin convertirla en concepto de producto.
+
+La identidad lógica debe garantizar un solo voto por:
+
+```text
+round_id
+voting_round
+voter_player_id
+```
+
+La futura implementación debe garantizar estructuralmente:
+
+```text
+voter ∈ SessionPlayers de esa GameSession
+target ∈ SessionPlayers de esa GameSession
+voter != target
+máximo un voto por voter/round/voting_round
+```
+
+## Submit vote
+
+RPC prevista:
+
+```text
+submit_round_vote(target_player_id uuid)
+```
+
+El `target_player_id` es una elección de dominio proporcionada por el usuario. No es ownership ni autorización confiada al cliente.
+
+El servidor deriva desde `auth.uid()`:
+
+```text
+caller
+Player
+GameSession
+Round actual
+voter
+```
+
+y valida el target contra `SessionPlayers`.
+
+Guards mínimos:
+
+```text
+caller ∈ SessionPlayers
+GameSession.state = voting_first
+target ∈ SessionPlayers
+target != caller
+sin voto previo distinto para round_id/voting_round/voter
+```
+
+Caso idempotente:
+
+```text
+A vota B
+respuesta se pierde
+A vuelve a mandar voto B
+```
+
+Debe ser éxito idempotente o resultado equivalente recuperable.
+
+Caso no permitido:
+
+```text
+A ya votó B
+A intenta votar C
+```
+
+Debe rechazarse como voto ya registrado/cambio no permitido. La unicidad estructural protege carreras simultáneas del mismo voter.
+
+## Fin y resolución de primera votación
+
+La votación termina automáticamente cuando todos los `SessionPlayers` registraron voto con `voting_round = 1`.
+
+El host no cierra manualmente la votación. El último voto dispara la resolución autoritativa dentro de la misma operación/transacción lógica. No debe existir como estado estable:
+
+```text
+todos votaron
+pero GameSession.state sigue voting_first
+esperando otra RPC manual
+```
+
+Después del último voto requerido, el sistema cuenta votos autoritativamente:
+
+* empate en el máximo → `tie_discussion`;
+* impostor único más votado → `impostor_guess`;
+* otro jugador único más votado → `round_result`.
+
+En `tie_discussion`, debe conservarse o poder reconstruirse el conjunto de candidatos empatados necesario para Incremento 9. En `impostor_guess`, puede revelarse quién era el impostor, pero no la palabra secreta. En `round_result`, conceptualmente `winner = impostor`, sin implementar todavía puntos, scoreboard, historial, next round ni fin de tanda.
+
+## Privacy y read model de voting
+
+Durante `voting_first`, el jugador puede conocer:
+
+```text
+state
+round_number
+candidatos autorizados
+su propio voto / si ya votó
+```
+
+No puede conocer:
+
+```text
+votos individuales ajenos
+target de otro jugador
+conteos parciales por candidato
+quién votó a quién
+impostor_player_id
+secret_word si caller es impostor
+```
+
+El host no tiene acceso informativo extra. Su autoridad es capacidad de transición, no acceso a secretos.
+
+Se prefiere extender `get_my_game_state()` en lugar de crear una lectura separada solo para voting. La función sigue representando la vista autorizada del caller y debe discriminar por `GameSession.state`. Los candidatos se derivan de:
+
+```text
+SessionPlayers
+JOIN Player
+```
+
+No de `RoomParticipants` actuales.
+
+Después de cerrar la primera votación pueden exponerse resultados agregados:
+
+```text
+nickname/candidato
+cantidad de votos
+```
+
+Nunca es necesario exponer quién votó a quién.
+
+## Sync y recovery
+
+Incremento 8 mantiene polling lento de:
+
+```text
+get_my_game_state()
+```
+
+con valor inicial aproximado de 3 segundos.
+
+No introduce:
+
+```text
+Broadcast
+Realtime gameplay
+Postgres Changes para game_sessions
+Postgres Changes para round_votes
+```
+
+`round_votes` permanece privada al cliente: sin SELECT/INSERT/UPDATE directos y sin publicación Realtime.
+
+Si `start_round_voting()` cambia `discussion → voting_first` pero la respuesta se pierde, el cliente debe recuperar éxito releyendo `get_my_game_state()`. Si `submit_round_vote()` registra el voto pero la respuesta se pierde, el caller debe poder releer `get_my_game_state()` y descubrir su voto persistido.
+
+Refresh durante voting debe reconstruir:
+
+```text
+state
+candidates
+my_vote
+resultado si voting ya terminó
+```
+
+sin depender de eventos históricos del cliente.
+
+## Concurrencia prevista
+
+`start_round_voting()` debe validar host actual y fase de forma consistente. Locking esperado:
+
+```text
+Room FOR UPDATE
+→ GameSession FOR UPDATE
+```
+
+`submit_round_vote()` no necesita bloquear Room por cada voto. Lock mínimo recomendado:
+
+```text
+resolver caller/GameSession/Round
+→ GameSession FOR UPDATE
+→ validar state
+→ insertar voto
+→ comprobar cantidad
+→ resolver si fue el último
+```
+
+Para grupos de 3 a 8 jugadores, esta serialización breve por GameSession es proporcional y auditable. La constraint única protege doble voto concurrente.
+
+Errores de dominio mínimos:
+
+```text
+not_host
+not_in_voting
+not_session_player
+invalid_vote_target
+already_voted
+inconsistent_game_state
+```
+
+No se exponen errores SQL internos al usuario. Self-vote puede agruparse como `invalid_vote_target`, pero debe tener validación específica.
+
 ---
 
 # 22. Offline

@@ -15,8 +15,10 @@ export type ImpostorRoomsClient = {
             | "reassign_room_host_if_stale"
             | "start_session"
             | "start_round_discussion"
+            | "start_round_voting"
+            | "submit_round_vote"
             | "get_my_game_state",
-        params?: { room_code: string }
+        params?: { room_code: string } | { target_player_id: string }
     ) => PromiseLike<SupabaseRpcResult<unknown>>;
 };
 
@@ -284,6 +286,40 @@ const NOT_SESSION_PLAYER_START_DISCUSSION_ERROR =
     "No participás de la tanda actual.";
 const GENERIC_START_DISCUSSION_ERROR =
     "No pudimos empezar la ronda. Intentá de nuevo.";
+const UNAUTHENTICATED_START_VOTING_ERROR =
+    "Necesitás entrar a tu grupo antes de ir a votación.";
+const MISSING_PLAYER_START_VOTING_ERROR =
+    "No pudimos reconocer tu jugador para ir a votación.";
+const NO_ACTIVE_ROOM_START_VOTING_ERROR =
+    "No tenés una sala activa para ir a votación.";
+const ROOM_NOT_VOTABLE_ERROR =
+    "Esta ronda no se puede votar ahora.";
+const NOT_ROOM_HOST_START_VOTING_ERROR =
+    "Solo el host actual puede ir a votación.";
+const INCONSISTENT_START_VOTING_ERROR =
+    "No pudimos reconstruir la tanda para ir a votación.";
+const NOT_SESSION_PLAYER_START_VOTING_ERROR =
+    "No participás de la tanda actual.";
+const GENERIC_START_VOTING_ERROR =
+    "No pudimos ir a votación. Intentá de nuevo.";
+const UNAUTHENTICATED_SUBMIT_VOTE_ERROR =
+    "Necesitás entrar a tu grupo antes de votar.";
+const MISSING_PLAYER_SUBMIT_VOTE_ERROR =
+    "No pudimos reconocer tu jugador para votar.";
+const NO_ACTIVE_ROOM_SUBMIT_VOTE_ERROR =
+    "No tenés una sala activa para votar.";
+const ROOM_NOT_VOTING_ERROR =
+    "Esta ronda no está recibiendo votos ahora.";
+const INVALID_VOTE_TARGET_ERROR =
+    "Elegí otro jugador válido para votar.";
+const ALREADY_VOTED_ERROR =
+    "Tu voto ya fue registrado y no se puede cambiar.";
+const INCONSISTENT_SUBMIT_VOTE_ERROR =
+    "No pudimos reconstruir la tanda para votar.";
+const NOT_SESSION_PLAYER_SUBMIT_VOTE_ERROR =
+    "No participás de la tanda actual.";
+const GENERIC_SUBMIT_VOTE_ERROR =
+    "No pudimos registrar tu voto. Intentá de nuevo.";
 const UNAUTHENTICATED_GAME_STATE_ERROR =
     "Necesitás entrar a tu grupo antes de recuperar la tanda.";
 const MISSING_PLAYER_GAME_STATE_ERROR =
@@ -351,6 +387,20 @@ type StartRoundDiscussionRow = {
     round_number: number;
 };
 
+type StartRoundVotingRow = {
+    advanced: boolean;
+    already_in_phase: boolean;
+    state: "voting_first";
+    round_number: number;
+};
+
+type SubmitRoundVoteRow = {
+    accepted: boolean;
+    already_recorded: boolean;
+    state: "voting_first" | "tie_discussion" | "impostor_guess" | "round_result";
+    round_number: number;
+};
+
 export type StartRoundDiscussionResult = {
     advanced: boolean;
     alreadyInPhase: boolean;
@@ -358,11 +408,44 @@ export type StartRoundDiscussionResult = {
     roundNumber: number;
 };
 
-export type GameSessionState = "role_reveal" | "discussion";
+export type StartRoundVotingResult = {
+    advanced: boolean;
+    alreadyInPhase: boolean;
+    state: "voting_first";
+    roundNumber: number;
+};
+
+export type SubmitRoundVoteResult = {
+    accepted: boolean;
+    alreadyRecorded: boolean;
+    state: "voting_first" | "tie_discussion" | "impostor_guess" | "round_result";
+    roundNumber: number;
+};
+
+export type GameSessionState =
+    | "role_reveal"
+    | "discussion"
+    | "voting_first"
+    | "tie_discussion"
+    | "impostor_guess"
+    | "round_result";
+
+type VoteCandidateRow = {
+    player_id: string;
+    nickname: string;
+};
+
+type VoteResultRow = VoteCandidateRow & {
+    vote_count: number;
+};
 
 type MyGameStateRow = {
     state: GameSessionState;
     round_number: number;
+    candidates?: unknown;
+    my_vote_target_player_id?: string | null;
+    has_voted?: boolean;
+    vote_results?: unknown;
 } & (
     | {
         role: "player";
@@ -384,10 +467,25 @@ export type MyPrivateRoundView =
         word: null;
     };
 
+export type VoteCandidate = {
+    playerId: string;
+    nickname: string;
+};
+
+export type VoteResult = VoteCandidate & {
+    voteCount: number;
+};
+
 export type MyGameState = {
     state: GameSessionState;
     roundNumber: number;
     privateView: MyPrivateRoundView;
+    voting: {
+        candidates: VoteCandidate[];
+        myVoteTargetPlayerId: string | null;
+        hasVoted: boolean;
+    } | null;
+    voteResults: VoteResult[] | null;
 };
 
 function isSupabaseErrorLike(error: unknown): error is SupabaseErrorLike {
@@ -585,6 +683,78 @@ function getStartDiscussionErrorMessage(error: unknown) {
     return GENERIC_START_DISCUSSION_ERROR;
 }
 
+function getStartVotingErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "28000" || error.code === "42501") {
+            return UNAUTHENTICATED_START_VOTING_ERROR;
+        }
+
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_START_VOTING_ERROR;
+        }
+
+        if (error.code === "P0017") {
+            return NO_ACTIVE_ROOM_START_VOTING_ERROR;
+        }
+
+        if (error.code === "P0018") {
+            return ROOM_NOT_VOTABLE_ERROR;
+        }
+
+        if (error.code === "P0019") {
+            return NOT_ROOM_HOST_START_VOTING_ERROR;
+        }
+
+        if (error.code === "P0022") {
+            return INCONSISTENT_START_VOTING_ERROR;
+        }
+
+        if (error.code === "P0023") {
+            return NOT_SESSION_PLAYER_START_VOTING_ERROR;
+        }
+    }
+
+    return GENERIC_START_VOTING_ERROR;
+}
+
+function getSubmitVoteErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "28000" || error.code === "42501") {
+            return UNAUTHENTICATED_SUBMIT_VOTE_ERROR;
+        }
+
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_SUBMIT_VOTE_ERROR;
+        }
+
+        if (error.code === "P0017") {
+            return NO_ACTIVE_ROOM_SUBMIT_VOTE_ERROR;
+        }
+
+        if (error.code === "P0018") {
+            return ROOM_NOT_VOTING_ERROR;
+        }
+
+        if (error.code === "P0022") {
+            return INCONSISTENT_SUBMIT_VOTE_ERROR;
+        }
+
+        if (error.code === "P0023") {
+            return NOT_SESSION_PLAYER_SUBMIT_VOTE_ERROR;
+        }
+
+        if (error.code === "P0024") {
+            return INVALID_VOTE_TARGET_ERROR;
+        }
+
+        if (error.code === "P0025") {
+            return ALREADY_VOTED_ERROR;
+        }
+    }
+
+    return GENERIC_SUBMIT_VOTE_ERROR;
+}
+
 function getGameStateErrorMessage(error: unknown) {
     if (isSupabaseErrorLike(error)) {
         if (error.code === "28000" || error.code === "42501") {
@@ -648,11 +818,49 @@ function isStartRoundDiscussionRow(
     );
 }
 
+function isStartRoundVotingRow(value: unknown): value is StartRoundVotingRow {
+    const row = value as Partial<StartRoundVotingRow>;
+
+    return (
+        typeof row.advanced === "boolean" &&
+        typeof row.already_in_phase === "boolean" &&
+        row.state === "voting_first" &&
+        typeof row.round_number === "number" &&
+        Number.isInteger(row.round_number) &&
+        row.round_number >= 1
+    );
+}
+
+function isSubmitRoundVoteRow(value: unknown): value is SubmitRoundVoteRow {
+    const row = value as Partial<SubmitRoundVoteRow>;
+
+    return (
+        typeof row.accepted === "boolean" &&
+        typeof row.already_recorded === "boolean" &&
+        (
+            row.state === "voting_first" ||
+            row.state === "tie_discussion" ||
+            row.state === "impostor_guess" ||
+            row.state === "round_result"
+        ) &&
+        typeof row.round_number === "number" &&
+        Number.isInteger(row.round_number) &&
+        row.round_number >= 1
+    );
+}
+
 function isMyGameStateRow(value: unknown): value is MyGameStateRow {
     const row = value as Partial<MyGameStateRow>;
 
     if (
-        (row.state !== "role_reveal" && row.state !== "discussion") ||
+        (
+            row.state !== "role_reveal" &&
+            row.state !== "discussion" &&
+            row.state !== "voting_first" &&
+            row.state !== "tie_discussion" &&
+            row.state !== "impostor_guess" &&
+            row.state !== "round_result"
+        ) ||
         typeof row.round_number !== "number" ||
         !Number.isInteger(row.round_number) ||
         row.round_number < 1
@@ -661,10 +869,93 @@ function isMyGameStateRow(value: unknown): value is MyGameStateRow {
     }
 
     if (row.role === "player") {
-        return typeof row.word === "string";
+        if (typeof row.word !== "string") {
+            return false;
+        }
+    } else if (!(row.role === "impostor" && row.word === null)) {
+        return false;
     }
 
-    return row.role === "impostor" && row.word === null;
+    if (row.state === "voting_first") {
+        return (
+            Array.isArray(row.candidates) &&
+            row.candidates.every(isVoteCandidateRow) &&
+            (
+                typeof row.my_vote_target_player_id === "string" ||
+                row.my_vote_target_player_id === null
+            ) &&
+            typeof row.has_voted === "boolean" &&
+            (row.vote_results === null || typeof row.vote_results === "undefined")
+        );
+    }
+
+    if (
+        row.state === "tie_discussion" ||
+        row.state === "impostor_guess" ||
+        row.state === "round_result"
+    ) {
+        return (
+            (row.candidates === null || typeof row.candidates === "undefined") &&
+            Array.isArray(row.vote_results) &&
+            row.vote_results.every(isVoteResultRow)
+        );
+    }
+
+    return (
+        (row.candidates === null || typeof row.candidates === "undefined") &&
+        (row.my_vote_target_player_id === null ||
+            typeof row.my_vote_target_player_id === "undefined") &&
+        (row.has_voted === false || typeof row.has_voted === "undefined") &&
+        (row.vote_results === null || typeof row.vote_results === "undefined")
+    );
+}
+
+function isVoteCandidateRow(value: unknown): value is VoteCandidateRow {
+    const row = value as Partial<VoteCandidateRow>;
+
+    return typeof row.player_id === "string" && typeof row.nickname === "string";
+}
+
+function isVoteResultRow(value: unknown): value is VoteResultRow {
+    const row = value as Partial<VoteResultRow>;
+
+    return (
+        isVoteCandidateRow(value) &&
+        typeof row.vote_count === "number" &&
+        Number.isInteger(row.vote_count) &&
+        row.vote_count >= 0
+    );
+}
+
+function toVoteCandidates(value: unknown): VoteCandidate[] | null {
+    if (value === null || typeof value === "undefined") {
+        return null;
+    }
+
+    if (!Array.isArray(value) || !value.every(isVoteCandidateRow)) {
+        return null;
+    }
+
+    return value.map((candidate) => ({
+        playerId: candidate.player_id,
+        nickname: candidate.nickname
+    }));
+}
+
+function toVoteResults(value: unknown): VoteResult[] | null {
+    if (value === null || typeof value === "undefined") {
+        return null;
+    }
+
+    if (!Array.isArray(value) || !value.every(isVoteResultRow)) {
+        return null;
+    }
+
+    return value.map((result) => ({
+        playerId: result.player_id,
+        nickname: result.nickname,
+        voteCount: result.vote_count
+    }));
 }
 
 function toStartSessionResult(row: StartSessionRow): StartSessionResult {
@@ -689,19 +980,52 @@ function toStartRoundDiscussionResult(
     };
 }
 
+function toStartRoundVotingResult(row: StartRoundVotingRow): StartRoundVotingResult {
+    return {
+        advanced: row.advanced,
+        alreadyInPhase: row.already_in_phase,
+        state: row.state,
+        roundNumber: row.round_number
+    };
+}
+
+function toSubmitRoundVoteResult(row: SubmitRoundVoteRow): SubmitRoundVoteResult {
+    return {
+        accepted: row.accepted,
+        alreadyRecorded: row.already_recorded,
+        state: row.state,
+        roundNumber: row.round_number
+    };
+}
+
 function toMyGameState(row: MyGameStateRow): MyGameState {
+    const voteResults = toVoteResults(row.vote_results);
+    const candidates = toVoteCandidates(row.candidates);
+    const voting =
+        row.state === "voting_first"
+            ? {
+                candidates: candidates ?? [],
+                myVoteTargetPlayerId: row.my_vote_target_player_id ?? null,
+                hasVoted: row.has_voted === true
+            }
+            : null;
+
     if (row.role === "player") {
         return {
             state: row.state,
             roundNumber: row.round_number,
-            privateView: { role: "player", word: row.word }
+            privateView: { role: "player", word: row.word },
+            voting,
+            voteResults
         };
     }
 
     return {
         state: row.state,
         roundNumber: row.round_number,
-        privateView: { role: "impostor", word: null }
+        privateView: { role: "impostor", word: null },
+        voting,
+        voteResults
     };
 }
 
@@ -1209,6 +1533,45 @@ export async function startRoundDiscussion(
     }
 
     return toStartRoundDiscussionResult(rows[0]);
+}
+
+export async function startRoundVoting(
+    supabase: ImpostorRoomsClient
+): Promise<StartRoundVotingResult> {
+    const result = await supabase.rpc("start_round_voting");
+
+    if (result.error) {
+        throw new Error(getStartVotingErrorMessage(result.error));
+    }
+
+    const rows = Array.isArray(result.data) ? result.data : [];
+
+    if (rows.length !== 1 || !isStartRoundVotingRow(rows[0])) {
+        throw new Error("No pudimos confirmar el inicio de la votación.");
+    }
+
+    return toStartRoundVotingResult(rows[0]);
+}
+
+export async function submitRoundVote(
+    supabase: ImpostorRoomsClient,
+    targetPlayerId: string
+): Promise<SubmitRoundVoteResult> {
+    const result = await supabase.rpc("submit_round_vote", {
+        target_player_id: targetPlayerId
+    });
+
+    if (result.error) {
+        throw new Error(getSubmitVoteErrorMessage(result.error));
+    }
+
+    const rows = Array.isArray(result.data) ? result.data : [];
+
+    if (rows.length !== 1 || !isSubmitRoundVoteRow(rows[0])) {
+        throw new Error("No pudimos confirmar tu voto.");
+    }
+
+    return toSubmitRoundVoteResult(rows[0]);
 }
 
 export async function getMyGameState(

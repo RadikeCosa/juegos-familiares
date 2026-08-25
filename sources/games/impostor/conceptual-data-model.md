@@ -65,7 +65,7 @@ RoomParticipant
 GameSession
 SessionPlayer
 Round
-Vote
+RoundVote
 RoundResult
 GameSessionHistory
 RoundHistory
@@ -762,13 +762,21 @@ La elección privada de un jugador durante una votación.
 ## Información mínima
 
 ```text
-Vote
+RoundVote
 - roundId
+- votingRound
 - voterPlayerId
 - targetPlayerId
-- votingRound
 - createdAt
 ```
+
+La futura tabla física prevista puede llamarse:
+
+```text
+round_votes
+```
+
+Puede incluir columnas técnicas adicionales cuando hagan falta para integridad referencial, por ejemplo `game_session_id`, pero esas columnas no se convierten en conceptos de producto si solo redundan información derivable desde `Round`.
 
 ## VotingRound
 
@@ -785,18 +793,40 @@ La segunda corresponde a una eventual votación por empate.
 
 Un jugador:
 
-* solamente puede votar una vez por etapa;
+* solamente puede votar una vez por Round y etapa;
 * no puede votarse a sí mismo.
+
+La identidad lógica de un voto debe garantizar:
+
+```text
+un solo voto por voterPlayerId
+por roundId
+por votingRound
+```
+
+La integridad no debe depender solo del cliente. La implementación futura debe poder garantizar estructuralmente:
+
+```text
+voterPlayerId ∈ SessionPlayers de la GameSession
+targetPlayerId ∈ SessionPlayers de la GameSession
+voterPlayerId != targetPlayerId
+```
+
+El impostor vota como cualquier `SessionPlayer`. El host también vota y no tiene voto especial.
 
 ## Persistencia
 
 Temporal.
 
+Los votos pertenecen a `Round`, no solamente a `GameSession`.
+
 ## Visibilidad
 
 Privada mientras se vota.
 
-Los resultados agregados se revelan solamente cuando corresponde.
+Durante la votación no se muestran votos individuales ajenos, conteos parciales ni quién votó a quién. El host no recibe privilegios informativos sobre votos.
+
+Los resultados agregados se revelan solamente cuando corresponde y no requieren exponer quién votó a quién.
 
 ---
 
@@ -978,7 +1008,7 @@ Round
            impostor
 
 Round
-  1 ──────── N Vote
+  1 ──────── N RoundVote
 
 Group
   1 ──────── N GameSessionHistory
@@ -1019,7 +1049,7 @@ RoomParticipant
 GameSession
 SessionPlayer
 Round
-Vote
+RoundVote
 RoundResult
 ```
 

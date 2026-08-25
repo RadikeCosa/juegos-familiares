@@ -2306,57 +2306,99 @@ INCREMENTO 7 — CERRADO TÉCNICAMENTE
 
 ### Objetivo
 
-Analizar e implementar la transición `discussion → voting` y la primera votación secreta con su resolución básica.
+Convertir la transición `discussion → voting_first` y la primera votación secreta en un vertical autoritativo completo:
+
+```text
+discussion
+→ voting_first
+→ voto secreto de todos los SessionPlayers
+→ resolución automática de la primera votación
+→ resultado agregado
+→ tie_discussion | impostor_guess | round_result
+```
+
+El Incremento 8 no introduce `Round.status`: la fase global de gameplay continúa perteneciendo a `GameSession.state`.
 
 ### Resultado observable
 
-El host inicia votación.
+El host actual inicia la votación desde `discussion` mediante:
+
+```text
+start_round_voting()
+```
+
+La RPC no recibe parámetros, usa `rooms.host_player_id` actual como autoridad y es idempotente frente a retry/lost response coherente.
 
 Cada jugador vota por otro participante.
 
 No se muestran resultados parciales.
 
-Cuando todos votan, se revela el resultado agregado.
+Cuando todos los `SessionPlayers` votan, se revela el resultado agregado.
 
-Si no hay empate, la ronda avanza según corresponda:
+La resolución de la primera votación produce una de tres ramas:
 
-* impostor descubierto → `IMPOSTOR_GUESS`;
-* otro jugador acusado → `ROUND_RESULT`.
+* empate en el máximo → `tie_discussion`;
+* impostor único más votado → `impostor_guess`;
+* otro jugador único más votado → `round_result`.
+
+En empate, Incremento 8 solo detecta el empate, muestra el agregado y conserva o permite reconstruir el conjunto de candidatos empatados necesario para el Incremento 9. No inicia ni resuelve todavía la segunda votación.
 
 ### Dominio involucrado
 
 Impostor:
 
-* `VOTING_FIRST`;
-* `Vote`;
+* `voting_first`;
+* `RoundVote` / futura tabla `round_votes`;
 * voto secreto;
+* un voto por voter, Round y etapa de votación;
 * conteo autoritativo;
+* empate en el máximo;
 * acusado único;
-* detección de impostor descubierto o no descubierto.
+* transición a `tie_discussion`, `impostor_guess` o `round_result`.
 
 ### Infraestructura necesaria
 
 * persistencia operativa de votos;
-* restricción de un voto por jugador;
-* autorización de participante;
-* sincronización cuando todos votaron;
-* operación autoritativa de conteo.
+* distinción conceptual de `voting_round = 1 | 2`, aunque Incremento 8 solo use `1`;
+* restricción estructural de un voto por `voter_player_id`, `round_id` y `voting_round`;
+* validación estructural de `voter ∈ SessionPlayers`, `target ∈ SessionPlayers`, `voter != target`;
+* RPC `submit_round_vote(target_player_id uuid)` que deriva caller, Player, GameSession, Round y voter desde `auth.uid()`;
+* extensión discriminada de `get_my_game_state()` para `voting_first` y resultados posteriores;
+* operación autoritativa de conteo dentro de la misma operación lógica que registra el último voto;
+* polling lento vigente de `get_my_game_state()` como sincronización de gameplay.
 
 ### Decisiones técnicas a cerrar
 
-* cómo evitar voto duplicado;
-* cómo impedir auto-voto;
-* cómo ocultar votos individuales durante la votación;
-* cómo resolver carreras cuando llega el último voto;
-* qué información agregada se revela.
+Decisiones cerradas para el contrato de Incremento 8:
+
+* `GameSession.state` incorpora `voting_first`; la resolución puede llevar a `tie_discussion`, `impostor_guess` o `round_result`;
+* todos los `SessionPlayers` de la GameSession votan; no se usa Presence, liveness ni RoomParticipants conectados como denominador;
+* el impostor vota como cualquier `SessionPlayer`;
+* el host vota y no tiene voto especial;
+* no se permite auto-voto;
+* no se puede cambiar el voto una vez registrado;
+* retry del mismo voto puede ser éxito idempotente o recuperación equivalente; intento de cambiar target debe rechazarse;
+* no se muestran resultados parciales ni votos individuales ajenos;
+* el host no recibe privilegios informativos sobre votos;
+* `round_votes` permanece privada al cliente, sin SELECT/INSERT/UPDATE directos ni Realtime/Postgres Changes;
+* `get_my_game_state()` sigue siendo la vista autorizada del caller y no una descarga genérica del estado interno;
+* el último voto dispara la resolución automática; no existe una RPC manual de cierre de primera votación;
+* un `SessionPlayer` desconectado sigue perteneciendo a la tanda, sigue siendo candidato y puede votar si vuelve; si no votó y no vuelve, la primera versión puede quedar esperando.
+
+La espera indefinida por un `SessionPlayer` ausente queda registrada como limitación conocida/política pendiente de hardening. No se resuelve silenciosamente mediante Presence, timeout, host override, expulsión o votación solo con conectados.
 
 ### Tests / validación
 
-* unit tests de conteo sin empate;
+* unit tests de conteo con empate máximo, impostor único más votado y otro jugador único más votado;
 * unit tests de no auto-voto;
-* integración: un participante vota una sola vez;
+* unit tests de inmutabilidad del voto;
+* integración: un `SessionPlayer` vota una sola vez por Round y etapa;
+* integración: el impostor también vota;
 * integración/privacidad: no se consultan votos individuales ajenos;
+* integración: no se muestran resultados parciales;
+* integración: denominador de completion = `SessionPlayers`, no Presence/liveness;
 * concurrencia básica: votos simultáneos no duplican resolución;
+* lost-response/recovery: start voting y submit vote se recuperan con `get_my_game_state()`;
 * e2e mínimo de lobby a votación con pocos participantes si el flujo ya lo permite.
 
 ### Riesgos
@@ -2365,17 +2407,24 @@ Impostor:
 * permitir voto duplicado;
 * resolver dos veces por llegada simultánea del último voto;
 * dejar la ronda sin resultado.
+* confundir availability con membership y desbloquear votación por Presence.
 
 ### Fuera de alcance
 
-* empate;
 * segunda votación;
-* intento final completo;
-* scoring completo.
+* resolución de segunda votación;
+* intento final del impostor;
+* reveal de palabra;
+* registro de acierto/error del impostor;
+* scoring;
+* scoreboard;
+* nueva ronda;
+* fin de tanda;
+* Realtime/Broadcast de gameplay.
 
 ### Criterio de terminado
 
-La primera votación funciona de forma privada, autoritativa y consistente para casos sin empate.
+La primera votación funciona de forma privada, autoritativa y consistente para las tres ramas de resolución inicial: empate, impostor único más votado y otro jugador único más votado.
 
 ### Conceptos a aprender
 
@@ -2384,17 +2433,48 @@ La primera votación funciona de forma privada, autoritativa y consistente para 
 * resolución por evento final;
 * concurrencia pequeña pero real.
 
+### Slicing oficial
+
+#### Incremento 8.0 — Contrato/documentación
+
+Actualizar la documentación vigente para convertir el Incremento 8 en contrato implementable por slices pequeños, sin código funcional, migrations, Supabase ni tests.
+
+#### Incremento 8.1 — Persistencia de votos + voting_first + start_round_voting()
+
+Preparar la persistencia operativa de votos de Round, ampliar `GameSession.state` con `voting_first` y agregar `start_round_voting()` host-only desde `discussion`.
+
+#### Incremento 8.2 — submit_round_vote() + resolución autoritativa de primera votación
+
+Registrar votos de `voting_round = 1`, validar roster congelado, impedir auto-voto/cambio de voto, resolver automáticamente en el último voto y transicionar a `tie_discussion`, `impostor_guess` o `round_result`.
+
+#### Incremento 8.3 — get_my_game_state() voting/result + UI vertical
+
+Extender el read model privado y la UI para `discussion`, `voting_first`, post-vote y resultado agregado, sin resultados parciales ni votos individuales.
+
+#### Incremento 8.4 — Polling, recovery, concurrencia, privacidad y cierre
+
+Validar polling lento, refresh/reconnect, lost-response recovery, carreras del último voto, privacidad, auditoría documental/técnica y cierre del incremento.
+
 ---
 
 ## Incremento 9 — Empate y segunda votación
 
 ### Objetivo
 
-Completar la regla de empate y segunda votación definitiva.
+Completar la rama posterior al empate detectado en Incremento 8:
+
+```text
+tie_discussion
+→ current host continúa
+→ voting_second
+→ candidatos limitados a los empatados
+→ segundo voto secreto
+→ resolución definitiva
+```
 
 ### Resultado observable
 
-Si la primera votación empata, todos ven los jugadores empatados.
+Si la primera votación ya dejó la GameSession en `tie_discussion`, todos ven los jugadores empatados.
 
 El host inicia segunda votación.
 
@@ -2406,8 +2486,8 @@ La segunda votación resuelve definitivamente la ronda.
 
 Impostor:
 
-* `TIE_DISCUSSION`;
-* `VOTING_SECOND`;
+* `tie_discussion`;
+* `voting_second`;
 * candidatos empatados;
 * regla determinística de segunda votación.
 
@@ -2420,13 +2500,12 @@ Impostor:
 
 ### Decisiones técnicas a cerrar
 
-* dónde se guarda el conjunto de empatados;
+* cómo se conserva o reconstruye el conjunto de empatados producido por Incremento 8;
 * cómo se evita votar por alguien fuera del empate;
-* si los votos de primera y segunda etapa comparten entidad con restricción compuesta.
+* cómo se reutiliza la entidad de votos con `voting_round = 2`.
 
 ### Tests / validación
 
-* unit tests de detección de empate;
 * unit tests de candidatos restringidos;
 * unit tests de regla definitiva de segunda votación;
 * integración: no hay tercera votación;
@@ -2436,7 +2515,7 @@ Impostor:
 
 * permitir candidatos incorrectos;
 * abrir tercera votación por ambigüedad;
-* confundir empate de primera con empate de segunda;
+* confundir resolución de primera votación con resolución definitiva de segunda votación;
 * revelar palabra antes de tiempo si el impostor fue descubierto.
 
 ### Fuera de alcance

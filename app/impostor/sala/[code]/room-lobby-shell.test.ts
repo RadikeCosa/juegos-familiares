@@ -9,6 +9,8 @@ import {
     formatPlayerCount,
     renderRoomLobbyContent,
     runStartDiscussionCommand,
+    runStartVotingCommand,
+    runSubmitVoteCommand,
     toGameplayDataState
 } from "./room-lobby-shell";
 
@@ -71,31 +73,92 @@ const playingHostLobby: RoomLobby = {
 const playerGameState: MyGameState = {
     state: "role_reveal",
     roundNumber: 1,
-    privateView: { role: "player", word: "Casa" }
+    privateView: { role: "player", word: "Casa" },
+    voting: null,
+    voteResults: null
 };
 
 const impostorGameState: MyGameState = {
     state: "role_reveal",
     roundNumber: 1,
-    privateView: { role: "impostor", word: null }
+    privateView: { role: "impostor", word: null },
+    voting: null,
+    voteResults: null
 };
 
 const discussionGameState: MyGameState = {
     state: "discussion",
     roundNumber: 1,
-    privateView: { role: "player", word: "Casa" }
+    privateView: { role: "player", word: "Casa" },
+    voting: null,
+    voteResults: null
 };
 
 const impostorDiscussionGameState: MyGameState = {
     state: "discussion",
     roundNumber: 1,
-    privateView: { role: "impostor", word: null }
+    privateView: { role: "impostor", word: null },
+    voting: null,
+    voteResults: null
 };
 
 const secondRoundDiscussionGameState: MyGameState = {
     state: "discussion",
     roundNumber: 2,
-    privateView: { role: "player", word: "Mesa" }
+    privateView: { role: "player", word: "Mesa" },
+    voting: null,
+    voteResults: null
+};
+
+const votingGameState: MyGameState = {
+    state: "voting_first",
+    roundNumber: 1,
+    privateView: { role: "player", word: "Casa" },
+    voting: {
+        candidates: [
+            { playerId: "player-2", nickname: "Pedro" },
+            { playerId: "player-3", nickname: "Ana" }
+        ],
+        myVoteTargetPlayerId: null,
+        hasVoted: false
+    },
+    voteResults: null
+};
+
+const votedGameState: MyGameState = {
+    ...votingGameState,
+    voting: {
+        candidates: votingGameState.voting?.candidates ?? [],
+        myVoteTargetPlayerId: "player-2",
+        hasVoted: true
+    }
+};
+
+const tieDiscussionGameState: MyGameState = {
+    state: "tie_discussion",
+    roundNumber: 1,
+    privateView: { role: "player", word: "Casa" },
+    voting: null,
+    voteResults: [
+        { playerId: "player-2", nickname: "Pedro", voteCount: 2 },
+        { playerId: "player-3", nickname: "Ana", voteCount: 2 }
+    ]
+};
+
+const impostorGuessGameState: MyGameState = {
+    state: "impostor_guess",
+    roundNumber: 1,
+    privateView: { role: "impostor", word: null },
+    voting: null,
+    voteResults: [{ playerId: "player-2", nickname: "Pedro", voteCount: 3 }]
+};
+
+const roundResultGameState: MyGameState = {
+    state: "round_result",
+    roundNumber: 1,
+    privateView: { role: "player", word: "Casa" },
+    voting: null,
+    voteResults: [{ playerId: "player-3", nickname: "Ana", voteCount: 2 }]
 };
 
 function createDeferred<T>() {
@@ -187,6 +250,21 @@ describe("toGameplayDataState", () => {
         expect(nextState).toMatchObject({
             status: "discussion",
             isPrivateViewRevealed: false
+        });
+    });
+
+    it("recognizes voting and first-vote result states for polling convergence", () => {
+        expect(toGameplayDataState(playingHostLobby, votingGameState)).toMatchObject({
+            status: "voting-first"
+        });
+        expect(toGameplayDataState(playingHostLobby, tieDiscussionGameState)).toMatchObject({
+            status: "tie-discussion"
+        });
+        expect(toGameplayDataState(playingHostLobby, impostorGuessGameState)).toMatchObject({
+            status: "impostor-guess"
+        });
+        expect(toGameplayDataState(playingHostLobby, roundResultGameState)).toMatchObject({
+            status: "round-result"
         });
     });
 });
@@ -324,6 +402,120 @@ describe("runStartDiscussionCommand", () => {
         expect(refreshAuthoritative).toHaveBeenCalledTimes(1);
         expect(setError).toHaveBeenCalledTimes(1);
         expect(setError).toHaveBeenCalledWith(undefined);
+    });
+});
+
+describe("runStartVotingCommand", () => {
+    it("recovers a lost command response by accepting voting_first from manual refresh", async () => {
+        const start = vi.fn(async () => {
+            throw new Error("NetworkError");
+        });
+        const refreshGameplay = vi.fn(async () => votingGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartVotingCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(start).toHaveBeenCalledTimes(1);
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(refreshAuthoritative).not.toHaveBeenCalled();
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it("reconciles host loss through the authoritative room path", async () => {
+        const start = vi.fn(async () => {
+            throw new Error("Solo el host actual puede ir a votación.");
+        });
+        const refreshGameplay = vi.fn(async () => discussionGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartVotingCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(setError).toHaveBeenLastCalledWith("Ya no sos el host actual.");
+        expect(refreshAuthoritative).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("runSubmitVoteCommand", () => {
+    it("requires a local target before submitting", async () => {
+        const submit = vi.fn(async () => undefined);
+        const refreshGameplay = vi.fn(async () => votingGameState);
+        const setError = vi.fn();
+
+        await runSubmitVoteCommand({
+            targetPlayerId: null,
+            submit,
+            refreshGameplay,
+            setError
+        });
+
+        expect(submit).not.toHaveBeenCalled();
+        expect(refreshGameplay).not.toHaveBeenCalled();
+        expect(setError).toHaveBeenLastCalledWith("Elegí a quién votar.");
+    });
+
+    it("refreshes gameplay after successful vote submit", async () => {
+        const submit = vi.fn(async () => undefined);
+        const refreshGameplay = vi.fn(async () => votedGameState);
+        const setError = vi.fn();
+
+        await runSubmitVoteCommand({
+            targetPlayerId: "player-2",
+            submit,
+            refreshGameplay,
+            setError
+        });
+
+        expect(submit).toHaveBeenCalledWith("player-2");
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it("recovers a lost vote response when polling sees the caller vote", async () => {
+        const submit = vi.fn(async () => {
+            throw new Error("NetworkError");
+        });
+        const refreshGameplay = vi.fn(async () => votedGameState);
+        const setError = vi.fn();
+
+        await runSubmitVoteCommand({
+            targetPlayerId: "player-2",
+            submit,
+            refreshGameplay,
+            setError
+        });
+
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it("recovers a lost final vote response when polling already sees a result", async () => {
+        const submit = vi.fn(async () => {
+            throw new Error("NetworkError");
+        });
+        const refreshGameplay = vi.fn(async () => roundResultGameState);
+        const setError = vi.fn();
+
+        await runSubmitVoteCommand({
+            targetPlayerId: "player-2",
+            submit,
+            refreshGameplay,
+            setError
+        });
+
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(setError).toHaveBeenLastCalledWith(undefined);
     });
 });
 
@@ -853,7 +1045,6 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("Host actual: Ramiro");
         expect(markup).not.toContain("Casa");
         expect(markup).not.toContain("Empezar ronda");
-        expect(markup).not.toContain("Ir a votación");
     });
 
     it("reveals and hides a normal player's word in discussion by removing it from DOM", () => {
@@ -946,7 +1137,7 @@ describe("renderRoomLobbyContent", () => {
                 recognizedState,
                 {
                     status: "discussion",
-                    lobby: playingHostLobby,
+                    lobby: { ...playingHostLobby, participants: nonHostLobby.participants },
                     gameState: discussionGameState,
                     isPrivateViewRevealed: false
                 },
@@ -955,6 +1146,138 @@ describe("renderRoomLobbyContent", () => {
         );
 
         expect(markup).not.toMatch(/Ir a votación|Votar|Elegir jugador|Finalizar ronda/);
+    });
+
+    it("shows Ir a votación only to the host during discussion", () => {
+        const hostMarkup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "discussion",
+                    lobby: playingHostLobby,
+                    gameState: discussionGameState,
+                    isPrivateViewRevealed: false
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+        const nonHostMarkup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "discussion",
+                    lobby: { ...playingHostLobby, participants: nonHostLobby.participants },
+                    gameState: discussionGameState,
+                    isPrivateViewRevealed: false
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(hostMarkup).toContain("Ir a votación");
+        expect(nonHostMarkup).not.toContain("Ir a votación");
+    });
+
+    it("renders voting candidates without self, partial counts or hidden vote internals", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "voting-first",
+                    lobby: playingHostLobby,
+                    gameState: votingGameState
+                },
+                {
+                    roomCode: "AB7KQ2M4",
+                    selectedVoteTargetPlayerId: "player-3"
+                }
+            )
+        );
+
+        expect(markup).toContain("Votación");
+        expect(markup).toContain("Pedro");
+        expect(markup).toContain("Ana");
+        expect(markup).toContain("aria-pressed=\"true\"");
+        expect(markup).toContain("Votar");
+        expect(markup).not.toContain("Ramiro");
+        expect(markup).not.toContain("Casa");
+        expect(markup).not.toContain("quién falta");
+        expect(markup).not.toMatch(/votos|vote_count|player-\d/);
+    });
+
+    it("shows registered vote feedback and disables changing the vote", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "voting-first",
+                    lobby: playingHostLobby,
+                    gameState: votedGameState
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Voto registrado. Esperando al resto.");
+        expect(markup).toContain("disabled=\"\"");
+        expect(markup).not.toContain("Registrando voto");
+    });
+
+    it("renders tie discussion with aggregate results only", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "tie-discussion",
+                    lobby: playingHostLobby,
+                    gameState: tieDiscussionGameState
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Hubo empate");
+        expect(markup).toContain("Pedro");
+        expect(markup).toContain("2 votos");
+        expect(markup).not.toContain("segunda votación");
+        expect(markup).not.toMatch(/Ramiro.*Pedro|Pedro.*Ana.*Ramiro|player-\d/);
+    });
+
+    it("renders impostor guess pending state without word input or secret reveal", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "impostor-guess",
+                    lobby: playingHostLobby,
+                    gameState: impostorGuessGameState
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("El impostor fue señalado");
+        expect(markup).toContain("Queda pendiente el intento del impostor.");
+        expect(markup).not.toContain("Casa");
+        expect(markup).not.toMatch(/input|Adivinar|secret_word|normalized/i);
+    });
+
+    it("renders round result without score or next-round controls", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "round-result",
+                    lobby: playingHostLobby,
+                    gameState: roundResultGameState
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Acusación incorrecta");
+        expect(markup).toContain("sin marcador todavía");
+        expect(markup).not.toMatch(/Nueva ronda|Puntaje|score/i);
     });
 
     it("renders excluded state without role, word, participants or Start", () => {

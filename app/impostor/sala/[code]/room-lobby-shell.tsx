@@ -20,9 +20,11 @@ import {
   getMyGameState,
   getMyActiveRoom,
   refreshMyRoomLiveness,
+  submitRoundVote,
   subscribeToRoomPresence,
   recordRoomJoinIntent,
   startRoundDiscussion,
+  startRoundVoting,
   startRoomHostSuccessionRecheck,
   startRoomLivenessHeartbeat,
   subscribeToRoomChanges,
@@ -57,6 +59,26 @@ type RoomLobbyDataState =
       gameState: MyGameState;
       isPrivateViewRevealed: boolean;
     }
+  | {
+      status: "voting-first";
+      lobby: RoomLobby;
+      gameState: MyGameState;
+    }
+  | {
+      status: "tie-discussion";
+      lobby: RoomLobby;
+      gameState: MyGameState;
+    }
+  | {
+      status: "impostor-guess";
+      lobby: RoomLobby;
+      gameState: MyGameState;
+    }
+  | {
+      status: "round-result";
+      lobby: RoomLobby;
+      gameState: MyGameState;
+    }
   | { status: "excluded"; lobby: RoomLobby; message: string }
   | { status: "error"; message: string }
   | { status: "awaiting-join"; error?: string }
@@ -80,6 +102,12 @@ const START_DISCUSSION_NOT_HOST_UI_MESSAGE = "Ya no sos el host actual.";
 const START_DISCUSSION_INCONSISTENT_MESSAGE =
   "No pudimos reconstruir la tanda para empezar la ronda.";
 const START_DISCUSSION_EXCLUDED_MESSAGE = "No participás de la tanda actual.";
+const START_VOTING_NOT_HOST_MESSAGE =
+  "Solo el host actual puede ir a votación.";
+const START_VOTING_NOT_HOST_UI_MESSAGE = "Ya no sos el host actual.";
+const START_VOTING_INCONSISTENT_MESSAGE =
+  "No pudimos reconstruir la tanda para ir a votación.";
+const START_VOTING_EXCLUDED_MESSAGE = "No participás de la tanda actual.";
 const EXCLUDED_GAME_STATE_MESSAGE = "No participás de la tanda actual.";
 const ROOM_LIVENESS_LOG_MESSAGE = "No pudimos refrescar liveness de sala.";
 const ROOM_HOST_SUCCESSION_LOG_MESSAGE = "No pudimos revisar sucesión de host.";
@@ -166,8 +194,26 @@ function isExcludedStartDiscussionError(error: unknown) {
 
 function isGameplayDataState(
   state: RoomLobbyDataState,
-): state is Extract<RoomLobbyDataState, { status: "role-reveal" | "discussion" }> {
-  return state.status === "role-reveal" || state.status === "discussion";
+): state is Extract<
+  RoomLobbyDataState,
+  {
+    status:
+      | "role-reveal"
+      | "discussion"
+      | "voting-first"
+      | "tie-discussion"
+      | "impostor-guess"
+      | "round-result";
+  }
+> {
+  return (
+    state.status === "role-reveal" ||
+    state.status === "discussion" ||
+    state.status === "voting-first" ||
+    state.status === "tie-discussion" ||
+    state.status === "impostor-guess" ||
+    state.status === "round-result"
+  );
 }
 
 function isSamePrivateGameState(left: MyGameState, right: MyGameState) {
@@ -178,8 +224,29 @@ function isSamePrivateGameState(left: MyGameState, right: MyGameState) {
   );
 }
 
+function isSameVoteResults(left: MyGameState, right: MyGameState) {
+  return JSON.stringify(left.voteResults) === JSON.stringify(right.voteResults);
+}
+
+function isSameVotingState(left: MyGameState, right: MyGameState) {
+  return JSON.stringify(left.voting) === JSON.stringify(right.voting);
+}
+
 function isSameGameState(left: MyGameState, right: MyGameState) {
-  return left.state === right.state && isSamePrivateGameState(left, right);
+  return (
+    left.state === right.state &&
+    isSamePrivateGameState(left, right) &&
+    isSameVotingState(left, right) &&
+    isSameVoteResults(left, right)
+  );
+}
+
+function isFirstVotingResolutionState(state: MyGameState["state"]) {
+  return (
+    state === "tie_discussion" ||
+    state === "impostor_guess" ||
+    state === "round_result"
+  );
 }
 
 export function toGameplayDataState(
@@ -187,6 +254,22 @@ export function toGameplayDataState(
   gameState: MyGameState,
   previousState?: RoomLobbyDataState,
 ): RoomLobbyDataState {
+  if (gameState.state === "voting_first") {
+    return { status: "voting-first", lobby, gameState };
+  }
+
+  if (gameState.state === "tie_discussion") {
+    return { status: "tie-discussion", lobby, gameState };
+  }
+
+  if (gameState.state === "impostor_guess") {
+    return { status: "impostor-guess", lobby, gameState };
+  }
+
+  if (gameState.state === "round_result") {
+    return { status: "round-result", lobby, gameState };
+  }
+
   if (gameState.state === "discussion") {
     const isPrivateViewRevealed =
       previousState?.status === "discussion" &&
@@ -209,6 +292,18 @@ export function toGameplayDataState(
     gameState,
     isPrivateViewRevealed,
   };
+}
+
+function isNotHostStartVotingError(error: unknown) {
+  return error instanceof Error && error.message === START_VOTING_NOT_HOST_MESSAGE;
+}
+
+function isInconsistentStartVotingError(error: unknown) {
+  return error instanceof Error && error.message === START_VOTING_INCONSISTENT_MESSAGE;
+}
+
+function isExcludedStartVotingError(error: unknown) {
+  return error instanceof Error && error.message === START_VOTING_EXCLUDED_MESSAGE;
 }
 
 type GameplayPollLoopOptions = {
@@ -351,6 +446,111 @@ export async function runStartDiscussionCommand(
   }
 }
 
+type StartVotingCommandOptions = {
+  start: () => Promise<unknown>;
+  refreshGameplay: () => Promise<MyGameState | null>;
+  refreshAuthoritative: () => Promise<void>;
+  setError: (message: string | undefined) => void;
+};
+
+export async function runStartVotingCommand(options: StartVotingCommandOptions) {
+  async function refreshAuthoritatively() {
+    try {
+      await options.refreshAuthoritative();
+    } catch (reconcileError) {
+      options.setError(
+        getFriendlyError(
+          reconcileError,
+          "No pudimos reconstruir la sala. Intentá de nuevo.",
+        ),
+      );
+    }
+  }
+
+  options.setError(undefined);
+
+  try {
+    await options.start();
+    await options.refreshGameplay();
+    return;
+  } catch (error) {
+    let recoveredGameState: MyGameState | null = null;
+
+    try {
+      recoveredGameState = await options.refreshGameplay();
+    } catch {
+      recoveredGameState = null;
+    }
+
+    if (recoveredGameState?.state === "voting_first") {
+      options.setError(undefined);
+      return;
+    }
+
+    if (isNotHostStartVotingError(error)) {
+      options.setError(START_VOTING_NOT_HOST_UI_MESSAGE);
+      await refreshAuthoritatively();
+      return;
+    }
+
+    if (
+      isInconsistentStartVotingError(error) ||
+      isExcludedStartVotingError(error)
+    ) {
+      await refreshAuthoritatively();
+      return;
+    }
+
+    options.setError(
+      getFriendlyError(error, "No pudimos ir a votación. Intentá de nuevo."),
+    );
+  }
+}
+
+type SubmitVoteCommandOptions = {
+  targetPlayerId: string | null;
+  submit: (targetPlayerId: string) => Promise<unknown>;
+  refreshGameplay: () => Promise<MyGameState | null>;
+  setError: (message: string | undefined) => void;
+};
+
+export async function runSubmitVoteCommand(options: SubmitVoteCommandOptions) {
+  options.setError(undefined);
+
+  if (!options.targetPlayerId) {
+    options.setError("Elegí a quién votar.");
+    return;
+  }
+
+  try {
+    await options.submit(options.targetPlayerId);
+    await options.refreshGameplay();
+  } catch (error) {
+    let recoveredGameState: MyGameState | null = null;
+
+    try {
+      recoveredGameState = await options.refreshGameplay();
+    } catch {
+      recoveredGameState = null;
+    }
+
+    if (
+      recoveredGameState?.voting?.hasVoted ||
+      (
+        recoveredGameState &&
+        isFirstVotingResolutionState(recoveredGameState.state)
+      )
+    ) {
+      options.setError(undefined);
+      return;
+    }
+
+    options.setError(
+      getFriendlyError(error, "No pudimos registrar tu voto. Intentá de nuevo."),
+    );
+  }
+}
+
 export function formatPlayerCount(count: number) {
   return count === 1 ? "1 jugador" : `${count} jugadores`;
 }
@@ -399,12 +599,20 @@ export function renderRoomLobbyContent(
     onRevealPrivateView?: () => void;
     onHidePrivateView?: () => void;
     onStartDiscussion?: () => void;
+    onStartVoting?: () => void;
+    onSelectVoteTarget?: (targetPlayerId: string) => void;
+    onSubmitVote?: () => void;
     onStartAnonymousAuth?: () => void;
     lifecycleActionState?: RoomLifecycleActionState;
     isStartingAuth?: boolean;
     startAuthError?: string;
     isStartingDiscussion?: boolean;
     startDiscussionError?: string;
+    isStartingVoting?: boolean;
+    startVotingError?: string;
+    selectedVoteTargetPlayerId?: string | null;
+    isSubmittingVote?: boolean;
+    submitVoteError?: string;
     connectedPlayerIds?: Set<string>;
     hostSuccessionNotice?: string;
   },
@@ -567,6 +775,8 @@ export function renderRoomLobbyContent(
     const selfParticipant = getSelfParticipant(lobby);
     const canStartDiscussion =
       dataState.status === "role-reveal" && selfParticipant?.isHost === true;
+    const canStartVoting =
+      dataState.status === "discussion" && selfParticipant?.isHost === true;
     const startDiscussionErrorFeedback =
       dataState.status === "role-reveal" && options.startDiscussionError ? (
         <div className="impostor-group-error" aria-live="polite">
@@ -584,6 +794,25 @@ export function renderRoomLobbyContent(
           {options.isStartingDiscussion ? "Empezando ronda..." : "Empezar ronda"}
         </button>
         {startDiscussionErrorFeedback}
+      </div>
+    ) : null;
+    const startVotingErrorFeedback =
+      dataState.status === "discussion" && options.startVotingError ? (
+        <div className="impostor-group-error" aria-live="polite">
+          <p>{options.startVotingError}</p>
+        </div>
+      ) : null;
+    const startVotingAction = canStartVoting ? (
+      <div className="impostor-room-round-actions">
+        <button
+          className="impostor-action impostor-action--primary"
+          type="button"
+          disabled={options.isStartingVoting}
+          onClick={options.onStartVoting}
+        >
+          {options.isStartingVoting ? "Yendo a votación..." : "Ir a votación"}
+        </button>
+        {startVotingErrorFeedback}
       </div>
     ) : null;
 
@@ -634,6 +863,8 @@ export function renderRoomLobbyContent(
                 ? "Ver mi palabra"
                 : "Ver mi rol"}
             </button>
+            {startVotingAction}
+            {!canStartVoting ? startVotingErrorFeedback : null}
           </section>
         );
       }
@@ -662,6 +893,115 @@ export function renderRoomLobbyContent(
           >
             Ocultar
           </button>
+          {startVotingAction}
+          {!canStartVoting ? startVotingErrorFeedback : null}
+        </section>
+      );
+    }
+
+    if (dataState.status === "voting-first") {
+      const voting = dataState.gameState.voting;
+      const selectedTargetPlayerId =
+        voting?.myVoteTargetPlayerId ??
+        options.selectedVoteTargetPlayerId ??
+        null;
+      const hasVoted = voting?.hasVoted === true;
+
+      return (
+        <section
+          className="impostor-group-card impostor-room-role-reveal"
+          aria-labelledby="impostor-room-voting-title"
+        >
+          <p className="impostor-kicker">
+            Ronda {dataState.gameState.roundNumber}
+          </p>
+          <h1 id="impostor-room-voting-title">Votación</h1>
+          <p>Elegí a quién acusa el grupo.</p>
+          <div className="impostor-vote-list" role="list">
+            {(voting?.candidates ?? []).map((candidate) => {
+              const isSelected = selectedTargetPlayerId === candidate.playerId;
+
+              return (
+                <button
+                  key={candidate.playerId}
+                  className={
+                    isSelected
+                      ? "impostor-vote-option impostor-vote-option--selected"
+                      : "impostor-vote-option"
+                  }
+                  type="button"
+                  disabled={hasVoted || options.isSubmittingVote}
+                  aria-pressed={isSelected}
+                  onClick={() => options.onSelectVoteTarget?.(candidate.playerId)}
+                >
+                  {candidate.nickname}
+                </button>
+              );
+            })}
+          </div>
+          {hasVoted ? (
+            <p className="impostor-room-notice" aria-live="polite">
+              Voto registrado. Esperando al resto.
+            </p>
+          ) : (
+            <button
+              className="impostor-action impostor-action--primary"
+              type="button"
+              disabled={!selectedTargetPlayerId || options.isSubmittingVote}
+              onClick={options.onSubmitVote}
+            >
+              {options.isSubmittingVote ? "Registrando voto..." : "Votar"}
+            </button>
+          )}
+          {options.submitVoteError ? (
+            <div className="impostor-group-error" aria-live="polite">
+              <p>{options.submitVoteError}</p>
+            </div>
+          ) : null}
+        </section>
+      );
+    }
+
+    if (
+      dataState.status === "tie-discussion" ||
+      dataState.status === "impostor-guess" ||
+      dataState.status === "round-result"
+    ) {
+      const title =
+        dataState.status === "tie-discussion"
+          ? "Hubo empate"
+          : dataState.status === "impostor-guess"
+            ? "El impostor fue señalado"
+            : "Acusación incorrecta";
+      const message =
+        dataState.status === "tie-discussion"
+          ? "Conversen el empate antes de seguir."
+          : dataState.status === "impostor-guess"
+            ? "Queda pendiente el intento del impostor."
+            : "La ronda quedó resuelta sin marcador todavía.";
+
+      return (
+        <section
+          className="impostor-group-card impostor-room-role-reveal"
+          aria-labelledby="impostor-room-result-title"
+        >
+          <p className="impostor-kicker">
+            Ronda {dataState.gameState.roundNumber}
+          </p>
+          <h1 id="impostor-room-result-title">{title}</h1>
+          <p>{message}</p>
+          <ol className="impostor-vote-results">
+            {(dataState.gameState.voteResults ?? []).map((result) => (
+              <li key={result.playerId}>
+                <span>{result.nickname}</span>
+                <strong>
+                  {result.voteCount === 1
+                    ? "1 voto"
+                    : `${result.voteCount} votos`}
+                </strong>
+              </li>
+            ))}
+          </ol>
         </section>
       );
     }
@@ -834,6 +1174,13 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   const [startDiscussionError, setStartDiscussionError] = useState<
     string | undefined
   >();
+  const [isStartingVoting, setIsStartingVoting] = useState(false);
+  const [startVotingError, setStartVotingError] = useState<string | undefined>();
+  const [selectedVoteTargetPlayerId, setSelectedVoteTargetPlayerId] = useState<
+    string | null
+  >(null);
+  const [isSubmittingVote, setIsSubmittingVote] = useState(false);
+  const [submitVoteError, setSubmitVoteError] = useState<string | undefined>();
   const [roomPresenceSnapshot, setRoomPresenceSnapshot] = useState<{
     roomId?: string;
     state: RoomPresenceState;
@@ -1117,7 +1464,9 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
             (nextState.status === "discussion" &&
               currentState.status === "discussion" &&
               nextState.isPrivateViewRevealed ===
-                currentState.isPrivateViewRevealed))
+                currentState.isPrivateViewRevealed) ||
+            (nextState.status !== "role-reveal" &&
+              nextState.status !== "discussion"))
         ) {
           return currentState;
         }
@@ -1327,6 +1676,55 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
         setIsStartingDiscussion(false);
       }
     }
+  }
+
+  async function handleStartVoting() {
+    if (isStartingVoting || !isMountedRef.current) {
+      return;
+    }
+
+    setStartVotingError(undefined);
+    setIsStartingVoting(true);
+
+    try {
+      await runStartVotingCommand({
+        start: () => startRoundVoting(createImpostorRoomsClient()),
+        refreshGameplay: () => refreshGameplayStateNow("manual"),
+        refreshAuthoritative: () => refreshAuthoritativeRoomState("authority"),
+        setError: setStartVotingError,
+      });
+    } finally {
+      if (isMountedRef.current) {
+        setIsStartingVoting(false);
+      }
+    }
+  }
+
+  async function handleSubmitVote() {
+    if (isSubmittingVote || !isMountedRef.current) {
+      return;
+    }
+
+    setIsSubmittingVote(true);
+
+    try {
+      await runSubmitVoteCommand({
+        targetPlayerId: selectedVoteTargetPlayerId,
+        submit: (targetPlayerId) =>
+          submitRoundVote(createImpostorRoomsClient(), targetPlayerId),
+        refreshGameplay: () => refreshGameplayStateNow("manual"),
+        setError: setSubmitVoteError,
+      });
+    } finally {
+      if (isMountedRef.current) {
+        setIsSubmittingVote(false);
+      }
+    }
+  }
+
+  function handleSelectVoteTarget(targetPlayerId: string) {
+    setSelectedVoteTargetPlayerId(targetPlayerId);
+    setSubmitVoteError(undefined);
   }
 
   useEffect(() => {
@@ -1539,12 +1937,20 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     onRevealPrivateView: () => void handleRevealPrivateView(),
     onHidePrivateView: () => void handleHidePrivateView(),
     onStartDiscussion: () => void handleStartDiscussion(),
+    onStartVoting: () => void handleStartVoting(),
+    onSelectVoteTarget: handleSelectVoteTarget,
+    onSubmitVote: () => void handleSubmitVote(),
     onStartAnonymousAuth: () => void handleStartAnonymousAuth(),
     lifecycleActionState,
     isStartingAuth,
     startAuthError,
     isStartingDiscussion,
     startDiscussionError,
+    isStartingVoting,
+    startVotingError,
+    selectedVoteTargetPlayerId,
+    isSubmittingVote,
+    submitVoteError,
     connectedPlayerIds,
     hostSuccessionNotice,
   });
