@@ -1182,15 +1182,55 @@ El impostor recibe:
 
 `+2 puntos`
 
+Los jugadores normales no reciben puntos.
+
 ### Victoria del grupo
 
 Cada jugador normal recibe:
 
 `+1 punto`
 
+El impostor no recibe puntos.
+
+La ronda no otorga la misma cantidad de puntos en ambos casos: el impostor recibe 2 puntos cuando gana; cada jugador normal recibe 1 punto cuando gana el grupo.
+
+La puntuación es individual. Si gana el grupo, puntúan todos los jugadores no impostores de la ronda; si gana el impostor, puntúa solo el impostor.
+
+`round_winner` se representa como:
+
+```text
+impostor | group
+```
+
+No se introduce un ganador individual distinto de los jugadores que reciben puntos.
+
+`round_winner` es el ganador final de la ronda, no el resultado intermedio de una votación. En particular:
+
+* si el grupo acusa a otro jugador, `round_winner = impostor`;
+* si la segunda votación no señala al impostor como único más votado, `round_winner = impostor`;
+* si el grupo descubre al impostor y el impostor adivina la palabra, `round_winner = impostor`;
+* si el grupo descubre al impostor y el impostor falla su intento final, `round_winner = group`.
+
+La ronda queda cerrada para scoring cuando entra en `round_result` con `round_winner` definido.
+
+Después del scoring, el lifecycle normal continúa:
+
+```text
+round_result
+→ scoreboard
+```
+
+El marcador se acumula dentro de la tanda mediante el `score` de cada `SessionPlayer`.
+
+No se introduce una entidad `Scoreboard` separada en la primera versión. `GameSession` mantiene la tanda y su fase `scoreboard`; `SessionPlayer` mantiene la puntuación individual acumulada; el scoreboard visible es un read model derivado del roster congelado y sus scores.
+
+El cliente nunca calcula puntos ni decide ganadores. Solo la autoridad server-side muta scores a partir de `round_winner`.
+
 ## Motivo
 
 Queremos que el marcador agregue continuidad y competencia sin convertir la partida en una optimización compleja de puntos individuales.
+
+La diferencia `+2` para el impostor y `+1` para cada jugador normal compensa que el grupo reparte su victoria entre varios participantes, mientras el impostor juega solo.
 
 ---
 
@@ -1205,9 +1245,162 @@ Después de cada ronda el host puede:
 * iniciar otra ronda;
 * terminar la tanda.
 
+La nueva ronda reutiliza la misma `GameSession` y el mismo roster congelado de `SessionPlayers`.
+
+Cada nueva ronda crea un `Round` con el número siguiente al mayor número existente en la tanda.
+
+La palabra y el impostor se eligen server-side.
+
+La palabra debe salir del banco disponible del grupo y no puede repetir una palabra ya usada durante la misma tanda.
+
+Para evitar repeticiones se usa el snapshot normalizado de palabras ya jugadas en las rondas de la `GameSession`, no una lista enviada por el cliente.
+
+El nuevo impostor se elige server-side usando la regla de balance vigente: tienen prioridad los jugadores que fueron impostores menos veces durante la tanda, y entre ellos se selecciona aleatoriamente.
+
+Si no quedan palabras suficientes, no se crea la ronda. El host puede terminar la tanda; el grupo puede agregar palabras válidas al banco y luego intentar iniciar la nueva ronda otra vez.
+
+No se define todavía un final automático por puntaje objetivo, por cantidad máxima de rondas ni por agotamiento de palabras.
+
 ## Motivo
 
 El juego debe adaptarse naturalmente al contexto presencial.
+
+Mantener la misma tanda evita reconstruir lobby entre rondas y conserva continuidad competitiva.
+
+---
+
+# Fuera del Incremento 11
+
+Puntuación, marcador y nueva ronda no cierran todavía:
+
+* terminar tanda con historial persistente mínimo;
+* estadísticas históricas;
+* ganador final de tanda por puntos;
+* cambios de participantes durante una tanda;
+* objetivo fijo de puntos;
+* fin automático por puntaje;
+* ranking histórico;
+* moderación avanzada;
+* categorías;
+* palabras precargadas.
+
+El historial mínimo sigue previsto para Incremento 12. Las estadísticas, ranking histórico, moderación avanzada, categorías y palabras precargadas pertenecen a decisiones posteriores.
+
+---
+
+# Terminar tanda e historial mínimo
+
+## Decisión
+
+Incremento 12 cierra la tanda activa desde el marcador y conserva un historial mínimo para estadísticas futuras.
+
+Solo el host actual puede terminar la tanda.
+
+La primera versión permite terminar únicamente desde `scoreboard`, después de una ronda cerrada y puntuada.
+
+No se termina desde:
+
+* `role_reveal`;
+* `discussion`;
+* `voting_first`;
+* `tie_discussion`;
+* `voting_second`;
+* `impostor_guess`;
+* `round_result`.
+
+La transición de producto es:
+
+```text
+scoreboard
+→ finished
+```
+
+`GameSession.finished_at` representa el instante autoritativo en que la tanda fue cerrada. Debe ser definido server-side en la misma operación que marca la tanda como `finished` y persiste el historial mínimo.
+
+La Room queda cerrada al terminar la tanda:
+
+```text
+Room.status = closed
+```
+
+Esa Room no se reutiliza para otra tanda. Para jugar otra tanda después del resultado final, el grupo crea una nueva Room.
+
+El resultado final se calcula por puntos acumulados en `SessionPlayer.score`.
+
+Ganan la tanda todos los jugadores que empatan en el mayor puntaje final.
+
+Por lo tanto el resultado final puede tener:
+
+* un ganador único;
+* múltiples ganadores empatados.
+
+No existe estado de “sin ganador” si la tanda llegó a `scoreboard` con al menos una ronda puntuada y roster válido.
+
+El cliente no decide ganador final, no arma historial, no envía scores finales y no cierra Room/tanda por sí mismo. La operación futura debe derivar contexto desde:
+
+```text
+auth.uid()
+→ Player
+→ Room activa
+→ rooms.host_player_id actual
+→ GameSession vigente
+→ estado scoreboard
+```
+
+El cierre debe ser idempotente. Si la respuesta se pierde y el host reintenta, la operación devuelve el cierre ya persistido sin duplicar historial ni modificar resultados.
+
+`get_my_game_state()` en `finished` debe exponer lo necesario para la pantalla final:
+
+* `state = finished`;
+* número de rondas jugadas;
+* scores finales por jugador;
+* ganador o ganadores finales;
+* `finished_at`;
+* acciones disponibles.
+
+Host y no-host ven el mismo resultado final. El host puede tener CTA para volver al grupo o crear otra Room, pero no una acción especial sobre la tanda ya cerrada.
+
+`can_start_next_round = false` en `finished`.
+
+`can_end_session = false` en `finished`, porque la tanda ya terminó.
+
+El historial de tanda conserva:
+
+* `groupId`;
+* referencia a la `GameSession` cerrada, si se decide conservarla;
+* `startedAt`;
+* `finishedAt`;
+* roster final de participantes;
+* scores finales por jugador;
+* ganador o ganadores finales;
+* cantidad de rondas jugadas;
+* host que cerró la tanda.
+
+El historial de ronda conserva:
+
+* número de ronda;
+* impostor;
+* `round_winner`;
+* si el impostor fue descubierto por votación;
+* si hubo intento final del impostor;
+* si el impostor adivinó la palabra;
+* puntaje aplicado por esa ronda, derivable o persistido como resumen.
+
+Las palabras usadas completas quedan fuera del historial mínimo inicial. La palabra permanece en el estado operativo de `Round` mientras exista para reconstrucción inmediata, pero el historial permanente no necesita guardar texto de palabras para estadísticas futuras.
+
+Los votos individuales históricos quedan fuera. Se pueden conservar resultados agregados mínimos si son necesarios para derivar “impostor descubierto”, pero no quién votó a quién.
+
+No se persiste historial de hosts por ronda. Solo se conserva, como auditoría mínima, el host que cerró la tanda.
+
+## Motivo
+
+Terminar sólo desde `scoreboard` evita cerrar una ronda a medias, perder input pendiente o tener que definir cancelaciones parciales.
+
+Cerrar la Room mantiene el contrato vigente de Room temporal y evita diseñar reutilización, reseteo de participants, liveness y host entre tandas dentro de la misma Room.
+
+El empate múltiple es más honesto y simple que inventar desempates invisibles por orden de join, host o azar.
+
+El historial mínimo debe habilitar estadísticas futuras sin guardar datos sensibles o innecesarios, especialmente votos individuales y palabras completas.
 
 ---
 

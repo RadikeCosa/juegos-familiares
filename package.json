@@ -8,6 +8,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:db": "node supabase/tests/validate-2-2.mjs && node supabase/tests/validate-2-3.mjs && node supabase/tests/validate-3-1.mjs && node supabase/tests/validate-3-2.mjs && node supabase/tests/validate-3-3.mjs && node supabase/tests/validate-4-1.mjs && node supabase/tests/validate-4-2.mjs && node supabase/tests/validate-4-3.mjs && node supabase/tests/validate-4-4.mjs && node supabase/tests/validate-4-5.mjs && node supabase/tests/validate-5-2.mjs",
+    "test:db:11.5": "node supabase/tests/validate-11-5.mjs",
     "supabase:reset": "supabase db reset",
     "supabase:start": "supabase start -x storage-api,imgproxy,studio,mailpit,postgres-meta,edge-runtime,logflare,vector,supavisor",
     "supabase:stop": "supabase stop"

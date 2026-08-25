@@ -9,6 +9,7 @@ import {
     formatPlayerCount,
     renderRoomLobbyContent,
     runStartDiscussionCommand,
+    runStartNextRoundCommand,
     runStartSecondVotingCommand,
     runStartVotingCommand,
     runSubmitVoteCommand,
@@ -206,6 +207,42 @@ const roundResultGameState: MyGameState = {
     }
 };
 
+const scoreboardGameState: MyGameState = {
+    ...roundResultGameState,
+    state: "scoreboard",
+    scoreboard: {
+        players: [
+            { playerId: "player-2", nickname: "Pedro", score: 4, isSelf: false },
+            { playerId: "player-1", nickname: "Ramiro", score: 2, isSelf: true },
+            { playerId: "player-3", nickname: "Ana", score: 2, isSelf: false }
+        ],
+        roundImpostor: { playerId: "player-2", nickname: "Pedro" },
+        canStartNextRound: true,
+        canEndSession: false,
+        availableUnusedWordsCount: 3,
+        nextRoundBlockReason: null
+    }
+};
+
+const scoreboardWithoutWordsGameState: MyGameState = {
+    ...scoreboardGameState,
+    scoreboard: {
+        ...(scoreboardGameState.scoreboard as NonNullable<MyGameState["scoreboard"]>),
+        canStartNextRound: false,
+        availableUnusedWordsCount: 0,
+        nextRoundBlockReason: "no_words"
+    }
+};
+
+const nonHostScoreboardGameState: MyGameState = {
+    ...scoreboardGameState,
+    scoreboard: {
+        ...(scoreboardGameState.scoreboard as NonNullable<MyGameState["scoreboard"]>),
+        canStartNextRound: false,
+        nextRoundBlockReason: "not_host"
+    }
+};
+
 const roundResultWithGuessGameState: MyGameState = {
     ...roundResultGameState,
     roundResult: {
@@ -322,6 +359,9 @@ describe("toGameplayDataState", () => {
         });
         expect(toGameplayDataState(playingHostLobby, roundResultGameState)).toMatchObject({
             status: "round-result"
+        });
+        expect(toGameplayDataState(playingHostLobby, scoreboardGameState)).toMatchObject({
+            status: "scoreboard"
         });
     });
 });
@@ -535,6 +575,82 @@ describe("runStartSecondVotingCommand", () => {
         const setError = vi.fn();
 
         await runStartSecondVotingCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(setError).toHaveBeenLastCalledWith("Ya no sos el host actual.");
+        expect(refreshAuthoritative).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("runStartNextRoundCommand", () => {
+    it("treats normal success as success and refreshes into role reveal", async () => {
+        const start = vi.fn(async () => ({ started: true }));
+        const refreshGameplay = vi.fn(async () => playerGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartNextRoundCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(start).toHaveBeenCalledTimes(1);
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(refreshAuthoritative).not.toHaveBeenCalled();
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it("treats already_started as recoverable success", async () => {
+        const start = vi.fn(async () => ({ alreadyStarted: true }));
+        const refreshGameplay = vi.fn(async () => playerGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartNextRoundCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it("recovers a lost next-round response when manual refresh sees role_reveal", async () => {
+        const start = vi.fn(async () => {
+            throw new Error("NetworkError");
+        });
+        const refreshGameplay = vi.fn(async () => playerGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartNextRoundCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+        expect(refreshAuthoritative).not.toHaveBeenCalled();
+    });
+
+    it("reconciles host loss through the authoritative room path", async () => {
+        const start = vi.fn(async () => {
+            throw new Error("Solo el host actual puede iniciar otra ronda.");
+        });
+        const refreshGameplay = vi.fn(async () => scoreboardGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartNextRoundCommand({
             start,
             refreshGameplay,
             refreshAuthoritative,
@@ -1469,6 +1585,123 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("Mesa");
         expect(markup).toContain("Casa");
         expect(markup).not.toMatch(/Nueva ronda|Puntaje|score|normalized/i);
+    });
+
+    it("renders scoreboard with accumulated scores and host next-round action", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "scoreboard",
+                    lobby: playingHostLobby,
+                    gameState: scoreboardGameState
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Marcador");
+        expect(markup).toContain("Ganó el impostor");
+        expect(markup).toContain("El impostor era Pedro.");
+        expect(markup).toContain("La palabra era");
+        expect(markup).toContain("Casa");
+        expect(markup).toContain("Puntaje");
+        expect(markup).toContain("Pedro");
+        expect(markup).toContain("4 puntos");
+        expect(markup).toContain("Ramiro");
+        expect(markup).toContain("2 puntos");
+        expect(markup).toContain("Nueva ronda");
+        expect(markup).not.toMatch(/next_secret|next_impostor|normalized|player-\d/);
+    });
+
+    it("does not render the next-round action for non-hosts", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "scoreboard",
+                    lobby: { ...playingHostLobby, participants: nonHostLobby.participants },
+                    gameState: nonHostScoreboardGameState
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Puntaje");
+        expect(markup).toContain("El host actual puede abrir la próxima ronda.");
+        expect(markup).not.toContain("Nueva ronda");
+    });
+
+    it("shows a manageable no-word block for the host without creating a round", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "scoreboard",
+                    lobby: playingHostLobby,
+                    gameState: scoreboardWithoutWordsGameState
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Nueva ronda");
+        expect(markup).toContain("disabled=\"\"");
+        expect(markup).toContain("No quedan palabras nuevas");
+    });
+
+    it("disables the next-round button while opening a new round", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "scoreboard",
+                    lobby: playingHostLobby,
+                    gameState: scoreboardGameState
+                },
+                { roomCode: "AB7KQ2M4", isStartingNextRound: true }
+            )
+        );
+
+        expect(markup).toContain("Abriendo nueva ronda...");
+        expect(markup).toContain("disabled=\"\"");
+    });
+
+    it("shows next-round command feedback in scoreboard", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "scoreboard",
+                    lobby: playingHostLobby,
+                    gameState: scoreboardGameState
+                },
+                {
+                    roomCode: "AB7KQ2M4",
+                    startNextRoundError: "No pudimos iniciar otra ronda. Intentá de nuevo."
+                }
+            )
+        );
+
+        expect(markup).toContain("No pudimos iniciar otra ronda. Intentá de nuevo.");
+        expect(markup).toContain("Nueva ronda");
+    });
+
+    it("wires Nueva ronda to the authoritative startNextRound wrapper and refreshes gameplay", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+        const handler = source.slice(
+            source.indexOf("async function handleStartNextRound()"),
+            source.indexOf("async function handleSubmitVote()")
+        );
+
+        expect(handler).toContain("isStartingNextRound");
+        expect(handler).toContain("runStartNextRoundCommand({");
+        expect(handler).toContain("start: () => startNextRound(createImpostorRoomsClient())");
+        expect(handler).toContain("refreshGameplay: () => refreshGameplayStateNow(\"manual\")");
+        expect(handler).not.toMatch(/secret|impostorPlayerId|roundNumber \+ 1|score \+/);
     });
 
     it("renders excluded state without role, word, participants or Start", () => {

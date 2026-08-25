@@ -115,7 +115,7 @@ impostor_guess
 round_result
 ```
 
-`PREPARING_ROUND` existe solo como preparación transaccional interna de `start_session()`. No se introduce `Round.status`: la fase global de gameplay pertenece a `GameSession.state`. Segunda votación, intento final, reveal de palabra, scoring, marcador y fin de tanda pertenecen a incrementos posteriores.
+`PREPARING_ROUND` existe solo como preparación transaccional interna de `start_session()` y `NEW_ROUND`. No se introduce `Round.status`: la fase global de gameplay pertenece a `GameSession.state`.
 
 ---
 
@@ -956,9 +956,19 @@ El sistema conoce:
 * si adivinó la palabra;
 * ganador.
 
+`round_winner` debe estar definido como:
+
+```text
+impostor | group
+```
+
+La entrada a `round_result` cierra la ronda para efectos de scoring.
+
 ## Side effects
 
-El sistema actualiza la puntuación.
+El sistema actualiza la puntuación una sola vez cuando la ronda entra en `round_result` con `round_winner` definido.
+
+La victoria del impostor y la victoria del grupo no tienen el mismo valor individual.
 
 ### Victoria del impostor
 
@@ -983,9 +993,13 @@ ROUND_RESULT
 → SCOREBOARD
 ```
 
+`scoreboard` es una fase durable de `GameSession.state`, no una entidad de datos separada.
+
 Actor:
 
 `system`
+
+La transición no requiere input del cliente. La UI puede presentar primero el resultado y luego el marcador, pero el dominio ya tiene la ronda cerrada y los puntos aplicados.
 
 La UI puede mostrar el resultado antes de presentar el marcador sin requerir que esto constituya una nueva decisión de dominio.
 
@@ -1004,6 +1018,30 @@ La ronda terminó y se muestra la situación acumulada de la tanda.
 * cantidad de rondas;
 * palabras restantes disponibles.
 
+`get_my_game_state()` en `round_result` o `scoreboard` debe poder exponer un scoreboard derivado de los `SessionPlayers` de la tanda:
+
+```text
+scoreboard[]
+- session_player_id
+- player_id
+- display_name
+- score
+- is_impostor_for_last_round
+- received_points_in_last_round
+```
+
+También debe exponer, al menos:
+
+* número de ronda actual;
+* `round_winner`;
+* si el caller puede iniciar nueva ronda;
+* si hay palabras disponibles para iniciar nueva ronda;
+* acción alternativa esperada cuando no hay palabras disponibles.
+
+La palabra secreta sigue respetando la privacidad de `role_reveal`: en una nueva ronda no se envía al impostor y no se expone antes de la fase correspondiente.
+
+Si `PREPARING_ROUND` llegara a ser observable por una lectura concurrente, `get_my_game_state()` solo debe exponer un estado transitorio de preparación sin palabra, sin impostor nuevo y sin datos privados de la ronda en construcción. La lectura estable posterior a `NEW_ROUND` debe ser `role_reveal` de la nueva ronda.
+
 ## Acciones del host
 
 ### Nueva ronda
@@ -1014,12 +1052,14 @@ Evento:
 
 Actor:
 
-`host`
+`rooms.host_player_id` actual
 
 Guard:
 
 ```text
 availableUnusedWords >= 1
+GameSession.state = scoreboard
+no existe otra ronda abierta posterior
 ```
 
 Transición:
@@ -1028,6 +1068,16 @@ Transición:
 SCOREBOARD
 → PREPARING_ROUND
 ```
+
+Efectos:
+
+1. calcular `nextRoundNumber = max(round.number en la tanda) + 1`;
+2. seleccionar server-side una palabra disponible no utilizada en la tanda;
+3. seleccionar server-side un impostor con balance por conteo histórico de la tanda;
+4. crear el nuevo `Round`;
+5. dejar `GameSession.state = role_reveal`.
+
+El cliente no decide el número de ronda, la palabra ni el impostor.
 
 ### Si no quedan palabras
 
@@ -1050,6 +1100,14 @@ Actor:
 
 `host`
 
+Disponibilidad inicial:
+
+```text
+solo desde SCOREBOARD
+```
+
+El cierre desde estados intermedios queda fuera del Incremento 12 inicial.
+
 Transición:
 
 ```text
@@ -1068,15 +1126,28 @@ La tanda terminó.
 ## Información disponible
 
 * clasificación final;
-* ganador;
-* puntos;
-* cantidad de rondas.
+* ganador o ganadores finales;
+* puntos finales;
+* cantidad de rondas;
+* momento de finalización.
+
+El ganador final se calcula desde los scores finales de `SessionPlayers`.
+
+Si varios jugadores empatan en el mayor puntaje, todos son ganadores finales de la tanda.
+
+No se aplica desempate automático.
 
 ## Side effects
 
 Al entrar en `FINISHED`, el sistema debe preservar el resumen histórico mínimo necesario de la tanda y sus rondas.
 
 Este side effect no agrega estados nuevos a la máquina.
+
+La Room asociada queda `closed` y deja de ser reutilizable para otra tanda.
+
+Para jugar otra tanda, el grupo crea una nueva Room.
+
+`finished_at` es el timestamp server-side del cierre exitoso. No lo decide el cliente.
 
 ## Historial persistente
 
@@ -1088,7 +1159,9 @@ El historial de tanda conserva conceptualmente:
 * fecha/hora de finalización;
 * participantes;
 * cantidad de rondas;
-* puntuación final.
+* puntuación final;
+* ganador o ganadores finales;
+* host que cerró la tanda.
 
 El historial de ronda conserva conceptualmente:
 
@@ -1097,9 +1170,13 @@ El historial de ronda conserva conceptualmente:
 * impostor;
 * ganador (`group` o `impostor`);
 * si el impostor fue descubierto;
-* si el impostor adivinó la palabra.
+* si hubo intento final del impostor;
+* si el impostor adivinó la palabra;
+* puntos aplicados o datos suficientes para derivarlos.
 
 No hace falta conservar votos individuales históricos salvo que aparezca una razón concreta.
+
+Las palabras completas usadas no forman parte del historial mínimo inicial.
 
 El grupo y su banco de palabras continúan existiendo.
 

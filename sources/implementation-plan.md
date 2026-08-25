@@ -2862,6 +2862,28 @@ CERRADO TÉCNICAMENTE
 
 Actualizar puntuación después de cada ronda y permitir iniciar una nueva ronda dentro de la misma tanda.
 
+### Slicing
+
+```text
+11.0 — contrato documental de puntuación, marcador y nueva ronda
+11.1 — persistencia de score y estado scoreboard
+11.2 — aplicar puntos al cerrar round_result
+11.3 — iniciar nueva ronda
+11.4 — read model y UI de marcador/nueva ronda
+11.5 — hardening
+```
+
+Estado de slicing:
+
+```text
+11.0 — CERRADO DOCUMENTAL
+11.1 — CERRADO TÉCNICAMENTE
+11.2 — CERRADO TÉCNICAMENTE
+11.3 — CERRADO TÉCNICAMENTE
+11.4 — CERRADO TÉCNICAMENTE
+11.5 — CERRADO TÉCNICAMENTE
+```
+
 ### Resultado observable
 
 Después del resultado se ve el marcador.
@@ -2869,6 +2891,13 @@ Después del resultado se ve el marcador.
 El host puede iniciar una nueva ronda.
 
 La nueva ronda conserva jugadores y puntuación, evita palabras usadas y considera balance de impostor.
+
+En Incremento 11.0 queda cerrado documentalmente el scoring vigente:
+
+* si `round_winner = group`, puntúan todos los jugadores no impostores con `+1`;
+* si `round_winner = impostor`, puntúa solo el impostor con `+2`;
+* el marcador es individual y vive en `SessionPlayer.score`;
+* el scoreboard visible se deriva del roster congelado de la `GameSession`.
 
 ### Dominio involucrado
 
@@ -2888,12 +2917,28 @@ Impostor:
 * persistencia operativa de marcador;
 * prevención de doble nueva ronda.
 
-### Decisiones técnicas a cerrar
+### Decisiones técnicas cerradas
 
-* si la puntuación se calcula al entrar a `ROUND_RESULT` o al avanzar a `SCOREBOARD`;
-* cómo registrar palabras usadas durante la tanda;
-* cómo informar falta de palabras disponibles;
-* cómo bloquear doble toque de `Nueva ronda`.
+Incremento 11.0 cierra:
+
+* la puntuación se aplica al cerrar `round_result` hacia `scoreboard`, siempre con `round_winner` definido;
+* `round_winner` se representa como `impostor | group`;
+* `round_winner` representa el ganador final de ronda, no solamente el resultado de votación;
+* `round_result → scoreboard` es el lifecycle posterior al cierre de ronda;
+* las palabras usadas se derivan de los `Round` ya creados en la `GameSession` y su snapshot normalizado;
+* la nueva ronda reutiliza la misma `GameSession` y el mismo roster congelado;
+* cada nueva ronda crea `Round.number = max(number) + 1`;
+* palabra, impostor y número de ronda se eligen server-side;
+* si no hay palabras disponibles, no se crea ronda y el host debe poder terminar la tanda o esperar nuevas palabras válidas;
+* no hay fin automático por puntaje objetivo en este incremento.
+
+Incremento 11.2 cierra:
+
+* `advance_round_result_to_scoreboard()` como operación autoritativa sin ownership ni puntajes enviados por cliente;
+* `Round.scored_at` como marca persistida de idempotencia;
+* scoring server-side según `round_winner`;
+* transición transaccional `round_result → scoreboard`;
+* retry sobre ronda ya puntuada como no-op no destructivo.
 
 ### Tests / validación
 
@@ -2914,11 +2959,41 @@ Impostor:
 
 * historial persistente de tanda finalizada;
 * UI de estadísticas;
+* ganador final de tanda por puntos;
+* ranking histórico;
+* moderación avanzada, categorías o palabras precargadas;
+* objetivo de puntos o ganador automático de tanda;
+* fin automático por puntaje;
 * cambio de participantes durante tanda.
 
 ### Criterio de terminado
 
 Una tanda puede contener múltiples rondas con marcador consistente y palabras no repetidas.
+
+Incremento 11 quedó cerrado técnicamente con validación DB multironda en 11.5.
+
+### Cierre técnico de 11.1
+
+Incremento 11.1 deja preparada la persistencia operativa:
+
+* `session_players.score` existe físicamente con default `0` y check no negativo;
+* `game_sessions.state` acepta `scoreboard`;
+* `get_my_game_state()` acepta `scoreboard` como fase post-resultado y mantiene privacidad de secretos normalizados;
+* el cliente tipado reconoce `scoreboard` sin introducir todavía UI final de marcador.
+
+No aplica puntos todavía, no crea nueva ronda y no introduce historial.
+
+### Cierre técnico de 11.2
+
+Incremento 11.2 aplica puntos al cerrar la ronda:
+
+* si `round_winner = impostor`, suma `+2` solo al `SessionPlayer` impostor;
+* si `round_winner = group`, suma `+1` a cada `SessionPlayer` no impostor;
+* la RPC `advance_round_result_to_scoreboard()` deriva jugador, sala, tanda y ronda desde estado autoritativo;
+* `Round.scored_at` evita duplicar puntos ante retry, doble click o llamada repetida;
+* una ronda puntuada avanza a `GameSession.state = scoreboard`.
+
+No crea nueva ronda, no implementa UI final de marcador y no introduce historial.
 
 ### Conceptos a aprender
 
@@ -2943,6 +3018,8 @@ Todos ven resultado final, ganador por puntos, clasificación completa y cantida
 
 El grupo, jugadores y banco permanecen disponibles para futuras partidas.
 
+La Room queda cerrada y no se reutiliza para otra tanda.
+
 ### Dominio involucrado
 
 Impostor:
@@ -2959,18 +3036,53 @@ Impostor:
 * limpieza o cierre del estado operativo temporal;
 * autorización de host.
 
-### Decisiones técnicas a cerrar
+### Decisiones cerradas en 12.0
 
-* forma exacta del resumen histórico;
-* cuándo se elimina o archiva estado operativo;
-* cómo evitar registrar dos veces el cierre;
-* qué datos no se guardan, especialmente votos individuales históricos.
+* sólo el host actual puede terminar la tanda;
+* inicialmente sólo se termina desde `scoreboard`;
+* `GameSession.state` avanza a `finished`;
+* `GameSession.finished_at` es server-side e idempotente;
+* la Room queda `closed`;
+* una nueva tanda requiere crear otra Room;
+* ganador final = jugador o jugadores con mayor `SessionPlayer.score`;
+* los empates en primer puesto se preservan como múltiples ganadores;
+* el historial de tanda guarda roster, scores finales, ganadores, cantidad de rondas, inicio, fin y host que cerró;
+* el historial de ronda guarda número, impostor, `round_winner`, descubierto por votación, guess final y resumen de scoring;
+* no se conservan votos individuales históricos;
+* no se guarda la palabra completa usada en el historial mínimo inicial;
+* el cliente no arma historial ni decide ganador final.
+
+### Slicing oficial 12.x
+
+* 12.0 — contrato documental de terminar tanda e historial mínimo;
+* 12.1 — persistencia de `finished` e historial mínimo;
+* 12.2 — RPC autoritativa 0-args `end_session()`;
+* 12.3 — read model `get_my_game_state()` para `finished`;
+* 12.4 — UI de cierre y resultado final;
+* 12.5 — hardening y validación DB multironda/cierre.
+
+### Decisiones abiertas
+
+* cuánto resumen de rondas muestra la UI de cierre en MVP.
+
+### Decisiones cerradas en 12.1
+
+* `game_sessions.finished_at` existe como timestamp server-side y sólo puede quedar seteado si `state = finished`;
+* `game_session_history` guarda un snapshot único por `game_session_id`, con FK a `GameSession` y `Room` más datos autosuficientes de cierre;
+* `round_history` guarda un snapshot único por `round_id` y por `(game_session_id, number)`;
+* ganadores múltiples se representan con `winner_player_ids uuid[]` y `winners jsonb`;
+* roster final y scores finales se guardan como snapshots `jsonb`;
+* `scoring_summary` de ronda es un objeto `jsonb` con al menos `rule` y `awarded`;
+* el historial no copia `secret_word` ni `normalized_secret_word`, y no conserva votos individuales.
 
 ### Tests / validación
 
 * integración: cerrar tanda crea historial una sola vez;
 * integración: historial contiene participantes, rondas, puntajes y ganadores;
 * integración/privacidad: no se conservan votos individuales históricos sin necesidad;
+* integración: empate en primer puesto conserva múltiples ganadores;
+* integración: no-host no puede terminar tanda;
+* integración: no se termina desde estados intermedios;
 * e2e de tanda completa con cuatro jugadores simulados si el entorno lo permite;
 * prueba real presencial con 3 a 4 teléfonos.
 

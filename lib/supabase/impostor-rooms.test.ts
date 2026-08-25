@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+    advanceRoundResultToScoreboard,
     createCreateRoomController,
     createCloseRoomController,
     createHostSuccessionController,
@@ -27,6 +28,7 @@ import {
     ROOM_LIVENESS_HEARTBEAT_MS,
     startRoomHostSuccessionRecheck,
     startRoomLivenessHeartbeat,
+    startNextRound,
     startRoundDiscussion,
     startRoundVoting,
     startSecondRoundVoting,
@@ -179,6 +181,21 @@ const gameStateRoundResultWithoutGuessRow = {
     impostor_guess_correct: null
 };
 
+const gameStateScoreboardRow = {
+    ...gameStateRoundResultWithoutGuessRow,
+    state: "scoreboard",
+    scoreboard_players: [
+        { player_id: "player-2", nickname: "Pedro", score: 4, is_self: false },
+        { player_id: "player-1", nickname: "Ramiro", score: 2, is_self: true },
+        { player_id: "player-3", nickname: "Ana", score: 2, is_self: false }
+    ],
+    round_impostor: { player_id: "player-2", nickname: "Pedro" },
+    can_start_next_round: true,
+    can_end_session: false,
+    available_unused_words_count: 3,
+    next_round_block_reason: null
+};
+
 const startRoundDiscussionRow = {
     advanced: true,
     already_in_phase: false,
@@ -198,6 +215,20 @@ const startSecondRoundVotingRow = {
     already_in_phase: false,
     state: "voting_second",
     round_number: 1
+};
+
+const advanceRoundResultToScoreboardRow = {
+    advanced: true,
+    already_scored: false,
+    state: "scoreboard",
+    round_number: 1
+};
+
+const startNextRoundRow = {
+    started: true,
+    already_started: false,
+    state: "role_reveal",
+    round_number: 2
 };
 
 const submitRoundVoteRow = {
@@ -1196,6 +1227,64 @@ describe("getMyGameState", () => {
         });
     });
 
+    it("maps scoreboard with accumulated scores and server-derived next-round actions", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [gameStateScoreboardRow],
+                error: null
+            }))
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toMatchObject({
+            state: "scoreboard",
+            privateView: { role: "player", word: "Tesoro Azul" },
+            roundResult: {
+                winner: "impostor",
+                impostorGuessText: null,
+                impostorGuessCorrect: null
+            },
+            scoreboard: {
+                players: [
+                    { playerId: "player-2", nickname: "Pedro", score: 4, isSelf: false },
+                    { playerId: "player-1", nickname: "Ramiro", score: 2, isSelf: true },
+                    { playerId: "player-3", nickname: "Ana", score: 2, isSelf: false }
+                ],
+                roundImpostor: { playerId: "player-2", nickname: "Pedro" },
+                canStartNextRound: true,
+                canEndSession: false,
+                availableUnusedWordsCount: 3,
+                nextRoundBlockReason: null
+            }
+        });
+    });
+
+    it("maps no-word scoreboard blocking without leaking future round secrets", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...gameStateScoreboardRow,
+                    can_start_next_round: false,
+                    available_unused_words_count: 0,
+                    next_round_block_reason: "no_words",
+                    next_secret_word: "Milanesa",
+                    next_impostor_player_id: "player-3"
+                }],
+                error: null
+            }))
+        };
+
+        const state = await getMyGameState(supabase);
+
+        expect(state?.scoreboard).toMatchObject({
+            canStartNextRound: false,
+            availableUnusedWordsCount: 0,
+            nextRoundBlockReason: "no_words"
+        });
+        expect(JSON.stringify(state)).not.toMatch(
+            /next_secret_word|next_impostor_player_id|Milanesa/
+        );
+    });
+
     it("maps game-state domain failures to product-level feedback", async () => {
         const inconsistent = {
             rpc: vi.fn(async () => ({ data: null, error: { code: "P0022" } }))
@@ -1239,7 +1328,7 @@ describe("getMyGameState", () => {
         };
         const unknownState = {
             rpc: vi.fn(async () => ({
-                data: [{ ...gameStatePlayerRow, state: "scoreboard" }],
+                data: [{ ...gameStatePlayerRow, state: "finished" }],
                 error: null
             }))
         };
@@ -1252,6 +1341,18 @@ describe("getMyGameState", () => {
         const votingWithVoteResults = {
             rpc: vi.fn(async () => ({
                 data: [{ ...gameStateVotingRow, vote_results: [{ player_id: "player-2", nickname: "Pedro", vote_count: 1 }] }],
+                error: null
+            }))
+        };
+        const scoreboardWithoutPlayers = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...gameStateScoreboardRow, scoreboard_players: null }],
+                error: null
+            }))
+        };
+        const scoreboardWithInvalidBlockReason = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...gameStateScoreboardRow, next_round_block_reason: "client_guess" }],
                 error: null
             }))
         };
@@ -1275,6 +1376,12 @@ describe("getMyGameState", () => {
             "No pudimos confirmar el estado de la tanda."
         );
         await expect(getMyGameState(votingWithVoteResults)).rejects.toThrow(
+            "No pudimos confirmar el estado de la tanda."
+        );
+        await expect(getMyGameState(scoreboardWithoutPlayers)).rejects.toThrow(
+            "No pudimos confirmar el estado de la tanda."
+        );
+        await expect(getMyGameState(scoreboardWithInvalidBlockReason)).rejects.toThrow(
             "No pudimos confirmar el estado de la tanda."
         );
     });
@@ -1895,6 +2002,214 @@ describe("submitImpostorGuess", () => {
 
         expect(JSON.stringify(result)).not.toMatch(
             /secret_word|normalized_secret_word|impostor_player_id|game_session_id|Milanesa|player-2|session-1/
+        );
+    });
+});
+
+describe("advanceRoundResultToScoreboard", () => {
+    it("calls the authoritative scoring RPC without client-owned arguments", async () => {
+        const supabase = {
+            rpc: vi.fn(async (_fn: string) => {
+                void _fn;
+
+                return { data: [advanceRoundResultToScoreboardRow], error: null };
+            })
+        };
+
+        await expect(advanceRoundResultToScoreboard(supabase)).resolves.toEqual({
+            advanced: true,
+            alreadyScored: false,
+            state: "scoreboard",
+            roundNumber: 1
+        });
+
+        expect(supabase.rpc).toHaveBeenCalledWith("advance_round_result_to_scoreboard");
+        expect(supabase.rpc.mock.calls[0]).toHaveLength(1);
+    });
+
+    it("maps idempotent scoring responses", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...advanceRoundResultToScoreboardRow,
+                    advanced: false,
+                    already_scored: true
+                }],
+                error: null
+            }))
+        };
+
+        await expect(advanceRoundResultToScoreboard(supabase)).resolves.toEqual({
+            advanced: false,
+            alreadyScored: true,
+            state: "scoreboard",
+            roundNumber: 1
+        });
+    });
+
+    it("maps scoreboard transition failures to product-level feedback", async () => {
+        const invalidPhase = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0018" } }))
+        };
+        const notSessionPlayer = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0023" } }))
+        };
+        const inconsistent = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0022" } }))
+        };
+
+        await expect(advanceRoundResultToScoreboard(invalidPhase)).rejects.toThrow(
+            "Esta ronda no está lista para mostrar el marcador."
+        );
+        await expect(advanceRoundResultToScoreboard(notSessionPlayer)).rejects.toThrow(
+            "No participás de la tanda actual."
+        );
+        await expect(advanceRoundResultToScoreboard(inconsistent)).rejects.toThrow(
+            "No pudimos reconstruir la tanda para mostrar el marcador."
+        );
+    });
+
+    it("rejects malformed scoreboard responses explicitly", async () => {
+        const wrongState = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...advanceRoundResultToScoreboardRow, state: "round_result" }],
+                error: null
+            }))
+        };
+        const invalidRoundNumber = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...advanceRoundResultToScoreboardRow, round_number: 0 }],
+                error: null
+            }))
+        };
+
+        await expect(advanceRoundResultToScoreboard(wrongState)).rejects.toThrow(
+            "No pudimos confirmar el marcador."
+        );
+        await expect(advanceRoundResultToScoreboard(invalidRoundNumber)).rejects.toThrow(
+            "No pudimos confirmar el marcador."
+        );
+    });
+
+    it("does not expose secret internals in mapped scoring results", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...advanceRoundResultToScoreboardRow,
+                    secret_word: "Milanesa",
+                    normalized_secret_word: "milanesa",
+                    round_winner: "impostor",
+                    impostor_player_id: "player-2"
+                }],
+                error: null
+            }))
+        };
+
+        const result = await advanceRoundResultToScoreboard(supabase);
+
+        expect(JSON.stringify(result)).not.toMatch(
+            /secret_word|normalized_secret_word|round_winner|impostor_player_id|Milanesa|player-2/
+        );
+    });
+});
+
+describe("startNextRound", () => {
+    it("calls the authoritative next-round RPC without client-owned arguments", async () => {
+        const supabase = {
+            rpc: vi.fn(async (_fn: string) => {
+                void _fn;
+
+                return { data: [startNextRoundRow], error: null };
+            })
+        };
+
+        await expect(startNextRound(supabase)).resolves.toEqual({
+            started: true,
+            alreadyStarted: false,
+            state: "role_reveal",
+            roundNumber: 2
+        });
+
+        expect(supabase.rpc).toHaveBeenCalledWith("start_next_round");
+        expect(supabase.rpc.mock.calls[0]).toHaveLength(1);
+    });
+
+    it("maps retry recovery responses without exposing secrets", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...startNextRoundRow,
+                    started: false,
+                    already_started: true,
+                    secret_word: "Milanesa",
+                    normalized_secret_word: "milanesa",
+                    impostor_player_id: "player-2",
+                    score: 7
+                }],
+                error: null
+            }))
+        };
+
+        const result = await startNextRound(supabase);
+
+        expect(result).toEqual({
+            started: false,
+            alreadyStarted: true,
+            state: "role_reveal",
+            roundNumber: 2
+        });
+        expect(JSON.stringify(result)).not.toMatch(
+            /secret_word|normalized_secret_word|impostor_player_id|Milanesa|player-2|score/
+        );
+    });
+
+    it("maps next-round failures to product-level feedback", async () => {
+        const notHost = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0019" } }))
+        };
+        const noWords = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0021" } }))
+        };
+        const invalidPhase = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0018" } }))
+        };
+        const notSessionPlayer = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0023" } }))
+        };
+
+        await expect(startNextRound(notHost)).rejects.toThrow(
+            "Solo el host actual puede iniciar otra ronda."
+        );
+        await expect(startNextRound(noWords)).rejects.toThrow(
+            "No quedan palabras nuevas para iniciar otra ronda."
+        );
+        await expect(startNextRound(invalidPhase)).rejects.toThrow(
+            "Esta tanda no está lista para iniciar otra ronda."
+        );
+        await expect(startNextRound(notSessionPlayer)).rejects.toThrow(
+            "No participás de la tanda actual."
+        );
+    });
+
+    it("rejects malformed next-round responses explicitly", async () => {
+        const wrongState = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...startNextRoundRow, state: "scoreboard" }],
+                error: null
+            }))
+        };
+        const invalidRoundNumber = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...startNextRoundRow, round_number: 1 }],
+                error: null
+            }))
+        };
+
+        await expect(startNextRound(wrongState)).rejects.toThrow(
+            "No pudimos confirmar la nueva ronda."
+        );
+        await expect(startNextRound(invalidRoundNumber)).rejects.toThrow(
+            "No pudimos confirmar la nueva ronda."
         );
     });
 });

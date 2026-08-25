@@ -27,7 +27,7 @@ El case study futuro debe mostrar tanto el resultado como el razonamiento que ll
 
 ```text
 Estado:
-Incremento 10 cerrado técnicamente: empate, segunda votación e intento final del impostor completos; siguen pendientes scoring, scoreboard, nueva ronda, historial, fin de tanda, deploy y validación física multi-dispositivo completa.
+Incremento 11 cerrado técnicamente: empate, segunda votación, intento final del impostor, scoring, scoreboard y nueva ronda están completos; `SessionPlayer.score`, `GameSession.state = scoreboard`, scoring idempotente, read model/UI de marcador y nueva ronda autoritativa quedan validados localmente, pero siguen pendientes historial, fin de tanda, deploy y validación física multi-dispositivo completa.
 ```
 
 ## Ya existe
@@ -147,9 +147,6 @@ Incremento 10 cerrado técnicamente: empate, segunda votación e intento final d
 
 * validación manual multi-dispositivo completa;
 * playtesting real;
-* scoring;
-* scoreboard;
-* nueva ronda;
 * historial;
 * fin de tanda;
 * deploy;
@@ -201,9 +198,9 @@ Retos asociados:
 
 Estado: `IMPLEMENTACIÓN PARCIAL`.
 
-La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras, Room + Lobby, Presence básica privada, liveness autoritativo mínimo y sucesión de host validados en producción, más gameplay privado implementado técnicamente hasta el intento final del impostor y `round_result`.
+La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras, Room + Lobby, Presence básica privada, liveness autoritativo mínimo y sucesión de host validados en producción, más gameplay privado implementado técnicamente hasta marcador y nueva ronda.
 
-Todavía no hay tanda completa jugable. Scoring, scoreboard, nueva ronda, historial y fin de tanda siguen en incrementos futuros, y falta deploy y validación física multi-dispositivo completa.
+Todavía no hay tanda completa cerrable. Historial y fin de tanda siguen en incrementos futuros, y falta deploy y validación física multi-dispositivo completa.
 
 ---
 
@@ -744,9 +741,9 @@ Estado: REGISTRADA.
 
 # 10. Arquitectura resumida
 
-La arquitectura está definida conceptualmente. La primera capa de plataforma ya está implementada para identidad, grupo, jugador, invitación y bootstrap. La capa específica de Impostor ya tiene banco de palabras, Room + Lobby, Presence/liveness/host succession, `GameSession`, `SessionPlayers`, `Round`, read model privado, primera votación y segunda votación.
+La arquitectura está definida conceptualmente. La primera capa de plataforma ya está implementada para identidad, grupo, jugador, invitación y bootstrap. La capa específica de Impostor ya tiene banco de palabras, Room + Lobby, Presence/liveness/host succession, `GameSession`, `SessionPlayers`, `Round`, read model privado, primera votación, segunda votación e intento final del impostor.
 
-La tanda completa todavía no está cerrada: implementación del intento final del impostor, reveal físico de palabra en resultado, scoring, scoreboard, nueva ronda, historial, maduración PWA, deploy y validación física multi-dispositivo permanecen pendientes.
+La tanda completa todavía no está cerrada: historial, fin de tanda, maduración PWA, deploy y validación física multi-dispositivo permanecen pendientes.
 
 Decisión preparada para el Incremento 3: el banco persistente se modelará como `GroupWord`, una entrada propia del grupo y distinta de la futura palabra seleccionada para una ronda. Esto permite alimentar el contenido entre partidas sin adelantar `Room`, `GameSession`, selección aleatoria ni registro de palabras usadas.
 
@@ -874,8 +871,16 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 10.2 | Read model + UI de intento final | CERRADO TÉCNICAMENTE | `get_my_game_state()` para `impostor_guess`/`round_result`, privacidad de palabra antes del intento, reveal permitido en resultado, input solo para impostor y espera para no-impostores; `validate-10-2.mjs` PASS |
 | 10.3 | Hardening de input nulo | CERRADO TÉCNICAMENTE | `guess_text = null` y guess vacío fallan con error controlado sin efectos persistidos; `validate-10-3.mjs` PASS |
 | 10 | Intento final del impostor | CERRADO TÉCNICAMENTE | 10.0 cerrado documentalmente; 10.1-10.3 cerrados técnicamente; validadores 10.1-10.3 y regresión 9.4 PASS, tests estáticos 10.1/10.2/10.3, `npm test`, lint, build y `git diff --check` PASS |
-| 11 | Puntuación, marcador y nueva ronda | PENDIENTE | PENDIENTE |
-| 12 | Terminar tanda e historial mínimo | PENDIENTE | PENDIENTE |
+| 11.0 | Contrato documental de puntuación, marcador y nueva ronda | CERRADO DOCUMENTAL | `round_winner = impostor | group` como ganador final de ronda; si gana el grupo puntúan todos los no impostores con `+1` y si gana el impostor puntúa solo el impostor con `+2`; marcador individual en `SessionPlayer.score`; `round_result → scoreboard`; nueva ronda misma `GameSession`, mismo roster, `Round.number + 1`, palabra/impostor server-side, sin repetir palabra y sin fin automático por objetivo |
+| 11.1 | Persistencia de score y estado scoreboard | CERRADO TÉCNICAMENTE | `session_players.score` con default `0` y check no negativo; `game_sessions.state` acepta `scoreboard`; `get_my_game_state()` y mapper tipado reconocen `scoreboard` como post-resultado sin UI final ni aplicación de puntos |
+| 11.2 | Aplicar puntos al cerrar round_result | CERRADO TÉCNICAMENTE | `advance_round_result_to_scoreboard()` aplica `+2` al impostor ganador o `+1` a cada no impostor ganador, usa `Round.scored_at` para idempotencia y avanza `round_result → scoreboard` sin nueva ronda, UI final ni historial |
+| 11.3 | Iniciar nueva ronda | CERRADO TÉCNICAMENTE | `start_next_round()` host-only crea `Round.number + 1` en la misma `GameSession`, conserva roster/scores, evita palabras usadas, balancea impostor por `impostor_count` y trata retry como `already_started` |
+| 11.4 | Read model y UI de marcador/nueva ronda | CERRADO TÉCNICAMENTE | `get_my_game_state()` expone `scoreboard_players`, permisos/bloqueos de nueva ronda y privacidad de `role_reveal`; la UI muestra marcador acumulado y CTA host-only de `Nueva ronda` |
+| 11.5 | Hardening multironda | CERRADO TÉCNICAMENTE | `validate-11-5.mjs` valida scoring idempotente, host/no-host, bloqueo sin palabras, no repetición de palabra, balance de impostor, retry sin doble ronda y privacidad de nueva `role_reveal` contra Supabase local |
+| 11 | Puntuación, marcador y nueva ronda | CERRADO TÉCNICAMENTE | 11.0-11.5 cerrados; validación DB 11.5, tests focales, `npm test`, lint, build y `git diff --check` PASS |
+| 12.0 | Contrato documental de terminar tanda e historial mínimo | CERRADO DOCUMENTAL | Host-only desde `scoreboard`, `GameSession.state = finished`, `finished_at` server-side, Room cerrada/no reutilizable, ganadores por máximo puntaje con empates múltiples, historial mínimo sin votos individuales ni palabras completas |
+| 12.1 | Persistencia de `finished` e historial mínimo | CERRADO TÉCNICAMENTE | `game_sessions.finished_at`, estado `finished`, snapshots `game_session_history` y `round_history` con unicidad para idempotencia futura, ganadores múltiples, roster/scores finales y resumen de scoring sin votos individuales ni palabras secretas completas |
+| 12 | Terminar tanda e historial mínimo | EN CURSO | 12.0-12.1 cerrados; pendientes 12.2-12.5: RPC `end_session()`, read model `finished`, UI y hardening |
 | 13 | Reconexión básica | PENDIENTE | PENDIENTE |
 | 14 | Maduración PWA iOS/Android del MVP | PENDIENTE | PENDIENTE |
 | 15 | Auditoría final de seguridad, testing y UX del MVP | PENDIENTE | PENDIENTE |

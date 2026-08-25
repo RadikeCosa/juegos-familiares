@@ -24,6 +24,7 @@ import {
   submitRoundVote,
   subscribeToRoomPresence,
   recordRoomJoinIntent,
+  startNextRound,
   startRoundDiscussion,
   startRoundVoting,
   startSecondRoundVoting,
@@ -86,6 +87,11 @@ type RoomLobbyDataState =
       lobby: RoomLobby;
       gameState: MyGameState;
     }
+  | {
+      status: "scoreboard";
+      lobby: RoomLobby;
+      gameState: MyGameState;
+    }
   | { status: "excluded"; lobby: RoomLobby; message: string }
   | { status: "error"; message: string }
   | { status: "awaiting-join"; error?: string }
@@ -121,6 +127,12 @@ const START_SECOND_VOTING_NOT_HOST_UI_MESSAGE = "Ya no sos el host actual.";
 const START_SECOND_VOTING_INCONSISTENT_MESSAGE =
   "No pudimos reconstruir la tanda para ir a segunda votación.";
 const START_SECOND_VOTING_EXCLUDED_MESSAGE = "No participás de la tanda actual.";
+const START_NEXT_ROUND_NOT_HOST_MESSAGE =
+  "Solo el host actual puede iniciar otra ronda.";
+const START_NEXT_ROUND_NOT_HOST_UI_MESSAGE = "Ya no sos el host actual.";
+const START_NEXT_ROUND_INCONSISTENT_MESSAGE =
+  "No pudimos reconstruir la tanda para iniciar otra ronda.";
+const START_NEXT_ROUND_EXCLUDED_MESSAGE = "No participás de la tanda actual.";
 const SUBMIT_GUESS_FALLBACK_MESSAGE =
   "No pudimos enviar el intento. Intentá de nuevo.";
 const EXCLUDED_GAME_STATE_MESSAGE = "No participás de la tanda actual.";
@@ -219,7 +231,8 @@ function isGameplayDataState(
       | "tie-discussion"
       | "voting-second"
       | "impostor-guess"
-      | "round-result";
+      | "round-result"
+      | "scoreboard";
   }
 > {
   return (
@@ -229,7 +242,8 @@ function isGameplayDataState(
     state.status === "tie-discussion" ||
     state.status === "voting-second" ||
     state.status === "impostor-guess" ||
-    state.status === "round-result"
+    state.status === "round-result" ||
+    state.status === "scoreboard"
   );
 }
 
@@ -261,6 +275,10 @@ function isSameRoundResultState(left: MyGameState, right: MyGameState) {
   return JSON.stringify(left.roundResult) === JSON.stringify(right.roundResult);
 }
 
+function isSameScoreboardState(left: MyGameState, right: MyGameState) {
+  return JSON.stringify(left.scoreboard) === JSON.stringify(right.scoreboard);
+}
+
 function isSameGameState(left: MyGameState, right: MyGameState) {
   return (
     left.state === right.state &&
@@ -269,7 +287,8 @@ function isSameGameState(left: MyGameState, right: MyGameState) {
     isSameVotingState(left, right) &&
     isSameVoteResults(left, right) &&
     isSameImpostorGuessState(left, right) &&
-    isSameRoundResultState(left, right)
+    isSameRoundResultState(left, right) &&
+    isSameScoreboardState(left, right)
   );
 }
 
@@ -278,7 +297,8 @@ function isFirstVotingResolutionState(state: MyGameState["state"]) {
     state === "tie_discussion" ||
     state === "voting_second" ||
     state === "impostor_guess" ||
-    state === "round_result"
+    state === "round_result" ||
+    state === "scoreboard"
   );
 }
 
@@ -301,6 +321,10 @@ export function toGameplayDataState(
 
   if (gameState.state === "impostor_guess") {
     return { status: "impostor-guess", lobby, gameState };
+  }
+
+  if (gameState.state === "scoreboard") {
+    return { status: "scoreboard", lobby, gameState };
   }
 
   if (gameState.state === "round_result") {
@@ -359,6 +383,25 @@ function isInconsistentStartSecondVotingError(error: unknown) {
 function isExcludedStartSecondVotingError(error: unknown) {
   return (
     error instanceof Error && error.message === START_SECOND_VOTING_EXCLUDED_MESSAGE
+  );
+}
+
+function isNotHostStartNextRoundError(error: unknown) {
+  return (
+    error instanceof Error && error.message === START_NEXT_ROUND_NOT_HOST_MESSAGE
+  );
+}
+
+function isInconsistentStartNextRoundError(error: unknown) {
+  return (
+    error instanceof Error &&
+    error.message === START_NEXT_ROUND_INCONSISTENT_MESSAGE
+  );
+}
+
+function isExcludedStartNextRoundError(error: unknown) {
+  return (
+    error instanceof Error && error.message === START_NEXT_ROUND_EXCLUDED_MESSAGE
   );
 }
 
@@ -629,6 +672,69 @@ export async function runStartSecondVotingCommand(
   }
 }
 
+type StartNextRoundCommandOptions = {
+  start: () => Promise<unknown>;
+  refreshGameplay: () => Promise<MyGameState | null>;
+  refreshAuthoritative: () => Promise<void>;
+  setError: (message: string | undefined) => void;
+};
+
+export async function runStartNextRoundCommand(
+  options: StartNextRoundCommandOptions,
+) {
+  async function refreshAuthoritatively() {
+    try {
+      await options.refreshAuthoritative();
+    } catch (reconcileError) {
+      options.setError(
+        getFriendlyError(
+          reconcileError,
+          "No pudimos reconstruir la sala. Intentá de nuevo.",
+        ),
+      );
+    }
+  }
+
+  options.setError(undefined);
+
+  try {
+    await options.start();
+    await options.refreshGameplay();
+    return;
+  } catch (error) {
+    let recoveredGameState: MyGameState | null = null;
+
+    try {
+      recoveredGameState = await options.refreshGameplay();
+    } catch {
+      recoveredGameState = null;
+    }
+
+    if (recoveredGameState?.state === "role_reveal") {
+      options.setError(undefined);
+      return;
+    }
+
+    if (isNotHostStartNextRoundError(error)) {
+      options.setError(START_NEXT_ROUND_NOT_HOST_UI_MESSAGE);
+      await refreshAuthoritatively();
+      return;
+    }
+
+    if (
+      isInconsistentStartNextRoundError(error) ||
+      isExcludedStartNextRoundError(error)
+    ) {
+      await refreshAuthoritatively();
+      return;
+    }
+
+    options.setError(
+      getFriendlyError(error, "No pudimos iniciar otra ronda. Intentá de nuevo."),
+    );
+  }
+}
+
 type SubmitVoteCommandOptions = {
   targetPlayerId: string | null;
   submit: (targetPlayerId: string) => Promise<unknown>;
@@ -723,6 +829,7 @@ export function renderRoomLobbyContent(
     onStartDiscussion?: () => void;
     onStartVoting?: () => void;
     onStartSecondVoting?: () => void;
+    onStartNextRound?: () => void;
     onSelectVoteTarget?: (targetPlayerId: string) => void;
     onSubmitVote?: () => void;
     onChangeImpostorGuessText?: (guessText: string) => void;
@@ -737,6 +844,8 @@ export function renderRoomLobbyContent(
     startVotingError?: string;
     isStartingSecondVoting?: boolean;
     startSecondVotingError?: string;
+    isStartingNextRound?: boolean;
+    startNextRoundError?: string;
     selectedVoteTargetPlayerId?: string | null;
     isSubmittingVote?: boolean;
     submitVoteError?: string;
@@ -1298,6 +1407,104 @@ export function renderRoomLobbyContent(
       );
     }
 
+    if (dataState.status === "scoreboard") {
+      const result = dataState.gameState.roundResult;
+      const scoreboard = dataState.gameState.scoreboard;
+      const winnerLabel =
+        result?.winner === "group" ? "Ganó el grupo" : "Ganó el impostor";
+      const word = dataState.gameState.privateView.word;
+      const canUseNextRoundAction =
+        scoreboard?.canStartNextRound === true && selfParticipant?.isHost === true;
+      const isHostBlockedFromNextRound =
+        selfParticipant?.isHost === true && scoreboard?.canStartNextRound !== true;
+      const nextRoundBlockCopy =
+        scoreboard?.nextRoundBlockReason === "no_words"
+          ? "No quedan palabras nuevas. Agreguen más al banco del grupo para seguir."
+          : scoreboard?.nextRoundBlockReason === "session_not_ready"
+            ? "La ronda todavía no está lista para abrir otra."
+            : scoreboard?.nextRoundBlockReason === "not_host"
+              ? "El host actual puede abrir la próxima ronda."
+              : "Esperando que el host abra la próxima ronda.";
+
+      return (
+        <section
+          className="impostor-group-card impostor-room-role-reveal"
+          aria-labelledby="impostor-room-scoreboard-title"
+        >
+          <p className="impostor-kicker">
+            Marcador · Ronda {dataState.gameState.roundNumber}
+          </p>
+          <h1 id="impostor-room-scoreboard-title">{winnerLabel}</h1>
+          {scoreboard?.roundImpostor ? (
+            <p>El impostor era {scoreboard.roundImpostor.nickname}.</p>
+          ) : null}
+          {word ? (
+            <div className="impostor-group-section">
+              <h2>La palabra era</h2>
+              <p className="impostor-room-secret-word">{word}</p>
+            </div>
+          ) : null}
+          <div
+            className="impostor-group-section"
+            aria-labelledby="impostor-room-scoreboard-players-title"
+          >
+            <h2 id="impostor-room-scoreboard-players-title">Puntaje</h2>
+            <ol className="impostor-scoreboard-list">
+              {(scoreboard?.players ?? []).map((player) => (
+                <li key={player.playerId}>
+                  <span>
+                    {player.nickname}
+                    {player.isSelf ? <strong> Vos</strong> : null}
+                  </span>
+                  <strong>
+                    {player.score === 1 ? "1 punto" : `${player.score} puntos`}
+                  </strong>
+                </li>
+              ))}
+            </ol>
+          </div>
+          <div className="impostor-room-round-actions">
+            {canUseNextRoundAction ? (
+              <button
+                className="impostor-action impostor-action--primary"
+                type="button"
+                disabled={options.isStartingNextRound}
+                onClick={options.onStartNextRound}
+              >
+                {options.isStartingNextRound
+                  ? "Abriendo nueva ronda..."
+                  : "Nueva ronda"}
+              </button>
+            ) : null}
+            {isHostBlockedFromNextRound ? (
+              <>
+                <button
+                  className="impostor-action impostor-action--primary"
+                  type="button"
+                  disabled
+                >
+                  Nueva ronda
+                </button>
+                <p className="impostor-room-notice" aria-live="polite">
+                  {nextRoundBlockCopy}
+                </p>
+              </>
+            ) : null}
+            {!selfParticipant?.isHost ? (
+              <p className="impostor-room-notice" aria-live="polite">
+                {nextRoundBlockCopy}
+              </p>
+            ) : null}
+            {options.startNextRoundError ? (
+              <div className="impostor-group-error" aria-live="polite">
+                <p>{options.startNextRoundError}</p>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      );
+    }
+
     if (dataState.status === "round-result") {
       const result = dataState.gameState.roundResult;
       const winnerLabel =
@@ -1524,6 +1731,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   const [startVotingError, setStartVotingError] = useState<string | undefined>();
   const [isStartingSecondVoting, setIsStartingSecondVoting] = useState(false);
   const [startSecondVotingError, setStartSecondVotingError] = useState<
+    string | undefined
+  >();
+  const [isStartingNextRound, setIsStartingNextRound] = useState(false);
+  const [startNextRoundError, setStartNextRoundError] = useState<
     string | undefined
   >();
   const [selectedVoteTargetPlayerId, setSelectedVoteTargetPlayerId] = useState<
@@ -2078,6 +2289,28 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     }
   }
 
+  async function handleStartNextRound() {
+    if (isStartingNextRound || !isMountedRef.current) {
+      return;
+    }
+
+    setStartNextRoundError(undefined);
+    setIsStartingNextRound(true);
+
+    try {
+      await runStartNextRoundCommand({
+        start: () => startNextRound(createImpostorRoomsClient()),
+        refreshGameplay: () => refreshGameplayStateNow("manual"),
+        refreshAuthoritative: () => refreshAuthoritativeRoomState("authority"),
+        setError: setStartNextRoundError,
+      });
+    } finally {
+      if (isMountedRef.current) {
+        setIsStartingNextRound(false);
+      }
+    }
+  }
+
   async function handleSubmitVote() {
     if (isSubmittingVote || !isMountedRef.current) {
       return;
@@ -2126,7 +2359,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
         recoveredGameState = null;
       }
 
-      if (recoveredGameState?.state === "round_result") {
+      if (
+        recoveredGameState?.state === "round_result" ||
+        recoveredGameState?.state === "scoreboard"
+      ) {
         setSubmitImpostorGuessError(undefined);
         setImpostorGuessText("");
         return;
@@ -2364,6 +2600,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     onStartDiscussion: () => void handleStartDiscussion(),
     onStartVoting: () => void handleStartVoting(),
     onStartSecondVoting: () => void handleStartSecondVoting(),
+    onStartNextRound: () => void handleStartNextRound(),
     onSelectVoteTarget: handleSelectVoteTarget,
     onSubmitVote: () => void handleSubmitVote(),
     onChangeImpostorGuessText: handleChangeImpostorGuessText,
@@ -2378,6 +2615,8 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     startVotingError,
     isStartingSecondVoting,
     startSecondVotingError,
+    isStartingNextRound,
+    startNextRoundError,
     selectedVoteTargetPlayerId,
     isSubmittingVote,
     submitVoteError,

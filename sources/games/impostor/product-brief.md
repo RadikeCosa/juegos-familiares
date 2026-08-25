@@ -48,13 +48,15 @@ La conversación y la parte principal del juego ocurren entre las personas.
 
 # Alcance vigente
 
-Al cierre técnico del Incremento 7, el producto ya soporta crear grupo, administrar banco de palabras, crear/unirse a Room, Presence/liveness/sucesión de host, iniciar tanda desde el host actual, revelar privadamente Round 1 y avanzar la GameSession de `role_reveal` a `discussion`.
+Al cierre técnico del Incremento 10, el producto ya soporta crear grupo, administrar banco de palabras, crear/unirse a Room, Presence/liveness/sucesión de host, iniciar tanda desde el host actual, revelar privadamente Round 1, avanzar a discusión, votar, resolver empates con segunda votación, ejecutar el intento final del impostor y llegar a `round_result`.
 
 El Incremento 7 decide no implementar `roleAcknowledged` ni acknowledgements persistidos para el MVP. La coordinación de que todos vieron su rol ocurre presencialmente y el host actual ejecuta `Empezar ronda`.
 
 Durante `discussion`, cada jugador puede volver a revelar localmente su palabra o rol y volver a ocultarlo. La vista privada se oculta nuevamente al cambiar de fase y no se persiste ese reveal local.
 
-Todavía no están implementados timer, votación, scoring, ganador, `END_SESSION`, Realtime de gameplay ni Broadcast.
+Incremento 11 cierra técnicamente scoring, marcador y nueva ronda: `SessionPlayer.score`, fase `scoreboard`, scoring server-side idempotente, read model/UI de marcador y apertura autoritativa de nueva ronda con validación DB multironda.
+
+Todavía no están implementados timer, `END_SESSION`, historial persistente final, Realtime de gameplay ni Broadcast.
 
 El contrato documental de Incremento 8 deja preparada la primera votación: el host actual avanza `discussion → voting_first`, todos los `SessionPlayers` votan secretamente una vez, sin auto-voto ni resultados parciales, y el sistema resuelve automáticamente hacia `tie_discussion`, `impostor_guess` o `round_result`. Presence/liveness no cambian quién debe votar; solo el roster congelado de `SessionPlayers` define membership de la tanda.
 

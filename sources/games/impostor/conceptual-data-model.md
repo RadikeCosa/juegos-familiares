@@ -924,6 +924,8 @@ Victoria  3
 
 ## Regla
 
+La ronda no otorga la misma cantidad de puntos individuales en ambos bandos.
+
 ### Victoria del impostor
 
 ```text
@@ -935,6 +937,18 @@ impostor +2
 ```text
 cada jugador normal +1
 ```
+
+La puntuación es individual.
+
+Si `round_winner = group`, reciben punto todos los `SessionPlayers` que no fueron impostores en esa ronda.
+
+Si `round_winner = impostor`, recibe 2 puntos solo el `SessionPlayer` impostor de esa ronda.
+
+`round_winner` no representa un `player_id`: representa el bando ganador final de la ronda.
+
+El marcador visible es un read model derivado de `SessionPlayer.score`; no requiere una entidad `Scoreboard` separada en la primera versión.
+
+`GameSession` conserva la tanda y `Round` conserva los hechos de cada ronda. El score acumulado vive en `SessionPlayer` mientras la tanda está activa.
 
 ---
 
@@ -980,11 +994,14 @@ Información conceptual mínima:
 GameSessionHistory
 - id
 - groupId
+- gameSessionId opcional
 - startedAt
 - finishedAt
 - participants
 - roundCount
 - finalScores
+- finalWinners
+- endedByHostPlayerId
 ```
 
 ## RoundHistory
@@ -1000,7 +1017,9 @@ RoundHistory
 - impostorPlayerId
 - winner
 - impostorWasFound
+- impostorGuessWasSubmitted
 - impostorGuessedWord
+- scoringSummary
 ```
 
 ## Alcance
@@ -1008,6 +1027,12 @@ RoundHistory
 El historial mínimo permite derivar estadísticas futuras como rondas jugadas, victorias, rendimiento como impostor, veces que un impostor fue descubierto o veces que adivinó la palabra.
 
 No hace falta conservar votos individuales históricos salvo que aparezca una razón concreta.
+
+No hace falta conservar la palabra completa usada en el historial mínimo inicial. La palabra pertenece al estado operativo de la ronda y a la experiencia inmediata, no a estadísticas históricas básicas.
+
+El ganador final de tanda se deriva de `finalScores`. Si hay empate en el mayor puntaje, `finalWinners` contiene varios jugadores.
+
+La Room que produjo una `GameSessionHistory` queda cerrada y no se reutiliza para otra tanda.
 
 Este modelo no define tablas, schemas ni base de datos.
 
