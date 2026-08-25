@@ -18,8 +18,9 @@ export type ImpostorRoomsClient = {
             | "start_round_voting"
             | "start_second_round_voting"
             | "submit_round_vote"
+            | "submit_impostor_guess"
             | "get_my_game_state",
-        params?: { room_code: string } | { target_player_id: string }
+        params?: { room_code: string } | { target_player_id: string } | { guess_text: string }
     ) => PromiseLike<SupabaseRpcResult<unknown>>;
 };
 
@@ -337,6 +338,24 @@ const NOT_SESSION_PLAYER_SUBMIT_VOTE_ERROR =
     "No participás de la tanda actual.";
 const GENERIC_SUBMIT_VOTE_ERROR =
     "No pudimos registrar tu voto. Intentá de nuevo.";
+const UNAUTHENTICATED_SUBMIT_GUESS_ERROR =
+    "Necesitás entrar a tu grupo antes de intentar adivinar.";
+const MISSING_PLAYER_SUBMIT_GUESS_ERROR =
+    "No pudimos reconocer tu jugador para intentar adivinar.";
+const NO_ACTIVE_ROOM_SUBMIT_GUESS_ERROR =
+    "No tenés una sala activa para intentar adivinar.";
+const ROOM_NOT_GUESSABLE_ERROR =
+    "Esta ronda no está esperando el intento final.";
+const INCONSISTENT_SUBMIT_GUESS_ERROR =
+    "No pudimos reconstruir la tanda para intentar adivinar.";
+const NOT_IMPOSTOR_SUBMIT_GUESS_ERROR =
+    "Solo el impostor puede enviar el intento final.";
+const EMPTY_SUBMIT_GUESS_ERROR =
+    "Escribí una palabra para enviar tu intento.";
+const ALREADY_SUBMITTED_GUESS_ERROR =
+    "El intento final ya fue registrado y no se puede cambiar.";
+const GENERIC_SUBMIT_GUESS_ERROR =
+    "No pudimos enviar el intento. Intentá de nuevo.";
 const UNAUTHENTICATED_GAME_STATE_ERROR =
     "Necesitás entrar a tu grupo antes de recuperar la tanda.";
 const MISSING_PLAYER_GAME_STATE_ERROR =
@@ -430,6 +449,15 @@ type SubmitRoundVoteRow = {
     round_number: number;
 };
 
+type SubmitImpostorGuessRow = {
+    accepted: boolean;
+    already_recorded: boolean;
+    state: "round_result";
+    round_number: number;
+    is_correct: boolean;
+    winner: "impostor" | "group";
+};
+
 export type StartRoundDiscussionResult = {
     advanced: boolean;
     alreadyInPhase: boolean;
@@ -463,6 +491,15 @@ export type SubmitRoundVoteResult = {
     roundNumber: number;
 };
 
+export type SubmitImpostorGuessResult = {
+    accepted: boolean;
+    alreadyRecorded: boolean;
+    state: "round_result";
+    roundNumber: number;
+    isCorrect: boolean;
+    winner: "impostor" | "group";
+};
+
 export type GameSessionState =
     | "role_reveal"
     | "discussion"
@@ -488,25 +525,29 @@ type MyGameStateRow = {
     my_vote_target_player_id?: string | null;
     has_voted?: boolean;
     vote_results?: unknown;
+    can_submit_impostor_guess?: boolean;
+    winner?: "impostor" | "group" | null;
+    impostor_guess_text?: string | null;
+    impostor_guess_correct?: boolean | null;
 } & (
     | {
         role: "player";
-        word: string;
+        word: string | null;
     }
     | {
         role: "impostor";
-        word: null;
+        word: string | null;
     }
 );
 
 export type MyPrivateRoundView =
     | {
         role: "player";
-        word: string;
+        word: string | null;
     }
     | {
         role: "impostor";
-        word: null;
+        word: string | null;
     };
 
 export type VoteCandidate = {
@@ -529,6 +570,14 @@ export type MyGameState = {
         hasVoted: boolean;
     } | null;
     voteResults: VoteResult[] | null;
+    impostorGuess?: {
+        canSubmit: boolean;
+    };
+    roundResult?: {
+        winner: "impostor" | "group";
+        impostorGuessText: string | null;
+        impostorGuessCorrect: boolean | null;
+    };
 };
 
 function isSupabaseErrorLike(error: unknown): error is SupabaseErrorLike {
@@ -832,6 +881,44 @@ function getSubmitVoteErrorMessage(error: unknown) {
     return GENERIC_SUBMIT_VOTE_ERROR;
 }
 
+function getSubmitGuessErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "28000" || error.code === "42501") {
+            return UNAUTHENTICATED_SUBMIT_GUESS_ERROR;
+        }
+
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_SUBMIT_GUESS_ERROR;
+        }
+
+        if (error.code === "P0017") {
+            return NO_ACTIVE_ROOM_SUBMIT_GUESS_ERROR;
+        }
+
+        if (error.code === "P0018") {
+            return ROOM_NOT_GUESSABLE_ERROR;
+        }
+
+        if (error.code === "P0022") {
+            return INCONSISTENT_SUBMIT_GUESS_ERROR;
+        }
+
+        if (error.code === "P0023") {
+            return NOT_IMPOSTOR_SUBMIT_GUESS_ERROR;
+        }
+
+        if (error.code === "22023") {
+            return EMPTY_SUBMIT_GUESS_ERROR;
+        }
+
+        if (error.code === "P0025") {
+            return ALREADY_SUBMITTED_GUESS_ERROR;
+        }
+    }
+
+    return GENERIC_SUBMIT_GUESS_ERROR;
+}
+
 function getGameStateErrorMessage(error: unknown) {
     if (isSupabaseErrorLike(error)) {
         if (error.code === "28000" || error.code === "42501") {
@@ -942,6 +1029,23 @@ function isSubmitRoundVoteRow(value: unknown): value is SubmitRoundVoteRow {
     );
 }
 
+function isSubmitImpostorGuessRow(
+    value: unknown
+): value is SubmitImpostorGuessRow {
+    const row = value as Partial<SubmitImpostorGuessRow>;
+
+    return (
+        typeof row.accepted === "boolean" &&
+        typeof row.already_recorded === "boolean" &&
+        row.state === "round_result" &&
+        typeof row.round_number === "number" &&
+        Number.isInteger(row.round_number) &&
+        row.round_number >= 1 &&
+        typeof row.is_correct === "boolean" &&
+        (row.winner === "impostor" || row.winner === "group")
+    );
+}
+
 function isMyGameStateRow(value: unknown): value is MyGameStateRow {
     const row = value as Partial<MyGameStateRow>;
 
@@ -963,10 +1067,23 @@ function isMyGameStateRow(value: unknown): value is MyGameStateRow {
     }
 
     if (row.role === "player") {
-        if (typeof row.word !== "string") {
+        if (
+            !(
+                typeof row.word === "string" ||
+                (row.state === "impostor_guess" && row.word === null)
+            )
+        ) {
             return false;
         }
-    } else if (!(row.role === "impostor" && row.word === null)) {
+    } else if (
+        !(
+            row.role === "impostor" &&
+            (
+                row.word === null ||
+                (row.state === "round_result" && typeof row.word === "string")
+            )
+        )
+    ) {
         return false;
     }
 
@@ -997,11 +1114,34 @@ function isMyGameStateRow(value: unknown): value is MyGameStateRow {
         );
     }
 
-    if (row.state === "impostor_guess" || row.state === "round_result") {
+    if (row.state === "impostor_guess") {
         return (
             (row.candidates === null || typeof row.candidates === "undefined") &&
             Array.isArray(row.vote_results) &&
-            row.vote_results.every(isVoteResultRow)
+            row.vote_results.every(isVoteResultRow) &&
+            typeof row.can_submit_impostor_guess === "boolean" &&
+            (row.winner === null || typeof row.winner === "undefined") &&
+            (row.impostor_guess_text === null ||
+                typeof row.impostor_guess_text === "undefined") &&
+            (row.impostor_guess_correct === null ||
+                typeof row.impostor_guess_correct === "undefined")
+        );
+    }
+
+    if (row.state === "round_result") {
+        return (
+            (row.candidates === null || typeof row.candidates === "undefined") &&
+            Array.isArray(row.vote_results) &&
+            row.vote_results.every(isVoteResultRow) &&
+            (row.can_submit_impostor_guess === false ||
+                typeof row.can_submit_impostor_guess === "undefined") &&
+            (row.winner === "impostor" || row.winner === "group") &&
+            (typeof row.impostor_guess_text === "string" ||
+                row.impostor_guess_text === null ||
+                typeof row.impostor_guess_text === "undefined") &&
+            (typeof row.impostor_guess_correct === "boolean" ||
+                row.impostor_guess_correct === null ||
+                typeof row.impostor_guess_correct === "undefined")
         );
     }
 
@@ -1113,6 +1253,19 @@ function toSubmitRoundVoteResult(row: SubmitRoundVoteRow): SubmitRoundVoteResult
     };
 }
 
+function toSubmitImpostorGuessResult(
+    row: SubmitImpostorGuessRow
+): SubmitImpostorGuessResult {
+    return {
+        accepted: row.accepted,
+        alreadyRecorded: row.already_recorded,
+        state: row.state,
+        roundNumber: row.round_number,
+        isCorrect: row.is_correct,
+        winner: row.winner
+    };
+}
+
 function toMyGameState(row: MyGameStateRow): MyGameState {
     const voteResults = toVoteResults(row.vote_results);
     const candidates = toVoteCandidates(row.candidates);
@@ -1124,6 +1277,16 @@ function toMyGameState(row: MyGameStateRow): MyGameState {
                 hasVoted: row.has_voted === true
             }
             : null;
+    const impostorGuess = row.state === "impostor_guess"
+        ? { canSubmit: row.can_submit_impostor_guess === true }
+        : undefined;
+    const roundResult = row.state === "round_result" && row.winner
+        ? {
+            winner: row.winner,
+            impostorGuessText: row.impostor_guess_text ?? null,
+            impostorGuessCorrect: row.impostor_guess_correct ?? null
+        }
+        : undefined;
 
     if (row.role === "player") {
         return {
@@ -1132,17 +1295,21 @@ function toMyGameState(row: MyGameStateRow): MyGameState {
             privateView: { role: "player", word: row.word },
             candidates,
             voting,
-            voteResults
+            voteResults,
+            ...(impostorGuess ? { impostorGuess } : {}),
+            ...(roundResult ? { roundResult } : {})
         };
     }
 
     return {
         state: row.state,
         roundNumber: row.round_number,
-        privateView: { role: "impostor", word: null },
+        privateView: { role: "impostor", word: row.word },
         candidates,
         voting,
-        voteResults
+        voteResults,
+        ...(impostorGuess ? { impostorGuess } : {}),
+        ...(roundResult ? { roundResult } : {})
     };
 }
 
@@ -1707,6 +1874,27 @@ export async function submitRoundVote(
     }
 
     return toSubmitRoundVoteResult(rows[0]);
+}
+
+export async function submitImpostorGuess(
+    supabase: ImpostorRoomsClient,
+    guessText: string
+): Promise<SubmitImpostorGuessResult> {
+    const result = await supabase.rpc("submit_impostor_guess", {
+        guess_text: guessText
+    });
+
+    if (result.error) {
+        throw new Error(getSubmitGuessErrorMessage(result.error));
+    }
+
+    const rows = Array.isArray(result.data) ? result.data : [];
+
+    if (rows.length !== 1 || !isSubmitImpostorGuessRow(rows[0])) {
+        throw new Error("No pudimos confirmar el intento final.");
+    }
+
+    return toSubmitImpostorGuessResult(rows[0]);
 }
 
 export async function getMyGameState(

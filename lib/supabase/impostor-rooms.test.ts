@@ -31,6 +31,7 @@ import {
     startRoundVoting,
     startSecondRoundVoting,
     startSession,
+    submitImpostorGuess,
     submitRoundVote,
     subscribeToRoomPresence,
     subscribeToRoomChanges
@@ -140,7 +141,42 @@ const gameStateImpostorGuessRow = {
     candidates: null,
     my_vote_target_player_id: "player-1",
     has_voted: true,
-    vote_results: [{ player_id: "player-2", nickname: "Pedro", vote_count: 3 }]
+    vote_results: [{ player_id: "player-2", nickname: "Pedro", vote_count: 3 }],
+    can_submit_impostor_guess: true,
+    winner: null,
+    impostor_guess_text: null,
+    impostor_guess_correct: null
+};
+
+const gameStateWaitingForImpostorGuessRow = {
+    ...gameStateImpostorGuessRow,
+    role: "player",
+    word: null,
+    can_submit_impostor_guess: false
+};
+
+const gameStateRoundResultWithGuessRow = {
+    state: "round_result",
+    round_number: 1,
+    role: "impostor",
+    word: "Tesoro Azul",
+    candidates: null,
+    my_vote_target_player_id: "player-1",
+    has_voted: true,
+    vote_results: [{ player_id: "player-2", nickname: "Pedro", vote_count: 3 }],
+    can_submit_impostor_guess: false,
+    winner: "group",
+    impostor_guess_text: "Mapa Verde",
+    impostor_guess_correct: false
+};
+
+const gameStateRoundResultWithoutGuessRow = {
+    ...gameStateRoundResultWithGuessRow,
+    role: "player",
+    word: "Tesoro Azul",
+    winner: "impostor",
+    impostor_guess_text: null,
+    impostor_guess_correct: null
 };
 
 const startRoundDiscussionRow = {
@@ -174,6 +210,15 @@ const submitRoundVoteRow = {
 const submitSecondRoundVoteRow = {
     ...submitRoundVoteRow,
     state: "voting_second"
+};
+
+const submitImpostorGuessRow = {
+    accepted: true,
+    already_recorded: false,
+    state: "round_result",
+    round_number: 1,
+    is_correct: true,
+    winner: "impostor"
 };
 
 describe("createRoom", () => {
@@ -410,7 +455,7 @@ describe("joinRoomByCode", () => {
         const supabase = {
             rpc: vi.fn(async (
                 _fn: string,
-                _params?: { room_code: string } | { target_player_id: string }
+                _params?: { room_code: string } | { target_player_id: string } | { guess_text: string }
             ) => {
                 void _fn;
                 void _params;
@@ -1093,7 +1138,61 @@ describe("getMyGameState", () => {
         await expect(getMyGameState(supabase)).resolves.toMatchObject({
             state: "impostor_guess",
             privateView: { role: "impostor", word: null },
-            voteResults: [{ playerId: "player-2", nickname: "Pedro", voteCount: 3 }]
+            voteResults: [{ playerId: "player-2", nickname: "Pedro", voteCount: 3 }],
+            impostorGuess: { canSubmit: true }
+        });
+    });
+
+    it("maps non-impostor waiting state without revealing the secret word", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [gameStateWaitingForImpostorGuessRow],
+                error: null
+            }))
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toMatchObject({
+            state: "impostor_guess",
+            privateView: { role: "player", word: null },
+            impostorGuess: { canSubmit: false }
+        });
+    });
+
+    it("maps round_result with revealed word and impostor guess outcome", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [gameStateRoundResultWithGuessRow],
+                error: null
+            }))
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toMatchObject({
+            state: "round_result",
+            privateView: { role: "impostor", word: "Tesoro Azul" },
+            roundResult: {
+                winner: "group",
+                impostorGuessText: "Mapa Verde",
+                impostorGuessCorrect: false
+            }
+        });
+    });
+
+    it("maps round_result without guess for incorrect accusation paths", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [gameStateRoundResultWithoutGuessRow],
+                error: null
+            }))
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toMatchObject({
+            state: "round_result",
+            privateView: { role: "player", word: "Tesoro Azul" },
+            roundResult: {
+                winner: "impostor",
+                impostorGuessText: null,
+                impostorGuessCorrect: null
+            }
         });
     });
 
@@ -1511,7 +1610,7 @@ describe("submitRoundVote", () => {
         const supabase = {
             rpc: vi.fn(async (
                 _fn: string,
-                _params?: { room_code: string } | { target_player_id: string }
+                _params?: { room_code: string } | { target_player_id: string } | { guess_text: string }
             ) => {
                 void _fn;
                 void _params;
@@ -1654,6 +1753,149 @@ describe("submitRoundVote", () => {
         const result = await submitRoundVote(supabase, "player-2");
 
         expect(JSON.stringify(result)).not.toMatch(/secret_word|normalized_secret_word|impostor_player_id|target_player_id|vote_count|Tesoro|player-1|player-2/);
+    });
+});
+
+describe("submitImpostorGuess", () => {
+    it("calls the authoritative RPC with only guess_text", async () => {
+        const supabase = {
+            rpc: vi.fn(async (
+                _fn: string,
+                _params?: { room_code: string } | { target_player_id: string } | { guess_text: string }
+            ) => {
+                void _fn;
+                void _params;
+
+                return { data: [submitImpostorGuessRow], error: null };
+            })
+        };
+
+        await expect(submitImpostorGuess(supabase, "Milanesa")).resolves.toEqual({
+            accepted: true,
+            alreadyRecorded: false,
+            state: "round_result",
+            roundNumber: 1,
+            isCorrect: true,
+            winner: "impostor"
+        });
+
+        expect(supabase.rpc).toHaveBeenCalledWith("submit_impostor_guess", {
+            guess_text: "Milanesa"
+        });
+        expect(supabase.rpc.mock.calls[0]).toHaveLength(2);
+        expect(JSON.stringify(supabase.rpc.mock.calls[0][1])).not.toMatch(
+            /room_id|game_session_id|round_id|player_id|group_id|auth_user_id|is_correct|winner/
+        );
+    });
+
+    it("maps idempotent and incorrect guess responses", async () => {
+        const idempotent = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...submitImpostorGuessRow,
+                    already_recorded: true
+                }],
+                error: null
+            }))
+        };
+        const incorrect = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...submitImpostorGuessRow,
+                    is_correct: false,
+                    winner: "group"
+                }],
+                error: null
+            }))
+        };
+
+        await expect(submitImpostorGuess(idempotent, "Milanesa")).resolves.toMatchObject({
+            alreadyRecorded: true,
+            isCorrect: true,
+            winner: "impostor"
+        });
+        await expect(submitImpostorGuess(incorrect, "Ravioles")).resolves.toMatchObject({
+            alreadyRecorded: false,
+            isCorrect: false,
+            winner: "group"
+        });
+    });
+
+    it("maps submit guess failures to product-level feedback", async () => {
+        const invalidPhase = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0018" } }))
+        };
+        const notImpostor = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0023" } }))
+        };
+        const emptyGuess = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "22023" } }))
+        };
+        const alreadySubmitted = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0025" } }))
+        };
+        const inconsistent = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0022" } }))
+        };
+
+        await expect(submitImpostorGuess(invalidPhase, "Milanesa")).rejects.toThrow(
+            "Esta ronda no está esperando el intento final."
+        );
+        await expect(submitImpostorGuess(notImpostor, "Milanesa")).rejects.toThrow(
+            "Solo el impostor puede enviar el intento final."
+        );
+        await expect(submitImpostorGuess(emptyGuess, "   ")).rejects.toThrow(
+            "Escribí una palabra para enviar tu intento."
+        );
+        await expect(submitImpostorGuess(alreadySubmitted, "Ravioles")).rejects.toThrow(
+            "El intento final ya fue registrado y no se puede cambiar."
+        );
+        await expect(submitImpostorGuess(inconsistent, "Milanesa")).rejects.toThrow(
+            "No pudimos reconstruir la tanda para intentar adivinar."
+        );
+    });
+
+    it("rejects malformed guess responses explicitly", async () => {
+        const wrongState = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...submitImpostorGuessRow, state: "impostor_guess" }],
+                error: null
+            }))
+        };
+        const missingWinner = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...submitImpostorGuessRow, winner: null }],
+                error: null
+            }))
+        };
+
+        await expect(submitImpostorGuess(wrongState, "Milanesa")).rejects.toThrow(
+            "No pudimos confirmar el intento final."
+        );
+        await expect(submitImpostorGuess(missingWinner, "Milanesa")).rejects.toThrow(
+            "No pudimos confirmar el intento final."
+        );
+    });
+
+    it("does not expose secret internals in mapped guess results", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...submitImpostorGuessRow,
+                    secret_word: "Milanesa",
+                    normalized_secret_word: "milanesa",
+                    impostor_player_id: "player-2",
+                    game_session_id: "session-1"
+                }],
+                error: null
+            }))
+        };
+
+        const result = await submitImpostorGuess(supabase, "Milanesa");
+
+        expect(JSON.stringify(result)).not.toMatch(
+            /secret_word|normalized_secret_word|impostor_player_id|game_session_id|Milanesa|player-2|session-1/
+        );
     });
 });
 

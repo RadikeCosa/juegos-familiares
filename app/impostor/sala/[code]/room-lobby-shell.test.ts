@@ -182,7 +182,14 @@ const impostorGuessGameState: MyGameState = {
     privateView: { role: "impostor", word: null },
     candidates: null,
     voting: null,
-    voteResults: [{ playerId: "player-2", nickname: "Pedro", voteCount: 3 }]
+    voteResults: [{ playerId: "player-2", nickname: "Pedro", voteCount: 3 }],
+    impostorGuess: { canSubmit: true }
+};
+
+const waitingImpostorGuessGameState: MyGameState = {
+    ...impostorGuessGameState,
+    privateView: { role: "player", word: null },
+    impostorGuess: { canSubmit: false }
 };
 
 const roundResultGameState: MyGameState = {
@@ -191,7 +198,21 @@ const roundResultGameState: MyGameState = {
     privateView: { role: "player", word: "Casa" },
     candidates: null,
     voting: null,
-    voteResults: [{ playerId: "player-3", nickname: "Ana", voteCount: 2 }]
+    voteResults: [{ playerId: "player-3", nickname: "Ana", voteCount: 2 }],
+    roundResult: {
+        winner: "impostor",
+        impostorGuessText: null,
+        impostorGuessCorrect: null
+    }
+};
+
+const roundResultWithGuessGameState: MyGameState = {
+    ...roundResultGameState,
+    roundResult: {
+        winner: "group",
+        impostorGuessText: "Mesa",
+        impostorGuessCorrect: false
+    }
 };
 
 function createDeferred<T>() {
@@ -1364,7 +1385,7 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).not.toMatch(/votos|vote_count|player-\d/);
     });
 
-    it("renders impostor guess pending state without word input or secret reveal", () => {
+    it("renders impostor guess form only for the impostor without secret reveal", () => {
         const markup = renderToStaticMarkup(
             renderRoomLobbyContent(
                 recognizedState,
@@ -1373,14 +1394,40 @@ describe("renderRoomLobbyContent", () => {
                     lobby: playingHostLobby,
                     gameState: impostorGuessGameState
                 },
+                {
+                    roomCode: "AB7KQ2M4",
+                    impostorGuessText: "",
+                    onChangeImpostorGuessText: vi.fn(),
+                    onSubmitImpostorGuess: vi.fn()
+                }
+            )
+        );
+
+        expect(markup).toContain("El impostor fue señalado");
+        expect(markup).toContain("Tenés una última oportunidad.");
+        expect(markup).toContain("¿Cuál era la palabra?");
+        expect(markup).toContain("Enviar intento");
+        expect(markup).toContain("disabled=\"\"");
+        expect(markup).not.toContain("Casa");
+        expect(markup).not.toMatch(/secret_word|normalized/i);
+    });
+
+    it("renders impostor guess waiting state for non-impostors", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "impostor-guess",
+                    lobby: playingHostLobby,
+                    gameState: waitingImpostorGuessGameState
+                },
                 { roomCode: "AB7KQ2M4" }
             )
         );
 
         expect(markup).toContain("El impostor fue señalado");
-        expect(markup).toContain("Queda pendiente el intento del impostor.");
-        expect(markup).not.toContain("Casa");
-        expect(markup).not.toMatch(/input|Adivinar|secret_word|normalized/i);
+        expect(markup).toContain("El impostor está haciendo su intento final.");
+        expect(markup).not.toMatch(/input|Enviar intento|Casa|secret_word|normalized/i);
     });
 
     it("renders round result without score or next-round controls", () => {
@@ -1396,9 +1443,32 @@ describe("renderRoomLobbyContent", () => {
             )
         );
 
-        expect(markup).toContain("Acusación incorrecta");
-        expect(markup).toContain("sin marcador todavía");
+        expect(markup).toContain("Ganó el impostor");
+        expect(markup).toContain("El grupo no señaló al impostor.");
+        expect(markup).toContain("La palabra era");
+        expect(markup).toContain("Casa");
         expect(markup).not.toMatch(/Nueva ronda|Puntaje|score/i);
+    });
+
+    it("renders round result with guess outcome", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "round-result",
+                    lobby: playingHostLobby,
+                    gameState: roundResultWithGuessGameState
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Ganó el grupo");
+        expect(markup).toContain("El impostor no adivinó la palabra.");
+        expect(markup).toContain("Intento del impostor");
+        expect(markup).toContain("Mesa");
+        expect(markup).toContain("Casa");
+        expect(markup).not.toMatch(/Nueva ronda|Puntaje|score|normalized/i);
     });
 
     it("renders excluded state without role, word, participants or Start", () => {

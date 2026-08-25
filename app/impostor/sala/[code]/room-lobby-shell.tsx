@@ -20,6 +20,7 @@ import {
   getMyGameState,
   getMyActiveRoom,
   refreshMyRoomLiveness,
+  submitImpostorGuess,
   submitRoundVote,
   subscribeToRoomPresence,
   recordRoomJoinIntent,
@@ -120,6 +121,8 @@ const START_SECOND_VOTING_NOT_HOST_UI_MESSAGE = "Ya no sos el host actual.";
 const START_SECOND_VOTING_INCONSISTENT_MESSAGE =
   "No pudimos reconstruir la tanda para ir a segunda votación.";
 const START_SECOND_VOTING_EXCLUDED_MESSAGE = "No participás de la tanda actual.";
+const SUBMIT_GUESS_FALLBACK_MESSAGE =
+  "No pudimos enviar el intento. Intentá de nuevo.";
 const EXCLUDED_GAME_STATE_MESSAGE = "No participás de la tanda actual.";
 const ROOM_LIVENESS_LOG_MESSAGE = "No pudimos refrescar liveness de sala.";
 const ROOM_HOST_SUCCESSION_LOG_MESSAGE = "No pudimos revisar sucesión de host.";
@@ -250,13 +253,23 @@ function isSameVotingState(left: MyGameState, right: MyGameState) {
   return JSON.stringify(left.voting) === JSON.stringify(right.voting);
 }
 
+function isSameImpostorGuessState(left: MyGameState, right: MyGameState) {
+  return JSON.stringify(left.impostorGuess) === JSON.stringify(right.impostorGuess);
+}
+
+function isSameRoundResultState(left: MyGameState, right: MyGameState) {
+  return JSON.stringify(left.roundResult) === JSON.stringify(right.roundResult);
+}
+
 function isSameGameState(left: MyGameState, right: MyGameState) {
   return (
     left.state === right.state &&
     isSamePrivateGameState(left, right) &&
     isSameCandidates(left, right) &&
     isSameVotingState(left, right) &&
-    isSameVoteResults(left, right)
+    isSameVoteResults(left, right) &&
+    isSameImpostorGuessState(left, right) &&
+    isSameRoundResultState(left, right)
   );
 }
 
@@ -712,6 +725,8 @@ export function renderRoomLobbyContent(
     onStartSecondVoting?: () => void;
     onSelectVoteTarget?: (targetPlayerId: string) => void;
     onSubmitVote?: () => void;
+    onChangeImpostorGuessText?: (guessText: string) => void;
+    onSubmitImpostorGuess?: () => void;
     onStartAnonymousAuth?: () => void;
     lifecycleActionState?: RoomLifecycleActionState;
     isStartingAuth?: boolean;
@@ -725,6 +740,9 @@ export function renderRoomLobbyContent(
     selectedVoteTargetPlayerId?: string | null;
     isSubmittingVote?: boolean;
     submitVoteError?: string;
+    impostorGuessText?: string;
+    isSubmittingImpostorGuess?: boolean;
+    submitImpostorGuessError?: string;
     connectedPlayerIds?: Set<string>;
     hostSuccessionNotice?: string;
   },
@@ -1176,24 +1194,7 @@ export function renderRoomLobbyContent(
       );
     }
 
-    if (
-      dataState.status === "tie-discussion" ||
-      dataState.status === "impostor-guess" ||
-      dataState.status === "round-result"
-    ) {
-      const title =
-        dataState.status === "tie-discussion"
-          ? "Hubo empate"
-          : dataState.status === "impostor-guess"
-            ? "El impostor fue señalado"
-            : "Acusación incorrecta";
-      const message =
-        dataState.status === "tie-discussion"
-          ? "Conversen el empate antes de seguir."
-          : dataState.status === "impostor-guess"
-            ? "Queda pendiente el intento del impostor."
-            : "La ronda quedó resuelta sin marcador todavía.";
-
+    if (dataState.status === "tie-discussion") {
       return (
         <section
           className="impostor-group-card impostor-room-role-reveal"
@@ -1202,10 +1203,9 @@ export function renderRoomLobbyContent(
           <p className="impostor-kicker">
             Ronda {dataState.gameState.roundNumber}
           </p>
-          <h1 id="impostor-room-result-title">{title}</h1>
-          <p>{message}</p>
-          {dataState.status === "tie-discussion" &&
-          (dataState.gameState.candidates?.length ?? 0) > 0 ? (
+          <h1 id="impostor-room-result-title">Hubo empate</h1>
+          <p>Conversen el empate antes de seguir.</p>
+          {(dataState.gameState.candidates?.length ?? 0) > 0 ? (
             <div className="impostor-group-section">
               <h2>Empatados</h2>
               <ul className="impostor-vote-results">
@@ -1229,10 +1229,125 @@ export function renderRoomLobbyContent(
               </li>
             ))}
           </ol>
-          {dataState.status === "tie-discussion" ? startSecondVotingAction : null}
-          {dataState.status === "tie-discussion" && !canStartSecondVoting
-            ? startSecondVotingErrorFeedback
-            : null}
+          {startSecondVotingAction}
+          {!canStartSecondVoting ? startSecondVotingErrorFeedback : null}
+        </section>
+      );
+    }
+
+    if (dataState.status === "impostor-guess") {
+      const canSubmitGuess = dataState.gameState.impostorGuess?.canSubmit === true;
+      const currentGuessText = options.impostorGuessText ?? "";
+      const isGuessEmpty = currentGuessText.trim().length === 0;
+
+      return (
+        <section
+          className="impostor-group-card impostor-room-role-reveal"
+          aria-labelledby="impostor-room-guess-title"
+        >
+          <p className="impostor-kicker">
+            Ronda {dataState.gameState.roundNumber}
+          </p>
+          <h1 id="impostor-room-guess-title">El impostor fue señalado</h1>
+          {canSubmitGuess ? (
+            <>
+              <p>Tenés una última oportunidad.</p>
+              <label className="impostor-field">
+                <span>¿Cuál era la palabra?</span>
+                <input
+                  type="text"
+                  value={currentGuessText}
+                  disabled={options.isSubmittingImpostorGuess}
+                  onChange={(event) =>
+                    options.onChangeImpostorGuessText?.(event.target.value)
+                  }
+                />
+              </label>
+              <button
+                className="impostor-action impostor-action--primary"
+                type="button"
+                disabled={isGuessEmpty || options.isSubmittingImpostorGuess}
+                onClick={options.onSubmitImpostorGuess}
+              >
+                {options.isSubmittingImpostorGuess
+                  ? "Enviando intento..."
+                  : "Enviar intento"}
+              </button>
+            </>
+          ) : (
+            <p>El impostor está haciendo su intento final.</p>
+          )}
+          {options.submitImpostorGuessError ? (
+            <div className="impostor-group-error" aria-live="polite">
+              <p>{options.submitImpostorGuessError}</p>
+            </div>
+          ) : null}
+          <ol className="impostor-vote-results">
+            {(dataState.gameState.voteResults ?? []).map((result) => (
+              <li key={result.playerId}>
+                <span>{result.nickname}</span>
+                <strong>
+                  {result.voteCount === 1
+                    ? "1 voto"
+                    : `${result.voteCount} votos`}
+                </strong>
+              </li>
+            ))}
+          </ol>
+        </section>
+      );
+    }
+
+    if (dataState.status === "round-result") {
+      const result = dataState.gameState.roundResult;
+      const winnerLabel =
+        result?.winner === "group" ? "Ganó el grupo" : "Ganó el impostor";
+      const guessWasSubmitted =
+        typeof result?.impostorGuessCorrect === "boolean";
+      const word = dataState.gameState.privateView.word;
+
+      return (
+        <section
+          className="impostor-group-card impostor-room-role-reveal"
+          aria-labelledby="impostor-room-result-title"
+        >
+          <p className="impostor-kicker">
+            Ronda {dataState.gameState.roundNumber}
+          </p>
+          <h1 id="impostor-room-result-title">{winnerLabel}</h1>
+          {guessWasSubmitted ? (
+            <p>
+              {result?.impostorGuessCorrect
+                ? "El impostor adivinó la palabra."
+                : "El impostor no adivinó la palabra."}
+            </p>
+          ) : (
+            <p>El grupo no señaló al impostor.</p>
+          )}
+          {word ? (
+            <div className="impostor-group-section">
+              <h2>La palabra era</h2>
+              <p className="impostor-room-secret-word">{word}</p>
+            </div>
+          ) : null}
+          {result?.impostorGuessText ? (
+            <div className="impostor-group-section">
+              <h2>Intento del impostor</h2>
+              <p>{result.impostorGuessText}</p>
+            </div>
+          ) : null}
+          <ol className="impostor-vote-results">
+            {(dataState.gameState.voteResults ?? []).map((voteResult) => (
+              <li key={voteResult.playerId}>
+                <span>{voteResult.nickname}</span>
+                <strong>
+                  {voteResult.voteCount === 1
+                    ? "1 voto"
+                    : `${voteResult.voteCount} votos`}
+                </strong>
+              </li>
+            ))}
+          </ol>
         </section>
       );
     }
@@ -1416,6 +1531,12 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   >(null);
   const [isSubmittingVote, setIsSubmittingVote] = useState(false);
   const [submitVoteError, setSubmitVoteError] = useState<string | undefined>();
+  const [impostorGuessText, setImpostorGuessText] = useState("");
+  const [isSubmittingImpostorGuess, setIsSubmittingImpostorGuess] =
+    useState(false);
+  const [submitImpostorGuessError, setSubmitImpostorGuessError] = useState<
+    string | undefined
+  >();
   const [roomPresenceSnapshot, setRoomPresenceSnapshot] = useState<{
     roomId?: string;
     state: RoomPresenceState;
@@ -1979,9 +2100,56 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     }
   }
 
+  async function handleSubmitImpostorGuess() {
+    if (isSubmittingImpostorGuess || !isMountedRef.current) {
+      return;
+    }
+
+    if (impostorGuessText.trim().length === 0) {
+      setSubmitImpostorGuessError("Escribí una palabra para enviar tu intento.");
+      return;
+    }
+
+    setSubmitImpostorGuessError(undefined);
+    setIsSubmittingImpostorGuess(true);
+
+    try {
+      await submitImpostorGuess(createImpostorRoomsClient(), impostorGuessText);
+      setImpostorGuessText("");
+      await refreshGameplayStateNow("manual");
+    } catch (error) {
+      let recoveredGameState: MyGameState | null = null;
+
+      try {
+        recoveredGameState = await refreshGameplayStateNow("manual");
+      } catch {
+        recoveredGameState = null;
+      }
+
+      if (recoveredGameState?.state === "round_result") {
+        setSubmitImpostorGuessError(undefined);
+        setImpostorGuessText("");
+        return;
+      }
+
+      setSubmitImpostorGuessError(
+        getFriendlyError(error, SUBMIT_GUESS_FALLBACK_MESSAGE),
+      );
+    } finally {
+      if (isMountedRef.current) {
+        setIsSubmittingImpostorGuess(false);
+      }
+    }
+  }
+
   function handleSelectVoteTarget(targetPlayerId: string) {
     setSelectedVoteTargetPlayerId(targetPlayerId);
     setSubmitVoteError(undefined);
+  }
+
+  function handleChangeImpostorGuessText(nextGuessText: string) {
+    setImpostorGuessText(nextGuessText);
+    setSubmitImpostorGuessError(undefined);
   }
 
   useEffect(() => {
@@ -2198,6 +2366,8 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     onStartSecondVoting: () => void handleStartSecondVoting(),
     onSelectVoteTarget: handleSelectVoteTarget,
     onSubmitVote: () => void handleSubmitVote(),
+    onChangeImpostorGuessText: handleChangeImpostorGuessText,
+    onSubmitImpostorGuess: () => void handleSubmitImpostorGuess(),
     onStartAnonymousAuth: () => void handleStartAnonymousAuth(),
     lifecycleActionState,
     isStartingAuth,
@@ -2211,6 +2381,9 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     selectedVoteTargetPlayerId,
     isSubmittingVote,
     submitVoteError,
+    impostorGuessText,
+    isSubmittingImpostorGuess,
+    submitImpostorGuessError,
     connectedPlayerIds,
     hostSuccessionNotice,
   });
