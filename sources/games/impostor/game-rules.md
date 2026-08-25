@@ -309,6 +309,14 @@ Después del intento la ronda pasa a resultado y la aplicación puede revelar la
 
 # Condiciones de victoria
 
+El ganador final de ronda se representa como:
+
+```text
+round_winner = impostor | group
+```
+
+Este valor no describe solamente el resultado de la votación. Describe quién ganó después de resolver también el intento final del impostor cuando corresponde.
+
 ## Victoria del impostor
 
 El impostor gana si ocurre cualquiera de estas situaciones:
@@ -328,13 +336,15 @@ El grupo gana si:
 
 # Puntuación
 
-El sistema inicial prioriza simplicidad.
+El sistema inicial prioriza simplicidad, pero no iguala el peso de ambos bandos.
 
 ## Victoria del impostor
 
 El impostor recibe:
 
 `+2 puntos`
+
+Los jugadores normales no reciben puntos.
 
 ## Victoria del grupo
 
@@ -344,11 +354,19 @@ Cada jugador normal recibe:
 
 El impostor no recibe puntos.
 
+La puntuación es individual. No existe un score de equipo separado.
+
+El cliente nunca calcula puntos: el servidor los aplica al cerrar la ronda.
+
 ---
 
 # Marcador
 
 Después de cada ronda se muestra el marcador actualizado.
+
+El marcador acumula los puntos de todos los `SessionPlayers` de la tanda actual.
+
+No necesita una entidad de marcador separada en la primera versión.
 
 Ejemplo:
 
@@ -361,6 +379,8 @@ Desde esa pantalla el host puede:
 
 * iniciar una nueva ronda;
 * terminar la tanda.
+
+Si no quedan palabras disponibles para la tanda, la acción de nueva ronda no está disponible. La aplicación debe permitir agregar palabras al banco o terminar la tanda.
 
 ---
 
@@ -379,17 +399,35 @@ Se seleccionan:
 * una nueva palabra;
 * un nuevo impostor.
 
+La nueva palabra, el nuevo impostor y el nuevo número de ronda se eligen server-side.
+
+El cliente no puede elegir ni sugerir esos valores como autoridad.
+
+La nueva ronda reutiliza la misma tanda y el mismo roster congelado.
+
+Si existe una palabra disponible no utilizada en la tanda, el sistema crea una ronda con número siguiente.
+
+Si no existe una palabra disponible no utilizada, no se crea la ronda.
+
 ---
 
 # Fin de la tanda
 
-La tanda puede terminar después de cualquier ronda.
+La tanda puede terminar desde el marcador, después de una ronda cerrada y puntuada.
+
+Sólo el host actual puede terminarla.
 
 La aplicación muestra:
 
 * clasificación final;
-* ganador según puntuación;
+* ganador o ganadores según puntuación;
 * cantidad de rondas jugadas.
+
+Ganan todos los jugadores que tengan el puntaje máximo al cerrar la tanda.
+
+Si hay empate en el primer puesto, el resultado final conserva múltiples ganadores. No hay desempate oculto.
+
+Después de terminar la tanda, esa Room ya no se usa para otra tanda. Para volver a jugar, el grupo crea una nueva Room.
 
 Las estadísticas adicionales son opcionales y no forman parte necesaria del MVP.
 

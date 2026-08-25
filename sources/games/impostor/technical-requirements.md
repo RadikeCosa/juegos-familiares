@@ -1486,7 +1486,315 @@ La UI de Incremento 10 debe cubrir:
 
 ---
 
-# 22. Offline
+# 22. Puntuación, marcador y nueva ronda
+
+## Requisito de dominio
+
+La ronda no otorga la misma cantidad de puntos individuales en ambos bandos.
+
+Si `round_winner = group`, reciben punto todos los jugadores no impostores de la ronda.
+
+Si `round_winner = impostor`, recibe 2 puntos solo el impostor de la ronda.
+
+`round_winner` debe representarse como:
+
+```text
+impostor | group
+```
+
+No representa un `player_id` ni un nombre de equipo persistente.
+
+Representa el ganador final de ronda, no solo el resultado de votación.
+
+La resolución debe cubrir estos casos:
+
+* grupo no señaló al impostor → `round_winner = impostor`;
+* segunda votación no deja al impostor como único más votado → `round_winner = impostor`;
+* impostor señalado y guess correcto → `round_winner = impostor`;
+* impostor señalado y guess incorrecto → `round_winner = group`.
+
+## Persistencia operativa
+
+El marcador activo de la tanda vive en `SessionPlayer.score`.
+
+No se introduce inicialmente una entidad `Scoreboard` separada.
+
+`GameSession` representa la tanda activa.
+
+`GameSession.state = scoreboard` representa la fase observable de marcador entre rondas.
+
+Al cierre técnico de Incremento 11.1, `SessionPlayer.score` y el estado `scoreboard` quedan preparados físicamente.
+
+Incremento 11.2 implementa la aplicación autoritativa de puntos mediante `advance_round_result_to_scoreboard()`. La RPC no recibe `room_id`, `game_session_id`, `round_id`, `player_id`, `winner` ni puntajes desde el cliente: deriva el contexto desde `auth.uid()`, la Room activa y la ronda vigente.
+
+La idempotencia operativa de scoring se marca en `Round.scored_at`. Si la ronda ya tiene `scored_at`, repetir la RPC devuelve `scoreboard` sin volver a sumar puntos. Si la ronda está en `round_result` y tiene `round_winner` válido, la RPC suma puntos y mueve la `GameSession` a `scoreboard` en la misma operación transaccional. También tolera el caso recuperable `scoreboard` sin `scored_at`, aplicando el scoring pendiente si existe un ganador final válido.
+
+Incremento 11.4 completa el read model y la UI operativa de marcador y nueva ronda.
+
+`Round` representa cada ronda dentro de esa tanda.
+
+El read model de marcador se deriva de los `SessionPlayers` de la `GameSession`.
+
+## Cierre de ronda
+
+Una ronda está cerrada para scoring cuando:
+
+* la `GameSession` entra en `round_result`;
+* la ronda vigente tiene `round_winner` definido;
+* el resultado ya no requiere input de jugadores.
+
+La aplicación de puntos debe ser server-side, atómica e idempotente.
+
+Un retry o refresh no puede sumar puntos dos veces.
+
+La operación autoritativa de scoring puede ser disparada por cualquier `SessionPlayer` de la tanda activa porque no acepta decisiones del cliente; solo solicita cerrar el resultado ya decidido server-side hacia `scoreboard`.
+
+Después de cerrar la ronda y aplicar el scoring, el lifecycle normal es:
+
+```text
+round_result
+→ scoreboard
+```
+
+## Nueva ronda
+
+Solo `rooms.host_player_id` actual puede iniciar una nueva ronda.
+
+La nueva ronda:
+
+* reutiliza la misma `GameSession`;
+* reutiliza el mismo roster congelado de `SessionPlayers`;
+* conserva los scores existentes;
+* crea un `Round` con `number + 1`;
+* selecciona palabra server-side;
+* selecciona impostor server-side;
+* deja a la `GameSession` nuevamente en `role_reveal`.
+
+Para balance operativo, `SessionPlayer.impostorCount` se persiste como contador de veces que el jugador fue impostor dentro de la tanda. La operacion de nueva ronda reconcilia ese contador desde `Round.impostor_player_id` antes de seleccionar y luego incrementa solo al nuevo impostor.
+
+El cliente nunca elige:
+
+* puntos;
+* ganador;
+* palabra;
+* impostor;
+* número de ronda.
+
+La palabra no puede repetirse dentro de la misma tanda. La disponibilidad debe calcularse server-side contra las palabras ya usadas por las rondas de esa `GameSession`.
+
+Si no hay palabras disponibles no utilizadas:
+
+* no se crea una nueva ronda;
+* la respuesta debe explicar que faltan palabras disponibles;
+* el host puede terminar la tanda;
+* el grupo puede agregar palabras válidas al banco y volver a intentar.
+
+No se define todavía fin automático por puntaje objetivo, cantidad de rondas ni agotamiento de palabras.
+
+## Read model
+
+`get_my_game_state()` en resultado y marcador debe exponer datos suficientes para mostrar:
+
+* ganador de la ronda;
+* palabra revelada solo cuando corresponda;
+* scoreboard individual acumulado;
+* número de ronda actual;
+* si el caller puede iniciar nueva ronda;
+* si hay palabras disponibles para iniciar nueva ronda.
+
+`get_my_game_state()` en `scoreboard` debe exponer además:
+
+* `state = scoreboard`;
+* ranking o lista de jugadores ordenable por score;
+* `can_start_next_round` solo para el host actual;
+* `can_end_session` cuando corresponda a Incremento 12;
+* razón de indisponibilidad de nueva ronda cuando no hay palabras.
+
+En Incremento 11.4, la razón de bloqueo operativa de nueva ronda se expone como `not_host`, `no_words`, `session_not_ready` o `unknown`. La UI puede traducir esos valores a mensajes, pero no debe recalcular permisos ni disponibilidad.
+
+Durante la preparación transaccional de una nueva ronda, el read model no debe revelar la nueva palabra ni el nuevo impostor antes de `role_reveal`. Si la preparación es observable, debe responder como estado transitorio sin secretos o reconstruirse directamente como `role_reveal` una vez creada la ronda.
+
+En la nueva `role_reveal`, el read model debe preservar la privacidad existente:
+
+* el impostor no recibe `secret_word`;
+* ningún caller recibe `normalized_secret_word`;
+* el cliente no recibe datos suficientes para inferir la palabra antes de tiempo.
+
+## Fuera de alcance técnico de Incremento 11
+
+No se implementa ni se cierra en este incremento:
+
+* terminar tanda con historial persistente mínimo;
+* estadísticas históricas;
+* ganador final de tanda por puntos;
+* cambios de participantes durante una tanda;
+* objetivo fijo de puntos;
+* fin automático por puntaje;
+* ranking histórico;
+* moderación avanzada;
+* categorías;
+* palabras precargadas.
+
+---
+
+# 23. Terminar tanda e historial mínimo
+
+## Requisito de dominio
+
+Incremento 12 define y luego implementa el cierre explícito de una tanda de Impostor.
+
+En la primera versión, una tanda sólo puede terminar desde `scoreboard`, después de una ronda cerrada, puntuada y visible para todos.
+
+No se permite terminar desde estados intermedios:
+
+* `role_reveal`;
+* `discussion`;
+* `voting_first`;
+* `tie_discussion`;
+* `voting_second`;
+* `impostor_guess`;
+* `round_result`.
+
+Sólo `rooms.host_player_id` actual puede terminar la tanda.
+
+La transición de `GameSession` es:
+
+```text
+scoreboard
+→ finished
+```
+
+`finished_at` es el timestamp server-side que marca el cierre exitoso de la tanda. Debe definirse en la misma operación autoritativa que cambia el estado a `finished` y conserva el historial mínimo.
+
+La Room asociada queda cerrada:
+
+```text
+Room.status = closed
+```
+
+La Room no se reutiliza para otra tanda. Para jugar otra tanda, el grupo crea una nueva Room.
+
+## Resultado final
+
+El ganador final de tanda se calcula server-side desde `SessionPlayer.score`.
+
+El resultado final está compuesto por todos los jugadores con el mayor puntaje.
+
+Si una sola persona tiene el mayor puntaje, hay ganador único.
+
+Si varias personas empatan en el mayor puntaje, hay múltiples ganadores.
+
+No se define desempate automático por host, orden de join, cantidad de victorias, azar ni historial de impostor.
+
+El cliente no decide:
+
+* ganador final;
+* scores finales;
+* cantidad de rondas;
+* historial;
+* timestamp de cierre;
+* cierre de Room.
+
+## Historial mínimo
+
+El historial mínimo existe para estadísticas futuras, sin construir estadísticas en Incremento 12.
+
+El historial de tanda debe conservar:
+
+* grupo;
+* referencia a la `GameSession` cerrada, si se conserva operacionalmente;
+* fecha/hora de inicio;
+* fecha/hora de finalización;
+* roster final;
+* scores finales por jugador;
+* ganador o ganadores finales;
+* cantidad de rondas jugadas;
+* host que cerró la tanda.
+
+El historial de ronda debe conservar:
+
+* número de ronda;
+* impostor;
+* `round_winner`;
+* si el impostor fue descubierto por votación;
+* si hubo intento final del impostor;
+* si el impostor adivinó la palabra;
+* resumen de puntos aplicados o datos suficientes para derivarlo.
+
+Los votos individuales históricos quedan fuera.
+
+Las palabras completas usadas quedan fuera del historial mínimo inicial. La palabra puede seguir existiendo en `Round` mientras el estado operativo exista, pero no se replica al historial permanente salvo decisión futura explícita.
+
+No se persiste historial de host por ronda. Sólo se guarda el host que cerró la tanda como auditoría mínima.
+
+## Operación autoritativa futura
+
+La RPC futura de cierre debe ser 0-args:
+
+```text
+end_session()
+```
+
+Debe derivar contexto desde:
+
+```text
+auth.uid()
+→ Player
+→ Room activa
+→ GameSession vigente
+→ SessionPlayers
+→ Rounds
+```
+
+Debe validar:
+
+* caller autenticado;
+* caller resuelve `Player`;
+* caller participa de la Room activa;
+* Room está `playing`;
+* caller es host actual;
+* existe `GameSession`;
+* `GameSession.state = scoreboard`;
+* la ronda vigente está puntuada;
+* hay roster y al menos una ronda.
+
+La operación debe ser idempotente. Un retry después de un cierre exitoso no puede duplicar historial, cambiar `finished_at`, cambiar ganadores ni volver a cerrar otra Room.
+
+## Read model `finished`
+
+`get_my_game_state()` en `finished` debe devolver una vista compartida, sin secretos pendientes:
+
+* `state = finished`;
+* `round_count`;
+* `finished_at`;
+* scores finales;
+* ganador o ganadores finales;
+* resumen de rondas suficiente para mostrar cierre;
+* `can_start_next_round = false`;
+* `can_end_session = false`.
+
+Host y no-host ven el mismo resultado final.
+
+La UI puede ofrecer volver al grupo o crear otra Room, pero no iniciar nueva ronda desde esa tanda cerrada.
+
+## Fuera de alcance técnico de Incremento 12 inicial
+
+No se implementa:
+
+* estadísticas visuales;
+* ranking histórico entre tandas;
+* desempates automáticos;
+* múltiples tandas en una misma Room;
+* reutilización de Room cerrada;
+* votos individuales históricos;
+* historial completo de palabras usadas;
+* historial de hosts por ronda;
+* exportación de resultados;
+* analíticas.
+
+---
+
+# 24. Offline
 
 ## Requisito MVP
 

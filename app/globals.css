@@ -929,6 +929,50 @@ body {
   overflow-wrap: anywhere;
 }
 
+.impostor-scoreboard-list {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 28rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.impostor-scoreboard-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 3.25rem;
+  align-items: center;
+  gap: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+  padding: var(--space-3);
+}
+
+.impostor-scoreboard-list span,
+.impostor-scoreboard-list strong {
+  overflow-wrap: anywhere;
+}
+
+.impostor-scoreboard-list span {
+  display: inline-flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 700;
+}
+
+.impostor-scoreboard-list span strong {
+  border-radius: var(--radius-sm);
+  background: var(--background);
+  color: var(--success);
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.8125rem;
+  line-height: 1.2;
+}
+
 .impostor-own-words {
   display: grid;
   gap: var(--space-2);

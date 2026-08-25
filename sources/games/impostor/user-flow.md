@@ -579,7 +579,7 @@ Ejemplo:
 
 # Votación incorrecta
 
-Desde aquí el flujo entra en estados posteriores a la primera votación. Incremento 8 solo llega a `round_result`; scoring, marcador y nueva ronda pertenecen a incrementos posteriores.
+Desde aquí el flujo entra en estados posteriores a la primera votación. Incremento 8 solo llegaba a `round_result`; Incremento 11.0 define documentalmente scoring, marcador y nueva ronda.
 
 Si la persona más votada no era el impostor:
 
@@ -672,6 +672,15 @@ Acciones del host:
 
 `Terminar partida`
 
+El marcador muestra puntuación individual acumulada dentro de la tanda.
+
+La ronda otorga puntos según el bando ganador:
+
+* si gana el grupo, cada jugador normal recibe 1 punto;
+* si gana el impostor, solo el impostor recibe 2 puntos.
+
+Los demás jugadores ven el marcador y el estado de espera, pero no pueden iniciar la siguiente ronda.
+
 ---
 
 # Nueva ronda
@@ -686,9 +695,33 @@ Si el host selecciona `Nueva ronda`:
 
 Si no quedan palabras disponibles, la aplicación permite agregar nuevas palabras o terminar la tanda.
 
+El teléfono del host no elige palabra, impostor ni número de ronda. La aplicación prepara esos datos desde el servidor.
+
 El flujo vuelve a:
 
 `Información privada`
+
+En esa nueva información privada se preserva la misma regla de privacidad: el impostor no recibe la palabra antes del reveal permitido para su rol.
+
+---
+
+# Terminar tanda
+
+Si el host selecciona `Terminar tanda` desde el marcador:
+
+1. la tanda se marca como finalizada;
+2. se calcula el o los ganadores finales por puntaje;
+3. se conserva el historial mínimo de tanda y rondas;
+4. la Room queda cerrada;
+5. todos ven el resultado final.
+
+Los demás jugadores no pueden terminar la tanda.
+
+Si varios jugadores empatan en el mayor puntaje, todos se muestran como ganadores.
+
+Para jugar otra tanda, el grupo vuelve al grupo y crea una nueva Room.
+
+No se muestran votos individuales históricos.
 
 ---
 
@@ -742,7 +775,7 @@ Si hubo un nuevo empate o fue más votado cualquier otro jugador:
 
 > La ronda quedó resuelta
 
-No hay tercera votación. La victoria conceptual es del impostor, aunque scoring y marcador quedan para incrementos posteriores.
+No hay tercera votación. La victoria conceptual es del impostor y, según el contrato de puntuación, el impostor recibe 2 puntos al cerrarse la ronda.
 
 ---
 
@@ -803,7 +836,7 @@ Si falló:
 
 > Gana el grupo
 
-Scoring, marcador, nueva ronda e historial pertenecen a incrementos posteriores.
+Scoring, marcador y nueva ronda pertenecen al Incremento 11. Historial y cierre final de tanda pertenecen a incrementos posteriores.
 
 ---
 
