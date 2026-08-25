@@ -68,6 +68,7 @@ Incremento 5.0 documental completado sobre Incremento 4 cerrado localmente
 * sucesión autoritativa de host cerrada en 5.3 con `reassign_room_host_if_stale()`, selección server-side, concurrencia consistente, feedback breve y smoke productivo multi-cliente.
 * Incremento 6 cerrado técnicamente: host inicia tanda con `start_session()`, roster congelado en `SessionPlayers`, palabra e impostor server-side, Round 1 en `role_reveal`, Room `playing`, lectura privada con `get_my_game_state()` y UI tap-to-reveal sin filtrar secretos.
 * Incremento 7 cerrado técnicamente: `GameSession.state` admite `role_reveal → discussion`, `start_round_discussion()` lo ejecuta con autoridad del host actual, los clientes convergen por polling lento de `get_my_game_state()` y la UI de `discussion` mantiene la vista privada oculta por defecto con reveal/hide local.
+* Incremento 8.0 cerrado documentalmente: contrato de primera votación `discussion → voting_first`, voto secreto de todos los `SessionPlayers`, resolución automática y ramas `tie_discussion | impostor_guess | round_result`.
 
 ## PENDIENTE
 
@@ -126,9 +127,9 @@ Retos asociados:
 
 Estado: `IMPLEMENTACIÓN PARCIAL`.
 
-La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras, Room + Lobby, Presence básica privada y liveness autoritativo mínimo validados en producción.
+La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras, Room + Lobby, Presence básica privada, liveness autoritativo mínimo y sucesión de host validados en producción, más el primer tramo de gameplay privado cerrado técnicamente hasta `discussion`.
 
-El juego jugable todavía está pendiente: sucesión de host, roles, votación, scoring e historial siguen en incrementos futuros.
+El juego jugable todavía está pendiente: primera votación funcional, segunda votación, intento final del impostor, scoring e historial siguen en incrementos futuros.
 
 ---
 
@@ -767,8 +768,9 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 5.4 | Hardening mobile/concurrencia | EN SUSPENSO / VALIDACIÓN PENDIENTE | La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios; falta validación física mobile/desktop de background, lock, reconnect, multiple connections y timings 30s/90s/30s antes del cierre final del MVP |
 | 6 | Iniciar tanda y preparar ronda privada | CERRADO TÉCNICAMENTE | 6.0-6.5 cerrados: GameSession/SessionPlayer/Round, lifecycle `playing`, `start_session()` atómico, snapshot de activos, palabra e impostor server-side, `get_my_game_state()`, privacidad por caller, UI role reveal y hardening de refetch; validación manual multi-dispositivo pendiente |
 | 7 | Transición de role reveal a discussion | CERRADO TÉCNICAMENTE | 7.0-7.4 cerrados: sin acknowledgement persistido, `start_round_discussion()` 0-args, autoridad por host actual, sucesión de host vigente en `playing`, read model privado `role_reveal | discussion`, polling lento sin gameplay Realtime/Broadcast, UI `Empezar ronda` host-only y reveal/hide local en `discussion`; validación manual multi-dispositivo pendiente |
-| 8 | Primera votación | PENDIENTE | PENDIENTE |
-| 9 | Empate y segunda votación | PENDIENTE | PENDIENTE |
+| 8.0 | Contrato documental de primera votación | CERRADO DOCUMENTAL | `discussion → voting_first`, `start_round_voting()` 0-args por host actual, `RoundVote/round_votes`, voto secreto e inmutable de todos los `SessionPlayers`, sin resultados parciales, completion sin Presence/liveness, resolución automática a `tie_discussion | impostor_guess | round_result`, polling lento y segunda votación fuera |
+| 8 | Primera votación | PENDIENTE | Slicing 8.1-8.4 pendiente: persistencia/RPC de inicio, submit+resolución, read model+UI, hardening de sync/recovery/concurrencia/privacidad |
+| 9 | Empate y segunda votación | PENDIENTE | Parte desde `tie_discussion`: host actual continúa a `voting_second`, candidatos limitados a empatados, segundo voto secreto y resolución definitiva sin tercera votación |
 | 10 | Intento final del impostor | PENDIENTE | PENDIENTE |
 | 11 | Puntuación, marcador y nueva ronda | PENDIENTE | PENDIENTE |
 | 12 | Terminar tanda e historial mínimo | PENDIENTE | PENDIENTE |

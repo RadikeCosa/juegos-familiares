@@ -836,7 +836,13 @@ No puede votarse a sí mismo.
 
 No se muestran resultados parciales.
 
-Los votos se revelan cuando todos participaron.
+El impostor vota como cualquier participante.
+
+El host vota y no tiene voto especial.
+
+Los resultados agregados se revelan cuando todos los `SessionPlayers` de la tanda registraron su voto.
+
+La pertenencia a la tanda no depende de Presence ni liveness durante la votación. Un `SessionPlayer` desconectado sigue perteneciendo a la tanda, sigue siendo candidato y conserva su voto si ya votó. Si no vuelve y todavía no votó, la primera versión puede quedar esperando; timeouts, override del host o votación solo con conectados son políticas pendientes, no parte de la regla actual.
 
 ## Motivo
 
@@ -866,6 +872,48 @@ Esto incluye:
 * cualquier resultado donde el impostor no sea el único más votado.
 
 No hay más rondas de desempate.
+
+---
+
+# Contrato documental de Incremento 8
+
+## Decisión
+
+El Incremento 8 cubre la primera votación completa:
+
+```text
+discussion
+→ voting_first
+→ voto secreto de todos los SessionPlayers
+→ resolución automática
+→ tie_discussion | impostor_guess | round_result
+```
+
+El host actual inicia la votación con `start_round_voting()`. La autoridad es `rooms.host_player_id` actual, no el administrador del Group, el creador original ni quien inició la tanda si luego fue reemplazado.
+
+Cada voto se registra por Round y etapa. El voto es secreto, inmutable y único por voter/Round/votingRound.
+
+La resolución ocurre automáticamente cuando entra el último voto requerido. No hay acción manual del host para cerrar la primera votación.
+
+## Motivo
+
+La primera votación debe ser un vertical completo para que el producto no quede en un estado intermedio donde todos votaron pero el sistema todavía espera otra acción. Al mismo tiempo, la segunda votación y el intento final del impostor se mantienen fuera para preservar slices pequeños.
+
+La separación entre membership y availability evita que una desconexión cambie silenciosamente el cuerpo electoral de la tanda. Presence y liveness siguen siendo útiles para UX y sucesión de host, pero no son autoridad del roster congelado.
+
+## Alcance excluido
+
+Incremento 8 no implementa:
+
+* segunda votación;
+* resolución de segunda votación;
+* intento final del impostor;
+* reveal de palabra;
+* scoring;
+* scoreboard;
+* nueva ronda;
+* fin de tanda;
+* Realtime/Broadcast de gameplay.
 
 ---
 

@@ -514,13 +514,15 @@ Al cierre técnico del Incremento 7, el flujo implementado termina en esta conve
 
 ---
 
-# Futuro: iniciar votación
+# Incremento 8: iniciar primera votación
 
 Cuando el grupo lo decide, el host toca:
 
 `Ir a votación`
 
-Todos los dispositivos cambian de estado.
+Todos los dispositivos cambian a `voting_first` mediante polling de `get_my_game_state()`.
+
+Solo el host actual de la Room puede iniciar esta transición. El administrador del Group y el creador original no tienen permiso especial si no son el host actual.
 
 ---
 
@@ -540,6 +542,8 @@ Ejemplo para Ramiro:
 
 Ramiro no aparece como opción porque nadie puede votarse a sí mismo.
 
+La lista sale del roster congelado de `SessionPlayers`, no de Presence ni de quién aparece conectado. El impostor también vota. El host también vota y no tiene voto especial.
+
 Después:
 
 `Votar`
@@ -556,11 +560,13 @@ Después de votar:
 
 No se muestran resultados parciales.
 
+El voto no se puede editar. Si la respuesta de red se pierde, la pantalla se recupera al releer el estado y mostrar que el voto propio ya quedó registrado.
+
 ---
 
 # Revelación
 
-Cuando todos votaron, todos reciben el resultado.
+Cuando todos los `SessionPlayers` votaron, todos reciben el resultado agregado.
 
 Ejemplo:
 
@@ -572,6 +578,8 @@ Ejemplo:
 ---
 
 # Votación incorrecta
+
+Desde aquí el flujo entra en estados posteriores a la primera votación. Incremento 8 solo llega a `round_result`; scoring, marcador y nueva ronda pertenecen a incrementos posteriores.
 
 Si la persona más votada no era el impostor:
 
@@ -694,7 +702,7 @@ La aplicación indica:
 
 > Hablen un poco más y vuelvan a votar.
 
-Cuando el host continúa, los dispositivos muestran una segunda votación únicamente entre las personas empatadas.
+En Incremento 8, la aplicación llega hasta `tie_discussion`: muestra el resultado agregado y el empate. La acción del host para continuar a una segunda votación, la pantalla `voting_second` y su resolución pertenecen al Incremento 9.
 
 ---
 

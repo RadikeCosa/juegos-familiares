@@ -750,6 +750,10 @@ rounds
 
 por Postgres Changes. Tampoco se usa Room como bus artificial ni se agrega Broadcast. Broadcast privado de invalidación, sin secretos, queda como posibilidad futura.
 
+Incremento 8 mantiene la misma estrategia para la primera votación. No se publica `round_votes` por Postgres Changes y no hay SELECT/INSERT/UPDATE directo de cliente sobre votos. La sincronización de `voting_first`, voto propio y resultado agregado se reconstruye mediante polling lento de `get_my_game_state()`.
+
+Durante `voting_first`, el denominador de completion es el roster congelado de `SessionPlayers`, no Presence, liveness ni RoomParticipants conectados. Membership y availability permanecen separados: un `SessionPlayer` desconectado sigue siendo parte de la tanda, candidato y votante requerido.
+
 ---
 
 # 20. Presence
@@ -916,7 +920,7 @@ No se utiliza una operación genérica como `advance_round_phase()`.
 
 ---
 
-# 22. Ejemplo futuro: START_VOTING
+# 22. Ejemplo de Incremento 8: START_VOTING
 
 ```text
 Host toca "Ir a votación"
@@ -924,15 +928,52 @@ Host toca "Ir a votación"
 PWA envía intención
         ↓
 autoridad valida:
-- actor es host
+- actor es host actual de Room
 - GameSession.state = discussion
         ↓
-estado cambia a VOTING_FIRST
+GameSession.state cambia a voting_first
         ↓
-Realtime propaga estado
+host hace refetch inmediato
+        ↓
+demás participantes observan el cambio por polling
         ↓
 cada participante muestra UI de votación
 ```
+
+La RPC prevista es específica y sin argumentos:
+
+```text
+start_round_voting()
+```
+
+No se utiliza Group admin, creator original ni host histórico como autoridad.
+
+## Ejemplo de Incremento 8: SUBMIT_ROUND_VOTE
+
+```text
+SessionPlayer elige candidato
+        ↓
+PWA envía submit_round_vote(target_player_id)
+        ↓
+autoridad deriva caller desde auth.uid()
+        ↓
+valida:
+- caller pertenece a SessionPlayers
+- GameSession.state = voting_first
+- target pertenece a SessionPlayers
+- caller != target
+- no existe voto previo distinto
+        ↓
+guarda voto privado de voting_round = 1
+        ↓
+si faltan votos: permanece voting_first
+        ↓
+si votaron todos los SessionPlayers:
+  cuenta votos autoritativamente
+  cambia GameSession.state a tie_discussion | impostor_guess | round_result
+```
+
+El último voto resuelve dentro de la misma operación lógica. No existe una etapa estable donde todos votaron y otra RPC cierre manualmente la primera votación.
 
 ---
 

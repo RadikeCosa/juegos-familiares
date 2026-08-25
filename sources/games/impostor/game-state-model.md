@@ -101,7 +101,21 @@ role_reveal
 discussion
 ```
 
-`PREPARING_ROUND` existe solo como preparación transaccional interna de `start_session()`. Votación, resultado, marcador y fin de tanda pertenecen a incrementos posteriores.
+El contrato documental de Incremento 8 agrega como siguiente estado durable planificado:
+
+```text
+voting_first
+```
+
+La resolución de esa primera votación puede llevar a:
+
+```text
+tie_discussion
+impostor_guess
+round_result
+```
+
+`PREPARING_ROUND` existe solo como preparación transaccional interna de `start_session()`. No se introduce `Round.status`: la fase global de gameplay pertenece a `GameSession.state`. Segunda votación, intento final, reveal de palabra, scoring, marcador y fin de tanda pertenecen a incrementos posteriores.
 
 ---
 
@@ -483,7 +497,15 @@ Evento:
 
 Actor autorizado:
 
-`host`
+`host actual`
+
+RPC prevista:
+
+```text
+start_round_voting()
+```
+
+La operación no recibe parámetros y valida la autoridad contra `rooms.host_player_id` actual, no contra el administrador del Group, el creador original ni un host histórico. Debe ser idempotente frente a retry o respuesta perdida cuando la fase ya quedó en `voting_first`.
 
 ## Transición
 
@@ -502,11 +524,13 @@ Primera votación secreta de la ronda.
 
 ## Estado individual
 
-Cada participante tiene:
+Cada `SessionPlayer` tiene:
 
 ```text
 voteSubmitted = false
 ```
+
+Ese estado deriva de la existencia de su voto para la Round y etapa actual. No se basa en Presence, liveness ni conexión.
 
 ## Evento
 
@@ -524,27 +548,60 @@ targetPlayerId
 votingRound = 1
 ```
 
+RPC prevista:
+
+```text
+submit_round_vote(target_player_id uuid)
+```
+
+El `target_player_id` es una elección de dominio enviada por el usuario, no una autoridad confiada al cliente. El servidor deriva caller, Player, GameSession, Round actual y voter desde `auth.uid()` y valida el target contra el roster congelado.
+
 ## Guards
 
 El voto debe cumplir:
 
 ```text
-voter participa en la ronda
+voter ∈ SessionPlayers de la GameSession
 AND
-target participa en la ronda
+target ∈ SessionPlayers de la GameSession
 AND
 voter != target
 AND
 el jugador todavía no votó en esta etapa
+AND
+GameSession.state = voting_first
 ```
+
+El impostor también vota. El host también vota y no tiene voto especial.
+
+Cada voto pertenece a una Round y a una etapa de votación. La identidad lógica es:
+
+```text
+roundId
+votingRound
+voterPlayerId
+```
+
+El voto es secreto, inmutable y no se puede cambiar una vez registrado. Un retry del mismo voto por respuesta perdida puede ser éxito idempotente o recuperarse mediante el read model; un intento posterior de votar por otro target debe rechazarse.
 
 ## Después de cada voto
 
 El sistema evalúa:
 
 ```text
-¿votaron todos los participantes activos?
+¿votaron todos los SessionPlayers?
 ```
+
+Membership y availability son conceptos distintos. Presence/liveness no determinan el denominador de la votación.
+
+Un `SessionPlayer` desconectado:
+
+* sigue perteneciendo a la tanda;
+* sigue siendo candidato;
+* puede votar si vuelve;
+* conserva su voto si ya votó.
+
+Si todavía no votó y no vuelve, la primera versión puede quedar esperando. Timeouts, override del host, expulsión de `SessionPlayer` y votación solo con conectados son políticas pendientes de hardening, no parte de Incremento 8.
 
 ### No
 
@@ -556,7 +613,9 @@ VOTING_FIRST
 
 ### Sí
 
-El sistema cuenta votos.
+El sistema cuenta votos dentro de la misma operación lógica del último voto. No debe existir como estado estable que todos hayan votado y `GameSession.state` siga en `voting_first` esperando otra RPC manual.
+
+Durante la votación no se muestran resultados parciales, votos individuales ajenos, quién votó a quién, `impostorPlayerId` ni la palabra secreta si el caller es impostor. El host no recibe privilegios informativos adicionales.
 
 ---
 
@@ -574,6 +633,8 @@ VOTING_FIRST
 ```
 
 El sistema conserva la lista de jugadores empatados.
+
+Incremento 8 detecta este empate, muestra el resultado agregado y deja la GameSession en `tie_discussion`. No inicia todavía la segunda votación.
 
 ---
 
@@ -608,6 +669,8 @@ Transición:
 VOTING_FIRST
 → ROUND_RESULT
 ```
+
+Incremento 8 no aplica todavía puntos, scoreboard, historial final, nueva ronda ni fin de tanda.
 
 ---
 
