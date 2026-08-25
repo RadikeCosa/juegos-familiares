@@ -28,7 +28,9 @@ import {
     startRoomHostSuccessionRecheck,
     startRoomLivenessHeartbeat,
     startRoundDiscussion,
+    startRoundVoting,
     startSession,
+    submitRoundVote,
     subscribeToRoomPresence,
     subscribeToRoomChanges
 } from "./impostor-rooms";
@@ -75,6 +77,20 @@ const startRoundDiscussionRow = {
     advanced: true,
     already_in_phase: false,
     state: "discussion",
+    round_number: 1
+};
+
+const startRoundVotingRow = {
+    advanced: true,
+    already_in_phase: false,
+    state: "voting_first",
+    round_number: 1
+};
+
+const submitRoundVoteRow = {
+    accepted: true,
+    already_recorded: false,
+    state: "voting_first",
     round_number: 1
 };
 
@@ -310,7 +326,10 @@ describe("one-shot room intents", () => {
 describe("joinRoomByCode", () => {
     it("sends only the normalized room_code as product input", async () => {
         const supabase = {
-            rpc: vi.fn(async (_fn: string, _params?: { room_code: string }) => {
+            rpc: vi.fn(async (
+                _fn: string,
+                _params?: { room_code: string } | { target_player_id: string }
+            ) => {
                 void _fn;
                 void _params;
 
@@ -1068,6 +1087,250 @@ describe("startRoundDiscussion", () => {
         const result = await startRoundDiscussion(supabase);
 
         expect(JSON.stringify(result)).not.toMatch(/secret_word|normalized_secret_word|impostor_player_id|Tesoro/);
+    });
+});
+
+describe("startRoundVoting", () => {
+    it("calls the authoritative RPC without room, session, host, round or player arguments", async () => {
+        const supabase = {
+            rpc: vi.fn(async (_fn: string) => {
+                void _fn;
+
+                return { data: [startRoundVotingRow], error: null };
+            })
+        };
+
+        await expect(startRoundVoting(supabase)).resolves.toEqual({
+            advanced: true,
+            alreadyInPhase: false,
+            state: "voting_first",
+            roundNumber: 1
+        });
+
+        expect(supabase.rpc).toHaveBeenCalledWith("start_round_voting");
+        expect(supabase.rpc.mock.calls[0]).toHaveLength(1);
+    });
+
+    it("maps idempotent voting responses", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...startRoundVotingRow,
+                    advanced: false,
+                    already_in_phase: true
+                }],
+                error: null
+            }))
+        };
+
+        await expect(startRoundVoting(supabase)).resolves.toEqual({
+            advanced: false,
+            alreadyInPhase: true,
+            state: "voting_first",
+            roundNumber: 1
+        });
+    });
+
+    it("maps start voting failures to product-level feedback", async () => {
+        const notHost = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0019" } }))
+        };
+        const excluded = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0023" } }))
+        };
+        const invalidPhase = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0018" } }))
+        };
+
+        await expect(startRoundVoting(notHost)).rejects.toThrow(
+            "Solo el host actual puede ir a votación."
+        );
+        await expect(startRoundVoting(excluded)).rejects.toThrow(
+            "No participás de la tanda actual."
+        );
+        await expect(startRoundVoting(invalidPhase)).rejects.toThrow(
+            "Esta ronda no se puede votar ahora."
+        );
+    });
+
+    it("rejects malformed voting transition responses explicitly", async () => {
+        const wrongState = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...startRoundVotingRow, state: "discussion" }],
+                error: null
+            }))
+        };
+        const invalidRoundNumber = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...startRoundVotingRow, round_number: 0 }],
+                error: null
+            }))
+        };
+
+        await expect(startRoundVoting(wrongState)).rejects.toThrow(
+            "No pudimos confirmar el inicio de la votación."
+        );
+        await expect(startRoundVoting(invalidRoundNumber)).rejects.toThrow(
+            "No pudimos confirmar el inicio de la votación."
+        );
+    });
+
+    it("does not expose secret internals in mapped results", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...startRoundVotingRow,
+                    secret_word: "Tesoro",
+                    normalized_secret_word: "tesoro",
+                    impostor_player_id: "player-1",
+                    round_votes: [{ voter_player_id: "player-1" }]
+                }],
+                error: null
+            }))
+        };
+
+        const result = await startRoundVoting(supabase);
+
+        expect(JSON.stringify(result)).not.toMatch(/secret_word|normalized_secret_word|impostor_player_id|round_votes|Tesoro|player-1/);
+    });
+});
+
+describe("submitRoundVote", () => {
+    it("calls the authoritative RPC with only target_player_id", async () => {
+        const supabase = {
+            rpc: vi.fn(async (
+                _fn: string,
+                _params?: { room_code: string } | { target_player_id: string }
+            ) => {
+                void _fn;
+                void _params;
+
+                return { data: [submitRoundVoteRow], error: null };
+            })
+        };
+
+        await expect(submitRoundVote(supabase, "player-2")).resolves.toEqual({
+            accepted: true,
+            alreadyRecorded: false,
+            state: "voting_first",
+            roundNumber: 1
+        });
+
+        expect(supabase.rpc).toHaveBeenCalledWith("submit_round_vote", {
+            target_player_id: "player-2"
+        });
+        expect(supabase.rpc.mock.calls[0]).toHaveLength(2);
+        expect(JSON.stringify(supabase.rpc.mock.calls[0][1])).not.toMatch(
+            /room_id|game_session_id|round_id|voter_player_id|group_id|auth_user_id|voting_round/
+        );
+    });
+
+    it("maps idempotent and resolved vote responses", async () => {
+        const idempotent = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...submitRoundVoteRow,
+                    already_recorded: true,
+                    state: "impostor_guess"
+                }],
+                error: null
+            }))
+        };
+        const tie = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...submitRoundVoteRow, state: "tie_discussion" }],
+                error: null
+            }))
+        };
+        const roundResult = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...submitRoundVoteRow, state: "round_result" }],
+                error: null
+            }))
+        };
+
+        await expect(submitRoundVote(idempotent, "player-2")).resolves.toEqual({
+            accepted: true,
+            alreadyRecorded: true,
+            state: "impostor_guess",
+            roundNumber: 1
+        });
+        await expect(submitRoundVote(tie, "player-2")).resolves.toMatchObject({
+            state: "tie_discussion"
+        });
+        await expect(submitRoundVote(roundResult, "player-2")).resolves.toMatchObject({
+            state: "round_result"
+        });
+    });
+
+    it("maps submit vote failures to product-level feedback", async () => {
+        const invalidTarget = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0024" } }))
+        };
+        const alreadyVoted = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0025" } }))
+        };
+        const invalidPhase = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0018" } }))
+        };
+        const excluded = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0023" } }))
+        };
+
+        await expect(submitRoundVote(invalidTarget, "player-2")).rejects.toThrow(
+            "Elegí otro jugador válido para votar."
+        );
+        await expect(submitRoundVote(alreadyVoted, "player-2")).rejects.toThrow(
+            "Tu voto ya fue registrado y no se puede cambiar."
+        );
+        await expect(submitRoundVote(invalidPhase, "player-2")).rejects.toThrow(
+            "Esta ronda no está recibiendo votos ahora."
+        );
+        await expect(submitRoundVote(excluded, "player-2")).rejects.toThrow(
+            "No participás de la tanda actual."
+        );
+    });
+
+    it("rejects malformed vote responses explicitly", async () => {
+        const wrongState = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...submitRoundVoteRow, state: "discussion" }],
+                error: null
+            }))
+        };
+        const invalidRoundNumber = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...submitRoundVoteRow, round_number: 0 }],
+                error: null
+            }))
+        };
+
+        await expect(submitRoundVote(wrongState, "player-2")).rejects.toThrow(
+            "No pudimos confirmar tu voto."
+        );
+        await expect(submitRoundVote(invalidRoundNumber, "player-2")).rejects.toThrow(
+            "No pudimos confirmar tu voto."
+        );
+    });
+
+    it("does not expose secret internals in mapped results", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...submitRoundVoteRow,
+                    secret_word: "Tesoro",
+                    normalized_secret_word: "tesoro",
+                    impostor_player_id: "player-1",
+                    target_player_id: "player-2",
+                    vote_count: 2
+                }],
+                error: null
+            }))
+        };
+
+        const result = await submitRoundVote(supabase, "player-2");
+
+        expect(JSON.stringify(result)).not.toMatch(/secret_word|normalized_secret_word|impostor_player_id|target_player_id|vote_count|Tesoro|player-1|player-2/);
     });
 });
 
