@@ -1274,6 +1274,218 @@ No se exponen errores SQL internos al usuario. Self-vote puede agruparse como `i
 
 ---
 
+# Requisito de Incremento 10
+
+El Incremento 10 cubre exclusivamente la rama posterior a una acusación correcta:
+
+```text
+impostor_guess
+→ submit_impostor_guess(guess_text)
+→ comparación autoritativa
+→ round_result
+```
+
+No cubre scoring, scoreboard, nueva ronda, historial, deploy ni Realtime/Broadcast de gameplay.
+
+## Estado durable
+
+`GameSession.state = impostor_guess` representa que:
+
+* el impostor fue señalado como único jugador más votado;
+* la ronda todavía no tiene ganador definitivo;
+* falta un único intento final del impostor.
+
+Después de resolver el intento:
+
+```text
+GameSession.state = round_result
+```
+
+## submit_impostor_guess()
+
+RPC prevista:
+
+```text
+submit_impostor_guess(guess_text text)
+```
+
+Payload público:
+
+```text
+guess_text
+```
+
+La RPC no acepta:
+
+```text
+room_id
+game_session_id
+round_id
+player_id
+impostor_player_id
+secret_word
+normalized_secret_word
+is_correct
+winner
+```
+
+La autoridad deriva server-side desde:
+
+```text
+auth.uid()
+→ Player
+→ active Room
+→ GameSession actual
+→ Round actual
+→ impostor_player_id
+```
+
+Contrato:
+
+```text
+authenticated only
+estado requerido = impostor_guess
+caller debe ser el impostor de la ronda
+un solo intento por Round
+estado resultante = round_result
+```
+
+Los demás jugadores, incluido el host si no es el impostor, no pueden enviar el guess.
+
+## Normalización y comparación
+
+La comparación debe ser server-side.
+
+Regla conceptual de normalización:
+
+* trim;
+* colapsar espacios internos;
+* comparar sin sensibilidad a mayúsculas/minúsculas;
+* coincidencia exacta contra `normalized_secret_word`.
+
+La implementación futura debe usar la misma semántica conceptual que la normalización de palabras del grupo y del snapshot de ronda.
+
+Queda fuera del MVP:
+
+* matching difuso;
+* tolerancia a typos;
+* sinónimos;
+* equivalencias por singular/plural;
+* decisiones del cliente sobre acierto/error.
+
+## Resultado
+
+Si el intento normalizado coincide:
+
+```text
+winner = impostor
+final_guess_correct = true
+```
+
+Si no coincide:
+
+```text
+winner = group
+final_guess_correct = false
+```
+
+En ambos casos:
+
+```text
+GameSession.state = round_result
+```
+
+`round_result` debe poder distinguir:
+
+* impostor gana porque no fue identificado;
+* impostor gana porque fue identificado y acertó la palabra;
+* grupo gana porque identificó al impostor y el impostor falló.
+
+Datos conceptuales necesarios:
+
+```text
+winner
+accused_player_id
+impostor_was_accused
+final_guess_text
+final_guess_correct
+finished_at
+```
+
+`final_guess_text` es el texto visible original o sanitizado para display. No debe usarse como autoridad para decidir luego de persistir el resultado.
+
+## Privacidad
+
+Durante `impostor_guess`:
+
+* el impostor no recibe `secret_word`;
+* ningún caller recibe `normalized_secret_word`;
+* no se expone un hash, pista o derivado de comparación;
+* el cliente no recibe datos suficientes para evaluar localmente si el guess es correcto.
+
+Después de resolver:
+
+* la palabra secreta puede revelarse en `round_result`;
+* el guess visible puede mostrarse a todos;
+* el ganador conceptual puede mostrarse a todos;
+* `normalized_secret_word` sigue sin exponerse.
+
+## Read model
+
+`get_my_game_state()` durante `impostor_guess` debe exponer:
+
+* `state = impostor_guess`;
+* `impostor_player_id` o representación pública equivalente del impostor señalado;
+* `can_submit_impostor_guess` para el caller;
+* datos suficientes para mostrar espera a los demás jugadores;
+* `secret_word = null`;
+* sin `normalized_secret_word`;
+* sin resultado de guess.
+
+`get_my_game_state()` durante `round_result` debe exponer:
+
+* `winner`;
+* `impostor_player_id`;
+* `accused_player_id`;
+* `impostor_was_accused`;
+* `secret_word` revelada;
+* `final_guess_text` cuando haya existido;
+* `final_guess_correct` cuando haya existido;
+* `vote_results` de la votación que produjo la resolución vigente.
+
+Si la ronda llegó a `round_result` sin `impostor_guess`, `final_guess_text` y `final_guess_correct` deben ser `null`.
+
+## Idempotencia, retries y errores
+
+No debe haber múltiples intentos.
+
+Si el mismo caller reintenta después de una respuesta perdida y el intento ya fue registrado, la respuesta debe reconstruirse desde `round_result`.
+
+Errores conceptuales esperables:
+
+```text
+not_in_impostor_guess
+not_impostor
+invalid_guess_text
+guess_already_submitted
+inconsistent_game_state
+```
+
+No se exponen errores SQL internos.
+
+## UI mínima futura
+
+La UI de Incremento 10 debe cubrir:
+
+* vista `impostor_guess`;
+* formulario de un solo campo para el impostor;
+* CTA de enviar intento solo para quien puede enviarlo;
+* estado de espera para jugadores no autorizados;
+* bloqueo visual durante submit;
+* resultado con palabra revelada, guess y ganador.
+
+---
+
 # 22. Offline
 
 ## Requisito MVP

@@ -2689,72 +2689,170 @@ CERRADO TÉCNICAMENTE
 
 ### Objetivo
 
-Implementar la etapa donde el impostor descubierto intenta adivinar la palabra antes de definir el ganador.
+Completar la etapa donde el impostor descubierto intenta adivinar la palabra antes de definir el ganador.
 
 ### Resultado observable
 
 Cuando el grupo identifica al impostor, la aplicación revela quién era, pero mantiene oculta la palabra.
 
-El impostor responde verbalmente.
+Solo el impostor puede enviar un intento final desde la aplicación.
 
-El host toca `Comprobar palabra`, todos ven la palabra, y el host registra si acertó.
-
-La ronda obtiene ganador.
+El servidor compara el intento contra la palabra secreta y la ronda obtiene ganador.
 
 ### Dominio involucrado
 
 Impostor:
 
-* `IMPOSTOR_GUESS`;
-* revelación diferida de palabra;
-* `REGISTER_GUESS_RESULT`;
+* `impostor_guess`;
+* intento final único;
+* comparación server-side;
+* revelación de palabra en `round_result`;
 * ganador `impostor` o `group`.
 
 ### Infraestructura necesaria
 
-* autorización de host;
-* control de visibilidad de palabra;
+* autorización del impostor real de la ronda;
+* control de visibilidad de palabra antes/después del intento;
 * persistencia de resultado de ronda;
-* transición autoritativa a `ROUND_RESULT`.
+* transición autoritativa a `round_result`;
+* idempotencia frente a retries/respuesta perdida.
 
 ### Decisiones técnicas a cerrar
 
-* si `REVEAL_WORD` y `REGISTER_GUESS_RESULT` son pasos separados o una operación guiada;
-* cómo se representa `impostorGuessedWord`;
-* cómo prevenir doble registro del resultado;
-* qué ve cada jugador antes y después de revelar palabra.
+Decisiones cerradas para el contrato de Incremento 10:
+
+* `GameSession.state = impostor_guess` representa que el impostor fue señalado correctamente y falta su intento final;
+* solo el impostor de la ronda actual puede enviar el intento;
+* la RPC futura será `submit_impostor_guess(guess_text)`;
+* la RPC no recibe ownership ni campos de decisión como `is_correct` o `winner`;
+* la autoridad se deriva desde `auth.uid()` hacia Player, Room activa, GameSession actual y Round actual;
+* el intento es único; no hay múltiples intentos, edición ni reemplazo;
+* la comparación se hace server-side;
+* la normalización conceptual hace trim, colapsa espacios internos y compara sin sensibilidad a mayúsculas/minúsculas;
+* el MVP no incluye matching difuso, tolerancia ortográfica, sinónimos ni equivalencias semánticas;
+* si el guess normalizado coincide con `normalized_secret_word`, `winner = impostor`;
+* si no coincide, `winner = group`;
+* después de resolver siempre se pasa a `round_result`;
+* antes del intento no se expone `secret_word` al impostor ni a otros jugadores;
+* nunca se expone `normalized_secret_word`;
+* el cliente no decide si acertó;
+* `round_result` puede revelar `secret_word`, guess visible, acierto/error y ganador conceptual.
+
+### Contrato de read model
+
+`get_my_game_state()` durante `impostor_guess` debe exponer:
+
+* estado `impostor_guess`;
+* identidad pública del impostor señalado;
+* `can_submit_impostor_guess` o equivalente para el caller;
+* datos suficientes para espera de los demás jugadores;
+* ningún `secret_word`;
+* ningún `normalized_secret_word`;
+* ningún resultado de guess.
+
+`get_my_game_state()` durante `round_result` debe exponer:
+
+* `winner`;
+* `impostor_player_id`;
+* `accused_player_id`;
+* `impostor_was_accused`;
+* `secret_word` revelada;
+* `final_guess_text` si existió;
+* `final_guess_correct` si existió;
+* `vote_results` de la votación que produjo la resolución vigente.
+
+Si la ronda llegó a `round_result` sin pasar por `impostor_guess`, `final_guess_text` y `final_guess_correct` son `null`.
 
 ### Tests / validación
 
 * unit tests de victoria por acierto/fallo;
-* integración/privacidad: palabra no disponible antes de `REVEAL_WORD`;
-* integración/autorización: solo host registra;
-* idempotencia: no se registra dos veces;
+* integración/privacidad: palabra no disponible antes del intento;
+* integración/autorización: solo el impostor registra;
+* integración: otro jugador u host no impostor no puede enviar guess;
+* integración: el cliente no puede forzar `winner` ni `is_correct`;
+* idempotencia: no se registra dos veces ni cambia el primer intento;
 * prueba manual de flujo completo con impostor descubierto.
 
 ### Riesgos
 
 * revelar la palabra demasiado pronto;
-* dejar al host como fuente no validada de una transición crítica;
+* permitir que otro jugador envíe el intento;
+* dejar al cliente como fuente no validada de una transición crítica;
 * registrar resultado dos veces;
 * confundir resultado de votación con resultado final de ronda.
 
 ### Fuera de alcance
 
+* código en 10.0;
+* SQL en 10.0;
+* migrations en 10.0;
+* tests en 10.0;
+* UI en 10.0;
+* scoring;
+* scoreboard;
 * marcador persistente final;
 * nueva ronda;
+* historial;
 * cierre de tanda.
 
 ### Criterio de terminado
 
-La ronda puede resolver correctamente el caso en que el impostor fue descubierto.
+La ronda puede resolver autoritativamente el caso en que el impostor fue descubierto: el impostor envía un único intento, el servidor compara la palabra, se define `winner = impostor | group` y todos llegan a `round_result` sin exponer secretos antes de tiempo.
+
+Estado global del Incremento 10:
+
+```text
+CERRADO TÉCNICAMENTE
+```
 
 ### Conceptos a aprender
 
 * revelación progresiva de información;
 * acciones autorizadas;
-* separación entre interacción presencial y decisión digital;
+* comparación server-side;
 * idempotencia en resultados.
+
+### Slicing oficial
+
+#### Incremento 10.0 — Contrato documental
+
+Cerrar documentación de actor autorizado, payload, normalización, comparación server-side, privacidad, datos conceptuales de resultado, read model y slicing. No incluye código funcional, SQL, migrations, tests ni UI.
+
+Estado:
+
+```text
+CERRADO DOCUMENTAL
+```
+
+#### Incremento 10.1 — Persistencia/RPC autoritativa del guess
+
+Implementar la persistencia mínima necesaria del resultado y `submit_impostor_guess(guess_text)` con autorización del impostor, comparación server-side, transición a `round_result`, idempotencia y privacidad.
+
+Estado:
+
+```text
+CERRADO TÉCNICAMENTE
+```
+
+#### Incremento 10.2 — Read model + UI
+
+Extender `get_my_game_state()` y la UI para `impostor_guess` y `round_result`: formulario solo para el impostor, espera para los demás, palabra revelada después de resolver, intento visible y ganador conceptual.
+
+Estado:
+
+```text
+CERRADO TÉCNICAMENTE
+```
+
+#### Incremento 10.3 — Hardening
+
+Validar concurrencia, retries, refresh/reconnect, privacidad, estados inválidos, ausencia de múltiples intentos, normalización y regresiones de votación.
+
+Estado:
+
+```text
+CERRADO TÉCNICAMENTE
+```
 
 ---
 

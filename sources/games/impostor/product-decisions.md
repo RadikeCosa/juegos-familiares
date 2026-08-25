@@ -982,6 +982,155 @@ Incremento 9 no implementa:
 
 ---
 
+# Contrato documental de Incremento 10
+
+## Decisión
+
+El Incremento 10 cubre exclusivamente la etapa posterior a una identificación correcta del impostor:
+
+```text
+impostor_guess
+→ submit_impostor_guess(guess_text)
+→ comparación server-side
+→ round_result
+```
+
+Solo el `SessionPlayer` que es el impostor de la ronda actual puede enviar el intento final.
+
+La RPC futura recibe un único payload de producto:
+
+```text
+guess_text
+```
+
+No recibe `room_id`, `game_session_id`, `round_id`, `player_id`, `impostor_player_id`, `secret_word`, `normalized_secret_word`, `is_correct` ni `winner`.
+
+La autoridad se deriva server-side desde:
+
+```text
+auth.uid()
+→ Player
+→ active Room
+→ GameSession actual
+→ Round actual
+→ impostorPlayerId
+```
+
+El intento es único. Después de registrar un intento, no hay corrección, reemplazo ni segundo guess. Un retry del mismo request perdido debe reconstruirse desde el resultado ya persistido, no crear otra evaluación.
+
+El servidor normaliza `guess_text` con la misma regla conceptual usada para `normalizedSecretWord`:
+
+* trim;
+* colapsar espacios internos;
+* comparar sin sensibilidad a mayúsculas/minúsculas;
+* comparación exacta del texto normalizado.
+
+No se incorpora matching difuso, tolerancia ortográfica, sinónimos ni equivalencias semánticas en el MVP.
+
+Si el texto normalizado coincide con la palabra secreta normalizada:
+
+```text
+winner = impostor
+```
+
+Si no coincide:
+
+```text
+winner = group
+```
+
+Luego la GameSession pasa a:
+
+```text
+round_result
+```
+
+## Privacidad y seguridad
+
+Antes del intento, el impostor no recibe `secret_word`.
+
+Los demás jugadores no pueden enviar el guess.
+
+El cliente no decide si acertó.
+
+La comparación ocurre en servidor.
+
+No se expone `normalized_secret_word`.
+
+La palabra secreta solo puede revelarse después de resolver el intento, dentro de `round_result`.
+
+## Read model
+
+Durante `impostor_guess`, `get_my_game_state()` debe exponer:
+
+* estado `impostor_guess`;
+* identidad pública del impostor señalado correctamente;
+* indicador de si el caller puede enviar el intento final;
+* ningún `secret_word`;
+* ningún `normalized_secret_word`;
+* ningún dato que permita inferir la palabra antes del intento.
+
+Después de resolver, `get_my_game_state()` en `round_result` debe exponer:
+
+* ganador conceptual `impostor | group`;
+* si hubo intento final;
+* texto visible del intento final;
+* si el intento fue correcto;
+* palabra secreta revelada;
+* impostor real;
+* resultado agregado de la votación que llevó a la resolución.
+
+No expone `normalized_secret_word` ni necesita exponer el guess normalizado.
+
+## Datos de resultado
+
+`round_result` necesita datos adicionales para distinguir:
+
+* victoria del impostor porque no fue identificado;
+* victoria del impostor porque fue identificado y adivinó;
+* victoria del grupo porque identificó al impostor y el impostor falló.
+
+El resultado conceptual debe poder expresar:
+
+```text
+winner = impostor | group
+impostorWasAccused = true | false
+finalGuessText = texto visible o null
+finalGuessCorrect = true | false | null
+secretWord = revelable en round_result
+```
+
+`finalGuessCorrect = null` representa una ronda que no pasó por `impostor_guess`.
+
+## UI mínima futura
+
+Incrementos posteriores necesitan una pantalla `impostor_guess` con:
+
+* mensaje claro de que el impostor fue señalado;
+* formulario de un solo campo para el impostor;
+* CTA de enviar intento solo para el impostor;
+* pantalla de espera para los demás jugadores;
+* prevención visual de doble envío;
+* resultado posterior con palabra, intento y ganador.
+
+## Alcance excluido
+
+Incremento 10.0 no implementa:
+
+* código;
+* SQL;
+* migrations;
+* tests;
+* UI;
+* scoring;
+* scoreboard;
+* nueva ronda;
+* historial;
+* deploy;
+* Realtime/Broadcast de gameplay.
+
+---
+
 # Última oportunidad del impostor
 
 ## Decisión
@@ -992,9 +1141,9 @@ Primero se revela quién era el impostor.
 
 La palabra permanece oculta.
 
-El impostor dice en voz alta cuál cree que era.
+El impostor envía un único intento desde la aplicación.
 
-Después se revela la palabra y el host registra si acertó.
+Después el servidor revela la palabra en `round_result` y registra autoritativamente si acertó.
 
 ## Motivo
 

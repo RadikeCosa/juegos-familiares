@@ -702,6 +702,38 @@ En la forma mínima implementada por Incremento 6, `Round` guarda el snapshot de
 
 Para Incremento 6 la fase global pertenece a `GameSession.state`; no se agrega `Round.status` si duplicaría esa misma fase. Incremento 7 mantiene esa decisión para `role_reveal → discussion`.
 
+Para Incremento 10, el resultado de ronda necesita representar conceptualmente el intento final del impostor cuando exista:
+
+```text
+RoundResult
+- winner
+- accusedPlayerId
+- impostorWasAccused
+- finalGuessText
+- finalGuessCorrect
+- finishedAt
+```
+
+`winner` acepta:
+
+```text
+impostor
+group
+```
+
+`finalGuessText` es el texto visible enviado por el impostor. `finalGuessCorrect` indica la comparación server-side contra la palabra secreta normalizada.
+
+Si la ronda no pasó por `impostor_guess`, entonces:
+
+```text
+finalGuessText = null
+finalGuessCorrect = null
+```
+
+Si la ronda pasó por `impostor_guess`, entonces `finalGuessText` y `finalGuessCorrect` deben quedar definidos una sola vez.
+
+El modelo conceptual no requiere exponer ni persistir públicamente `normalizedSecretWord` ni el guess normalizado. Cualquier representación normalizada del intento es dato interno de comparación o auditoría técnica, no parte del read model público.
+
 ## Persistencia
 
 Operativa y temporal durante la tanda.

@@ -848,7 +848,7 @@ El impostor fue correctamente identificado y tiene su última oportunidad de gan
 
 ## Visibilidad
 
-El sistema puede revelar:
+El sistema revela:
 
 ```text
 impostorPlayerId
@@ -856,38 +856,49 @@ impostorPlayerId
 
 La palabra todavía permanece privada.
 
-## Interacción presencial
+No se expone:
 
-El impostor dice en voz alta cuál cree que era la palabra.
+```text
+secretWord
+normalizedSecretWord
+```
 
 ## Acción
 
-El host selecciona:
+Solo el impostor de la ronda actual puede enviar:
 
-`Comprobar palabra`
+```text
+submit_impostor_guess(guess_text)
+```
 
-Evento conceptual:
+El payload contiene únicamente el texto visible del intento.
 
-`REVEAL_WORD`
+No incluye identificadores de ownership ni campos de decisión como `isCorrect` o `winner`.
 
-Actor autorizado:
+## Normalización
 
-`host`
+La comparación es server-side.
 
-Después de este evento todos pueden ver la palabra secreta.
+El sistema normaliza el intento y lo compara contra `normalizedSecretWord` de la ronda.
 
-El host registra:
+Regla conceptual:
 
-* acertó;
-* no acertó.
+* trim;
+* colapsar espacios internos;
+* comparar sin sensibilidad a mayúsculas/minúsculas;
+* exigir coincidencia exacta del texto normalizado.
 
-Evento:
+No hay matching difuso en el MVP.
 
-`REGISTER_GUESS_RESULT`
+No se expone `normalizedSecretWord`.
 
-Actor autorizado:
+## Intentos
 
-`host`
+Hay un solo intento.
+
+Después de registrarlo, no se puede cambiar ni enviar otro.
+
+Un retry por respuesta perdida debe reconstruirse desde el resultado ya registrado.
 
 ## Resultado
 
@@ -909,6 +920,25 @@ winner = group
 IMPOSTOR_GUESS
 → ROUND_RESULT
 ```
+
+## Read model
+
+`get_my_game_state()` durante `impostor_guess` expone:
+
+* estado actual;
+* `impostorPlayerId`;
+* si el caller puede enviar el intento final;
+* ningún `secretWord`;
+* ningún `normalizedSecretWord`.
+
+Después de resolver, `round_result` expone:
+
+* ganador conceptual;
+* palabra secreta revelada;
+* texto del intento final si existió;
+* si el intento fue correcto;
+* impostor real;
+* resultado agregado de la votación que llevó a la resolución.
 
 ---
 
@@ -1241,8 +1271,6 @@ Puede producir:
 START_SESSION
 START_VOTING
 START_SECOND_VOTING
-REVEAL_WORD
-REGISTER_GUESS_RESULT
 NEW_ROUND
 END_SESSION
 ```
@@ -1253,6 +1281,7 @@ Puede producir:
 
 ```text
 SUBMIT_VOTE
+SUBMIT_IMPOSTOR_GUESS si es el impostor de la ronda actual
 ```
 
 y participar de la sala.
