@@ -9,6 +9,8 @@ import {
     formatPlayerCount,
     renderRoomLobbyContent,
     runStartDiscussionCommand,
+    runStartVotingCommand,
+    runSubmitVoteCommand,
     toGameplayDataState
 } from "./room-lobby-shell";
 
@@ -400,6 +402,120 @@ describe("runStartDiscussionCommand", () => {
         expect(refreshAuthoritative).toHaveBeenCalledTimes(1);
         expect(setError).toHaveBeenCalledTimes(1);
         expect(setError).toHaveBeenCalledWith(undefined);
+    });
+});
+
+describe("runStartVotingCommand", () => {
+    it("recovers a lost command response by accepting voting_first from manual refresh", async () => {
+        const start = vi.fn(async () => {
+            throw new Error("NetworkError");
+        });
+        const refreshGameplay = vi.fn(async () => votingGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartVotingCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(start).toHaveBeenCalledTimes(1);
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(refreshAuthoritative).not.toHaveBeenCalled();
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it("reconciles host loss through the authoritative room path", async () => {
+        const start = vi.fn(async () => {
+            throw new Error("Solo el host actual puede ir a votación.");
+        });
+        const refreshGameplay = vi.fn(async () => discussionGameState);
+        const refreshAuthoritative = vi.fn(async () => undefined);
+        const setError = vi.fn();
+
+        await runStartVotingCommand({
+            start,
+            refreshGameplay,
+            refreshAuthoritative,
+            setError
+        });
+
+        expect(setError).toHaveBeenLastCalledWith("Ya no sos el host actual.");
+        expect(refreshAuthoritative).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("runSubmitVoteCommand", () => {
+    it("requires a local target before submitting", async () => {
+        const submit = vi.fn(async () => undefined);
+        const refreshGameplay = vi.fn(async () => votingGameState);
+        const setError = vi.fn();
+
+        await runSubmitVoteCommand({
+            targetPlayerId: null,
+            submit,
+            refreshGameplay,
+            setError
+        });
+
+        expect(submit).not.toHaveBeenCalled();
+        expect(refreshGameplay).not.toHaveBeenCalled();
+        expect(setError).toHaveBeenLastCalledWith("Elegí a quién votar.");
+    });
+
+    it("refreshes gameplay after successful vote submit", async () => {
+        const submit = vi.fn(async () => undefined);
+        const refreshGameplay = vi.fn(async () => votedGameState);
+        const setError = vi.fn();
+
+        await runSubmitVoteCommand({
+            targetPlayerId: "player-2",
+            submit,
+            refreshGameplay,
+            setError
+        });
+
+        expect(submit).toHaveBeenCalledWith("player-2");
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it("recovers a lost vote response when polling sees the caller vote", async () => {
+        const submit = vi.fn(async () => {
+            throw new Error("NetworkError");
+        });
+        const refreshGameplay = vi.fn(async () => votedGameState);
+        const setError = vi.fn();
+
+        await runSubmitVoteCommand({
+            targetPlayerId: "player-2",
+            submit,
+            refreshGameplay,
+            setError
+        });
+
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it("recovers a lost final vote response when polling already sees a result", async () => {
+        const submit = vi.fn(async () => {
+            throw new Error("NetworkError");
+        });
+        const refreshGameplay = vi.fn(async () => roundResultGameState);
+        const setError = vi.fn();
+
+        await runSubmitVoteCommand({
+            targetPlayerId: "player-2",
+            submit,
+            refreshGameplay,
+            setError
+        });
+
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(setError).toHaveBeenLastCalledWith(undefined);
     });
 });
 

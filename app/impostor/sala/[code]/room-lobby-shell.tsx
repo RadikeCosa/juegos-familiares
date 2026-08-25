@@ -241,6 +241,14 @@ function isSameGameState(left: MyGameState, right: MyGameState) {
   );
 }
 
+function isFirstVotingResolutionState(state: MyGameState["state"]) {
+  return (
+    state === "tie_discussion" ||
+    state === "impostor_guess" ||
+    state === "round_result"
+  );
+}
+
 export function toGameplayDataState(
   lobby: RoomLobby,
   gameState: MyGameState,
@@ -526,7 +534,13 @@ export async function runSubmitVoteCommand(options: SubmitVoteCommandOptions) {
       recoveredGameState = null;
     }
 
-    if (recoveredGameState?.voting?.hasVoted) {
+    if (
+      recoveredGameState?.voting?.hasVoted ||
+      (
+        recoveredGameState &&
+        isFirstVotingResolutionState(recoveredGameState.state)
+      )
+    ) {
       options.setError(undefined);
       return;
     }
