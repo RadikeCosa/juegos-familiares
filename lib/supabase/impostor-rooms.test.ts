@@ -13,6 +13,7 @@ import {
     closeRoom,
     createRoom,
     getConnectedRoomParticipantIds,
+    endSession,
     getMyActiveRoom,
     getMyGameState,
     hasRoomCreationIntent,
@@ -191,9 +192,66 @@ const gameStateScoreboardRow = {
     ],
     round_impostor: { player_id: "player-2", nickname: "Pedro" },
     can_start_next_round: true,
-    can_end_session: false,
+    can_end_session: true,
     available_unused_words_count: 3,
     next_round_block_reason: null
+};
+
+const gameStateFinishedRow = {
+    state: "finished",
+    round_number: 2,
+    role: null,
+    word: null,
+    candidates: null,
+    my_vote_target_player_id: null,
+    has_voted: false,
+    vote_results: null,
+    can_submit_impostor_guess: false,
+    winner: null,
+    impostor_guess_text: null,
+    impostor_guess_correct: null,
+    scoreboard_players: null,
+    round_impostor: null,
+    can_start_next_round: false,
+    can_end_session: false,
+    available_unused_words_count: null,
+    next_round_block_reason: null,
+    finished_at: "2026-08-26T01:30:00.000Z",
+    round_count: 2,
+    final_scores: [
+        { player_id: "player-1", nickname: "Ramiro", score: 3 },
+        { player_id: "player-2", nickname: "Pedro", score: 3 },
+        { player_id: "player-3", nickname: "Ana", score: 1 }
+    ],
+    winner_player_ids: ["player-1", "player-2"],
+    winners: [
+        { player_id: "player-1", nickname: "Ramiro", score: 3 },
+        { player_id: "player-2", nickname: "Pedro", score: 3 }
+    ],
+    rounds_summary: [
+        {
+            number: 1,
+            round_winner: "impostor",
+            discovered_by_vote: false,
+            impostor_guess_text: null,
+            impostor_guess_correct: null,
+            scoring_summary: {
+                rule: "impostor_plus_2",
+                awarded: [{ player_id: "player-1", points: 2 }]
+            }
+        },
+        {
+            number: 2,
+            round_winner: "group",
+            discovered_by_vote: true,
+            impostor_guess_text: "Mapa Verde",
+            impostor_guess_correct: false,
+            scoring_summary: {
+                rule: "group_non_impostors_plus_1",
+                awarded: [{ player_id: "player-2", points: 1 }]
+            }
+        }
+    ]
 };
 
 const startRoundDiscussionRow = {
@@ -229,6 +287,14 @@ const startNextRoundRow = {
     already_started: false,
     state: "role_reveal",
     round_number: 2
+};
+
+const endSessionRow = {
+    ended: true,
+    already_ended: false,
+    state: "finished",
+    round_count: 2,
+    winner_player_ids: ["player-1"]
 };
 
 const submitRoundVoteRow = {
@@ -1251,7 +1317,7 @@ describe("getMyGameState", () => {
                 ],
                 roundImpostor: { playerId: "player-2", nickname: "Pedro" },
                 canStartNextRound: true,
-                canEndSession: false,
+                canEndSession: true,
                 availableUnusedWordsCount: 3,
                 nextRoundBlockReason: null
             }
@@ -1283,6 +1349,64 @@ describe("getMyGameState", () => {
         expect(JSON.stringify(state)).not.toMatch(
             /next_secret_word|next_impostor_player_id|Milanesa/
         );
+    });
+
+    it("maps finished state from shared historical snapshots", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [gameStateFinishedRow],
+                error: null
+            }))
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toEqual({
+            state: "finished",
+            roundNumber: 2,
+            privateView: { role: "player", word: null },
+            candidates: null,
+            voting: null,
+            voteResults: null,
+            finished: {
+                finishedAt: "2026-08-26T01:30:00.000Z",
+                roundCount: 2,
+                finalScores: [
+                    { playerId: "player-1", nickname: "Ramiro", score: 3 },
+                    { playerId: "player-2", nickname: "Pedro", score: 3 },
+                    { playerId: "player-3", nickname: "Ana", score: 1 }
+                ],
+                winnerPlayerIds: ["player-1", "player-2"],
+                winners: [
+                    { playerId: "player-1", nickname: "Ramiro", score: 3 },
+                    { playerId: "player-2", nickname: "Pedro", score: 3 }
+                ],
+                roundsSummary: [
+                    {
+                        number: 1,
+                        winner: "impostor",
+                        discoveredByVote: false,
+                        impostorGuessText: null,
+                        impostorGuessCorrect: null,
+                        scoringSummary: {
+                            rule: "impostor_plus_2",
+                            awarded: [{ player_id: "player-1", points: 2 }]
+                        }
+                    },
+                    {
+                        number: 2,
+                        winner: "group",
+                        discoveredByVote: true,
+                        impostorGuessText: "Mapa Verde",
+                        impostorGuessCorrect: false,
+                        scoringSummary: {
+                            rule: "group_non_impostors_plus_1",
+                            awarded: [{ player_id: "player-2", points: 1 }]
+                        }
+                    }
+                ],
+                canStartNextRound: false,
+                canEndSession: false
+            }
+        });
     });
 
     it("maps game-state domain failures to product-level feedback", async () => {
@@ -1329,6 +1453,27 @@ describe("getMyGameState", () => {
         const unknownState = {
             rpc: vi.fn(async () => ({
                 data: [{ ...gameStatePlayerRow, state: "finished" }],
+                error: null
+            }))
+        };
+        const finishedWithoutHistory = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...gameStateFinishedRow, final_scores: null }],
+                error: null
+            }))
+        };
+        const finishedWithPrivateWord = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...gameStateFinishedRow, role: "player", word: "Tesoro Azul" }],
+                error: null
+            }))
+        };
+        const finishedWithVoteResults = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...gameStateFinishedRow,
+                    vote_results: [{ player_id: "player-2", nickname: "Pedro", vote_count: 2 }]
+                }],
                 error: null
             }))
         };
@@ -1384,6 +1529,15 @@ describe("getMyGameState", () => {
         await expect(getMyGameState(scoreboardWithInvalidBlockReason)).rejects.toThrow(
             "No pudimos confirmar el estado de la tanda."
         );
+        await expect(getMyGameState(finishedWithoutHistory)).rejects.toThrow(
+            "No pudimos confirmar el estado de la tanda."
+        );
+        await expect(getMyGameState(finishedWithPrivateWord)).rejects.toThrow(
+            "No pudimos confirmar el estado de la tanda."
+        );
+        await expect(getMyGameState(finishedWithVoteResults)).rejects.toThrow(
+            "No pudimos confirmar el estado de la tanda."
+        );
     });
 
     it("does not expose secret internals in mapped results", async () => {
@@ -1401,6 +1555,27 @@ describe("getMyGameState", () => {
         const result = await getMyGameState(supabase);
 
         expect(JSON.stringify(result)).not.toMatch(/normalized_secret_word|impostor_player_id|player-3/);
+    });
+
+    it("does not expose historical secrets or individual votes in finished results", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...gameStateFinishedRow,
+                    secret_word: "Tesoro Azul",
+                    normalized_secret_word: "tesoro azul",
+                    voter_player_id: "player-3",
+                    target_player_id: "player-2"
+                }],
+                error: null
+            }))
+        };
+
+        const result = await getMyGameState(supabase);
+
+        expect(JSON.stringify(result)).not.toMatch(
+            /secret_word|normalized_secret_word|voter_player_id|target_player_id|Tesoro Azul/
+        );
     });
 });
 
@@ -2210,6 +2385,110 @@ describe("startNextRound", () => {
         );
         await expect(startNextRound(invalidRoundNumber)).rejects.toThrow(
             "No pudimos confirmar la nueva ronda."
+        );
+    });
+});
+
+describe("endSession", () => {
+    it("calls the authoritative end-session RPC without client-owned arguments", async () => {
+        const supabase = {
+            rpc: vi.fn(async (_fn: string) => {
+                void _fn;
+
+                return { data: [endSessionRow], error: null };
+            })
+        };
+
+        await expect(endSession(supabase)).resolves.toEqual({
+            ended: true,
+            alreadyEnded: false,
+            state: "finished",
+            roundCount: 2,
+            winnerPlayerIds: ["player-1"]
+        });
+
+        expect(supabase.rpc).toHaveBeenCalledWith("end_session");
+        expect(supabase.rpc.mock.calls[0]).toHaveLength(1);
+    });
+
+    it("maps idempotent close responses without exposing history snapshots", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...endSessionRow,
+                    ended: false,
+                    already_ended: true,
+                    roster: [{ player_id: "player-1", score: 4 }],
+                    final_scores: [{ player_id: "player-1", score: 4 }],
+                    winners: [{ player_id: "player-1", score: 4 }],
+                    game_session_history_id: "history-1",
+                    room_id: "room-1"
+                }],
+                error: null
+            }))
+        };
+
+        const result = await endSession(supabase);
+
+        expect(result).toEqual({
+            ended: false,
+            alreadyEnded: true,
+            state: "finished",
+            roundCount: 2,
+            winnerPlayerIds: ["player-1"]
+        });
+        expect(JSON.stringify(result)).not.toMatch(
+            /roster|final_scores|winners|game_session_history_id|room_id|history-1|score/
+        );
+    });
+
+    it("maps end-session failures to product-level feedback", async () => {
+        const notHost = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0019" } }))
+        };
+        const invalidPhase = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0018" } }))
+        };
+        const notSessionPlayer = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0023" } }))
+        };
+        const inconsistent = {
+            rpc: vi.fn(async () => ({ data: null, error: { code: "P0022" } }))
+        };
+
+        await expect(endSession(notHost)).rejects.toThrow(
+            "Solo el host actual puede terminar la tanda."
+        );
+        await expect(endSession(invalidPhase)).rejects.toThrow(
+            "Esta tanda no está lista para terminar."
+        );
+        await expect(endSession(notSessionPlayer)).rejects.toThrow(
+            "No participás de la tanda actual."
+        );
+        await expect(endSession(inconsistent)).rejects.toThrow(
+            "No pudimos reconstruir la tanda para terminarla."
+        );
+    });
+
+    it("rejects malformed end-session responses explicitly", async () => {
+        const wrongState = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...endSessionRow, state: "scoreboard" }],
+                error: null
+            }))
+        };
+        const emptyWinners = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...endSessionRow, winner_player_ids: [] }],
+                error: null
+            }))
+        };
+
+        await expect(endSession(wrongState)).rejects.toThrow(
+            "No pudimos confirmar el cierre de la tanda."
+        );
+        await expect(endSession(emptyWinners)).rejects.toThrow(
+            "No pudimos confirmar el cierre de la tanda."
         );
     });
 });

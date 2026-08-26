@@ -48,15 +48,19 @@ La conversación y la parte principal del juego ocurren entre las personas.
 
 # Alcance vigente
 
-Al cierre técnico del Incremento 10, el producto ya soporta crear grupo, administrar banco de palabras, crear/unirse a Room, Presence/liveness/sucesión de host, iniciar tanda desde el host actual, revelar privadamente Round 1, avanzar a discusión, votar, resolver empates con segunda votación, ejecutar el intento final del impostor y llegar a `round_result`.
+Al cierre técnico del Incremento 12, el producto ya soporta crear grupo, administrar banco de palabras, crear/unirse a Room, Presence/liveness/sucesión de host, iniciar tanda desde el host actual, revelar roles/palabras privadas, avanzar a discusión, votar, resolver empates con segunda votación, ejecutar el intento final del impostor, puntuar rondas, acumular marcador, iniciar nuevas rondas y terminar la tanda desde `scoreboard`.
 
 El Incremento 7 decide no implementar `roleAcknowledged` ni acknowledgements persistidos para el MVP. La coordinación de que todos vieron su rol ocurre presencialmente y el host actual ejecuta `Empezar ronda`.
 
 Durante `discussion`, cada jugador puede volver a revelar localmente su palabra o rol y volver a ocultarlo. La vista privada se oculta nuevamente al cambiar de fase y no se persiste ese reveal local.
 
-Incremento 11 cierra técnicamente scoring, marcador y nueva ronda: `SessionPlayer.score`, fase `scoreboard`, scoring server-side idempotente, read model/UI de marcador y apertura autoritativa de nueva ronda con validación DB multironda.
+Incremento 11 cerró técnicamente scoring, marcador y nueva ronda: `SessionPlayer.score`, fase `scoreboard`, scoring server-side idempotente, read model/UI de marcador y apertura autoritativa de nueva ronda con validación DB multironda.
 
-Todavía no están implementados timer, `END_SESSION`, historial persistente final, Realtime de gameplay ni Broadcast.
+Incremento 12 cerró técnicamente terminar tanda e historial mínimo: `end_session()` cierra autoritativamente desde `scoreboard`, la Room queda cerrada, `get_my_game_state()` reconstruye el resultado final para participantes históricos aunque no haya Room activa, la UI muestra ganador o ganadores, clasificación completa, puntajes finales, cantidad de rondas y `Volver al grupo`, y el historial mínimo queda validado adversarialmente contra Supabase local.
+
+Para jugar otra tanda, el grupo vuelve a `/impostor/grupo` y crea otra Room.
+
+Todavía no están implementados timer, estadísticas, ranking histórico, revancha automática, reutilización de Room, Realtime de gameplay ni Broadcast.
 
 El contrato documental de Incremento 8 deja preparada la primera votación: el host actual avanza `discussion → voting_first`, todos los `SessionPlayers` votan secretamente una vez, sin auto-voto ni resultados parciales, y el sistema resuelve automáticamente hacia `tie_discussion`, `impostor_guess` o `round_result`. Presence/liveness no cambian quién debe votar; solo el roster congelado de `SessionPlayers` define membership de la tanda.
 

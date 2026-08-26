@@ -1607,7 +1607,7 @@ No se define todavía fin automático por puntaje objetivo, cantidad de rondas n
 * `state = scoreboard`;
 * ranking o lista de jugadores ordenable por score;
 * `can_start_next_round` solo para el host actual;
-* `can_end_session` cuando corresponda a Incremento 12;
+* `can_end_session = true` sólo para el host actual cuando la ronda vigente está puntuada;
 * razón de indisponibilidad de nueva ronda cuando no hay palabras.
 
 En Incremento 11.4, la razón de bloqueo operativa de nueva ronda se expone como `not_host`, `no_words`, `session_not_ready` o `unknown`. La UI puede traducir esos valores a mensajes, pero no debe recalcular permisos ni disponibilidad.
@@ -1727,9 +1727,9 @@ Las palabras completas usadas quedan fuera del historial mínimo inicial. La pal
 
 No se persiste historial de host por ronda. Sólo se guarda el host que cerró la tanda como auditoría mínima.
 
-## Operación autoritativa futura
+## Operación autoritativa
 
-La RPC futura de cierre debe ser 0-args:
+La RPC de cierre es 0-args:
 
 ```text
 end_session()
@@ -1758,11 +1758,15 @@ Debe validar:
 * la ronda vigente está puntuada;
 * hay roster y al menos una ronda.
 
-La operación debe ser idempotente. Un retry después de un cierre exitoso no puede duplicar historial, cambiar `finished_at`, cambiar ganadores ni volver a cerrar otra Room.
+Incremento 12.2 implementa `end_session()` como operación autoritativa. Cierra sólo desde `scoreboard`, fija `finished_at`, mueve la `GameSession` a `finished`, cierra la Room, crea `game_session_history` y `round_history`, y no recibe ganador, scores, ids de ronda ni snapshots desde el cliente.
+
+La operación es idempotente. Un retry después de un cierre exitoso no puede duplicar historial, cambiar `finished_at`, cambiar ganadores ni volver a cerrar otra Room.
+
+Incremento 12.5 validó además que un retry tardío de `end_session()` no afecte una Room nueva creada posteriormente por el grupo.
 
 ## Read model `finished`
 
-`get_my_game_state()` en `finished` debe devolver una vista compartida, sin secretos pendientes:
+`get_my_game_state()` en `finished` devuelve una vista compartida, sin secretos pendientes:
 
 * `state = finished`;
 * `round_count`;
@@ -1775,7 +1779,27 @@ La operación debe ser idempotente. Un retry después de un cierre exitoso no pu
 
 Host y no-host ven el mismo resultado final.
 
-La UI puede ofrecer volver al grupo o crear otra Room, pero no iniciar nueva ronda desde esa tanda cerrada.
+Incremento 12.3 implementa esta vista desde `game_session_history` y `round_history`, incluso cuando la Room ya está `closed` y no quedan slots activos. Sólo pueden leerla jugadores que hayan sido `SessionPlayers` de la tanda cerrada. El resumen de rondas no incluye votos individuales ni `secret_word`/`normalized_secret_word`.
+
+Durante el hardening 12.5 se corrigió el permiso de cierre en el read model activo: en `scoreboard`, `can_end_session = true` sólo para el host actual con ronda vigente puntuada. En `finished`, `can_end_session = false` y `can_start_next_round = false`.
+
+## UI final y validación de cierre
+
+Incremento 12.4 implementa la UI de cierre y resultado final:
+
+* el host ve `Terminar tanda` sólo cuando `can_end_session` llega desde el read model;
+* la acción pide confirmación antes de llamar `end_session()`;
+* mientras se ejecuta, deshabilita acciones incompatibles;
+* ante error conserva el marcador y permite reintentar;
+* tras éxito refresca con `get_my_game_state()` y renderiza `finished`;
+* si la Room ya no está activa, el frontend intenta recuperar primero un resultado histórico `finished`;
+* no construye el resultado final con datos locales ni respuesta optimista.
+
+La vista `finished` del MVP muestra resultado final, ganador único o ganadores empatados, clasificación completa, puntajes finales, cantidad de rondas y `Volver al grupo`. No muestra detalle ronda por ronda, votos históricos ni palabras.
+
+Incremento 12.5 cerró la validación adversarial DB de multironda/cierre contra Supabase local: precondiciones, autorización, cierre exitoso, historial único, privacidad histórica, idempotencia, empates, read model para participantes, denegación a no participantes, no reutilización de Room cerrada y creación posterior de nueva Room sin alterar el historial.
+
+La UI puede ofrecer volver al grupo o crear otra Room desde el grupo, pero no iniciar nueva ronda desde esa tanda cerrada.
 
 ## Fuera de alcance técnico de Incremento 12 inicial
 
@@ -1895,15 +1919,15 @@ Esto no elige todavía framework, proveedor ni infraestructura.
 
 # Decisiones todavía abiertas
 
-* Cómo se crea inicialmente un grupo.
-* Cómo se invita a otro dispositivo al grupo.
-* Cómo se crea y comparte una sala.
-* Si conviene código, enlace, QR o combinación.
-* Comportamiento detallado cuando un jugador pierde conexión.
-* Entrada o salida de jugadores durante una tanda.
-* Forma técnica de persistir historial mínimo.
-* Mecanismo concreto para estado compartido y realtime.
-* Estrategia concreta de PWA para diferencias iOS/Android.
+El cierre técnico del Incremento 12 resolvió creación de grupo, invitación, sala/lobby, estado compartido mínimo, gameplay autoritativo, cierre de tanda e historial mínimo.
+
+Siguen abiertas o pendientes para incrementos posteriores:
+
+* comportamiento detallado cuando un jugador pierde conexión durante gameplay;
+* entrada o salida de jugadores durante una tanda;
+* estrategia concreta de PWA para diferencias iOS/Android;
+* robustez final de reconexión;
+* alcance de estadísticas o ranking histórico si se decide construirlos después del MVP.
 
 ---
 

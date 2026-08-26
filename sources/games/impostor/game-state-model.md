@@ -1112,6 +1112,7 @@ Transición:
 
 ```text
 SCOREBOARD
+→ END_SESSION
 → FINISHED
 ```
 
@@ -1179,6 +1180,8 @@ No hace falta conservar votos individuales históricos salvo que aparezca una ra
 Las palabras completas usadas no forman parte del historial mínimo inicial.
 
 El grupo y su banco de palabras continúan existiendo.
+
+Al cierre técnico del Incremento 12, `FINISHED`, `finished_at`, el cierre de la Room, la persistencia histórica mínima y la reconstrucción de `get_my_game_state()` sin Room activa están implementados. En este estado las acciones de nueva ronda y terminar tanda quedan deshabilitadas autoritativamente (`can_start_next_round = false`, `can_end_session = false`) y host/no-host participantes ven el mismo resultado final.
 
 ---
 
@@ -1601,10 +1604,9 @@ Este modelo deja deliberadamente para la arquitectura técnica o pruebas posteri
 * qué ocurre si quedan menos de tres jugadores conectados durante una ronda;
 * mecanismo concreto de presencia;
 * recuperación después de cerrar/reabrir la PWA;
-* expiración y limpieza de salas terminadas;
-* forma técnica de persistir el historial mínimo de tandas y rondas finalizadas.
+* expiración y limpieza de salas terminadas.
 
-Estos casos no impiden diseñar la arquitectura mínima ni comenzar posteriormente con un MVP controlado para el grupo inicial.
+Estos casos no bloquean el primer MVP jugable alcanzado técnicamente, pero pertenecen a robustez posterior y validación real con dispositivos.
 
 ---
 

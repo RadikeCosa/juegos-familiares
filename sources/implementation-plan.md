@@ -250,6 +250,10 @@ El grupo puede jugar una tanda completa de Impostor con rondas, votos, desempate
 
 Incluye incrementos 6 a 12.
 
+Estado: `ALCANZADO TÉCNICAMENTE`.
+
+El cierre técnico del Incremento 12 completa el primer MVP jugable a nivel técnico. Siguen pendientes robustez de reconexión, maduración PWA, auditoría final, deploy y validación presencial completa en los incrementos 13 a 15.
+
 Este hito marca el:
 
 ```text
@@ -3061,9 +3065,28 @@ Impostor:
 * 12.4 — UI de cierre y resultado final;
 * 12.5 — hardening y validación DB multironda/cierre.
 
-### Decisiones abiertas
+### Estado de slicing
 
-* cuánto resumen de rondas muestra la UI de cierre en MVP.
+```text
+12.0 — CERRADO DOCUMENTAL
+12.1 — CERRADO TÉCNICAMENTE
+12.2 — CERRADO TÉCNICAMENTE
+12.3 — CERRADO TÉCNICAMENTE
+12.4 — CERRADO TÉCNICAMENTE
+12.5 — CERRADO TÉCNICAMENTE
+```
+
+### Decisiones cerradas de UI final
+
+El MVP muestra en `finished` sólo el resultado final compartido:
+
+* ganador único o ganadores empatados;
+* clasificación completa;
+* puntajes finales;
+* cantidad de rondas jugadas;
+* CTA `Volver al grupo`.
+
+No muestra detalle ronda por ronda, votos históricos ni palabras usadas.
 
 ### Decisiones cerradas en 12.1
 
@@ -3074,6 +3097,93 @@ Impostor:
 * roster final y scores finales se guardan como snapshots `jsonb`;
 * `scoring_summary` de ronda es un objeto `jsonb` con al menos `rule` y `awarded`;
 * el historial no copia `secret_word` ni `normalized_secret_word`, y no conserva votos individuales.
+
+### Cierre técnico de 12.2
+
+Incremento 12.2 implementa la operación autoritativa de cierre:
+
+* `end_session()` es 0-args y deriva contexto desde `auth.uid()`, Room activa, `GameSession`, `SessionPlayers` y `Rounds`;
+* sólo el host actual puede cerrar desde `scoreboard`;
+* la operación fija `finished_at`, mueve `GameSession.state` a `finished` y deja `Room.status = closed`;
+* crea un único `game_session_history` y un `round_history` por ronda;
+* calcula `round_count`, scores finales y ganadores únicos o múltiples desde `SessionPlayer.score`;
+* conserva `scoring_summary` por ronda sin votos individuales ni palabras completas;
+* el retry devuelve cierre ya persistido sin duplicar historial ni cambiar resultados.
+
+En ese incremento todavía no se implementaba la UI final; quedó cubierta en 12.4.
+
+### Cierre técnico de 12.3
+
+Incremento 12.3 implementa el read model final:
+
+* `get_my_game_state()` sigue siendo 0-args y deriva identidad desde `auth.uid()` y `Player`;
+* si no hay Room activa, reconstruye la última tanda `finished` del jugador desde `game_session_history` y `round_history`;
+* sólo jugadores que fueron `SessionPlayers` de la tanda cerrada pueden ver ese resultado;
+* expone `finished_at`, `round_count`, `final_scores`, `winner_player_ids`, `winners` y `rounds_summary`;
+* devuelve vista compartida sin rol/palabra privada, sin votos individuales históricos y sin `secret_word`/`normalized_secret_word`;
+* deja `can_start_next_round = false` y `can_end_session = false`;
+* en `scoreboard`, expone `can_end_session = true` sólo para el host actual cuando la ronda vigente está puntuada.
+
+No implementa estadísticas ni ranking.
+
+### Cierre técnico de 12.4
+
+Incremento 12.4 implementa la experiencia frontend de cierre y resultado final:
+
+* en `scoreboard`, sólo el host ve `Terminar tanda` cuando el read model expone `can_end_session`;
+* antes de cerrar, se pide confirmación porque la tanda y la Room quedan cerradas;
+* durante el envío se deshabilitan acciones incompatibles para evitar doble ejecución;
+* ante error, el marcador permanece visible y permite reintentar;
+* `end_session()` se llama sin argumentos;
+* después del éxito, el frontend consulta nuevamente `get_my_game_state()` y renderiza `finished`;
+* si la Room ya no está activa, primero intenta recuperar el resultado histórico `finished`;
+* no construye el resultado final desde estado local ni desde una respuesta optimista;
+* host y no-host participantes ven la misma pantalla final;
+* la vista final muestra ganador o ganadores, clasificación completa, puntajes, cantidad de rondas y `Volver al grupo`;
+* no ofrece `Nueva ronda` ni `Terminar tanda` en `finished`.
+
+Validación: tests focales de `room-lobby-shell` con 110 casos PASS, suite completa PASS, lint PASS, build PASS y `git diff --check` PASS.
+
+### Cierre técnico de 12.5
+
+Incremento 12.5 valida adversarialmente el lifecycle completo contra Supabase local:
+
+```text
+scoreboard
+→ end_session()
+→ finished
+→ Room closed
+→ historial
+→ reconstrucción histórica
+```
+
+La matriz A-I quedó validada:
+
+* precondiciones y autorización de `end_session()`;
+* cierre exitoso sólo por host;
+* historial único de tanda;
+* historial único por ronda;
+* ausencia de votos individuales y palabras secretas en historial;
+* idempotencia;
+* ganadores múltiples;
+* read model histórico para participantes;
+* denegación a no participantes;
+* imposibilidad de reutilizar tanda o Room cerradas;
+* creación posterior de nueva Room sin alterar historial;
+* retry tardío sin afectar una Room nueva.
+
+Durante 12.5 se detectó y corrigió una inconsistencia del read model: `get_my_game_state()` devolvía `can_end_session = false` también para el host en `scoreboard`, bloqueando la acción real de 12.4. El contrato efectivo queda:
+
+```text
+scoreboard:
+can_end_session = true sólo para el host actual con ronda vigente puntuada
+
+finished:
+can_end_session = false
+can_start_next_round = false
+```
+
+Validación: `test:db:12.5` PASS, regresiones 11.5/12.2/12.3 PASS, tests focales 12.4 PASS, `npm test` PASS, lint PASS con un warning preexistente, build PASS y `git diff --check` PASS.
 
 ### Tests / validación
 
@@ -3103,15 +3213,15 @@ Impostor:
 
 ### Criterio de terminado
 
-El grupo puede jugar una tanda completa de Impostor desde creación de sala hasta resultado final.
+El grupo puede jugar técnicamente una tanda completa de Impostor desde creación de sala hasta resultado final: múltiples rondas, marcador, cierre por host, Room cerrada, historial mínimo y reconstrucción de `finished`.
 
 Este es el:
 
 ```text
-PRIMER MVP JUGABLE
+PRIMER MVP JUGABLE ALCANZADO TÉCNICAMENTE
 ```
 
-Debe poder probarse con 3 a 8 teléfonos, especialmente con 4.
+La prueba presencial completa con 3 a 8 teléfonos, especialmente con 4, sigue pendiente como validación posterior.
 
 ### Conceptos a aprender
 

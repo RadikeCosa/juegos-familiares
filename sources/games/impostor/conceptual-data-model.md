@@ -988,6 +988,8 @@ No necesitamos conservar absolutamente todo lo ocurrido durante la partida.
 
 Representa el resumen persistente de una tanda finalizada.
 
+Al cierre técnico del Incremento 12 existe como historial mínimo persistente de tanda. Guarda una referencia única por `GameSession`, el grupo, la Room cerrada, inicio, fin, host que cerró, roster final, scores finales, ganadores múltiples cuando corresponde y cantidad de rondas.
+
 Información conceptual mínima:
 
 ```text
@@ -1007,6 +1009,8 @@ GameSessionHistory
 ## RoundHistory
 
 Representa el resumen persistente de una ronda finalizada dentro de una tanda.
+
+Al cierre técnico del Incremento 12 existe como historial mínimo persistente de ronda. Guarda un snapshot único por ronda y por `(GameSession, número)`, con impostor, ganador de ronda, indicador de descubrimiento, intento final cuando existió y resumen de scoring.
 
 Información conceptual mínima:
 
@@ -1034,7 +1038,7 @@ El ganador final de tanda se deriva de `finalScores`. Si hay empate en el mayor 
 
 La Room que produjo una `GameSessionHistory` queda cerrada y no se reutiliza para otra tanda.
 
-Este modelo no define tablas, schemas ni base de datos.
+El modelo conceptual no agrega entidades adicionales: la implementación técnica vigente usa `game_session_history` y `round_history` con restricciones de unicidad para sostener idempotencia.
 
 ---
 

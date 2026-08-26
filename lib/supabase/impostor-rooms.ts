@@ -21,6 +21,7 @@ export type ImpostorRoomsClient = {
             | "submit_impostor_guess"
             | "advance_round_result_to_scoreboard"
             | "start_next_round"
+            | "end_session"
             | "get_my_game_state",
         params?: { room_code: string } | { target_player_id: string } | { guess_text: string }
     ) => PromiseLike<SupabaseRpcResult<unknown>>;
@@ -390,6 +391,22 @@ const NOT_SESSION_PLAYER_START_NEXT_ROUND_ERROR =
     "No participás de la tanda actual.";
 const GENERIC_START_NEXT_ROUND_ERROR =
     "No pudimos iniciar otra ronda. Intentá de nuevo.";
+const UNAUTHENTICATED_END_SESSION_ERROR =
+    "Necesitás entrar a tu grupo antes de terminar la tanda.";
+const MISSING_PLAYER_END_SESSION_ERROR =
+    "No pudimos reconocer tu jugador para terminar la tanda.";
+const NO_ACTIVE_ROOM_END_SESSION_ERROR =
+    "No tenés una sala activa para terminar la tanda.";
+const ROOM_NOT_ENDABLE_ERROR =
+    "Esta tanda no está lista para terminar.";
+const NOT_ROOM_HOST_END_SESSION_ERROR =
+    "Solo el host actual puede terminar la tanda.";
+const INCONSISTENT_END_SESSION_ERROR =
+    "No pudimos reconstruir la tanda para terminarla.";
+const NOT_SESSION_PLAYER_END_SESSION_ERROR =
+    "No participás de la tanda actual.";
+const GENERIC_END_SESSION_ERROR =
+    "No pudimos terminar la tanda. Intentá de nuevo.";
 const UNAUTHENTICATED_GAME_STATE_ERROR =
     "Necesitás entrar a tu grupo antes de recuperar la tanda.";
 const MISSING_PLAYER_GAME_STATE_ERROR =
@@ -506,6 +523,14 @@ type StartNextRoundRow = {
     round_number: number;
 };
 
+type EndSessionRow = {
+    ended: boolean;
+    already_ended: boolean;
+    state: "finished";
+    round_count: number;
+    winner_player_ids: string[];
+};
+
 export type StartRoundDiscussionResult = {
     advanced: boolean;
     alreadyInPhase: boolean;
@@ -562,6 +587,14 @@ export type StartNextRoundResult = {
     roundNumber: number;
 };
 
+export type EndSessionResult = {
+    ended: boolean;
+    alreadyEnded: boolean;
+    state: "finished";
+    roundCount: number;
+    winnerPlayerIds: string[];
+};
+
 export type GameSessionState =
     | "role_reveal"
     | "discussion"
@@ -585,6 +618,19 @@ type VoteResultRow = VoteCandidateRow & {
 type ScoreboardPlayerRow = VoteCandidateRow & {
     score: number;
     is_self?: boolean;
+};
+
+type FinalScoreRow = VoteCandidateRow & {
+    score: number;
+};
+
+type RoundSummaryRow = {
+    number: number;
+    round_winner: "impostor" | "group";
+    discovered_by_vote: boolean;
+    impostor_guess_text: string | null;
+    impostor_guess_correct: boolean | null;
+    scoring_summary: Record<string, unknown>;
 };
 
 type RoundImpostorRow = VoteCandidateRow;
@@ -612,6 +658,12 @@ type MyGameStateRow = {
     can_end_session?: boolean;
     available_unused_words_count?: number | null;
     next_round_block_reason?: NextRoundBlockReason | null;
+    finished_at?: string | null;
+    round_count?: number | null;
+    final_scores?: unknown;
+    winner_player_ids?: unknown;
+    winners?: unknown;
+    rounds_summary?: unknown;
 } & (
     | {
         role: "player";
@@ -620,6 +672,10 @@ type MyGameStateRow = {
     | {
         role: "impostor";
         word: string | null;
+    }
+    | {
+        role: null;
+        word: null;
     }
 );
 
@@ -647,6 +703,19 @@ export type ScoreboardPlayer = VoteCandidate & {
     isSelf: boolean;
 };
 
+export type FinalScore = VoteCandidate & {
+    score: number;
+};
+
+export type RoundSummary = {
+    number: number;
+    winner: "impostor" | "group";
+    discoveredByVote: boolean;
+    impostorGuessText: string | null;
+    impostorGuessCorrect: boolean | null;
+    scoringSummary: Record<string, unknown>;
+};
+
 export type RoundImpostor = VoteCandidate;
 
 export type ScoreboardState = {
@@ -656,6 +725,17 @@ export type ScoreboardState = {
     canEndSession: boolean;
     availableUnusedWordsCount: number;
     nextRoundBlockReason: NextRoundBlockReason | null;
+};
+
+export type FinishedState = {
+    finishedAt: string;
+    roundCount: number;
+    finalScores: FinalScore[];
+    winnerPlayerIds: string[];
+    winners: FinalScore[];
+    roundsSummary: RoundSummary[];
+    canStartNextRound: false;
+    canEndSession: false;
 };
 
 export type MyGameState = {
@@ -678,6 +758,7 @@ export type MyGameState = {
         impostorGuessCorrect: boolean | null;
     };
     scoreboard?: ScoreboardState;
+    finished?: FinishedState;
 };
 
 function isSupabaseErrorLike(error: unknown): error is SupabaseErrorLike {
@@ -1087,6 +1168,40 @@ function getStartNextRoundErrorMessage(error: unknown) {
     return GENERIC_START_NEXT_ROUND_ERROR;
 }
 
+function getEndSessionErrorMessage(error: unknown) {
+    if (isSupabaseErrorLike(error)) {
+        if (error.code === "28000" || error.code === "42501") {
+            return UNAUTHENTICATED_END_SESSION_ERROR;
+        }
+
+        if (error.code === "P0002") {
+            return MISSING_PLAYER_END_SESSION_ERROR;
+        }
+
+        if (error.code === "P0017") {
+            return NO_ACTIVE_ROOM_END_SESSION_ERROR;
+        }
+
+        if (error.code === "P0018") {
+            return ROOM_NOT_ENDABLE_ERROR;
+        }
+
+        if (error.code === "P0019") {
+            return NOT_ROOM_HOST_END_SESSION_ERROR;
+        }
+
+        if (error.code === "P0022") {
+            return INCONSISTENT_END_SESSION_ERROR;
+        }
+
+        if (error.code === "P0023") {
+            return NOT_SESSION_PLAYER_END_SESSION_ERROR;
+        }
+    }
+
+    return GENERIC_END_SESSION_ERROR;
+}
+
 function getGameStateErrorMessage(error: unknown) {
     if (isSupabaseErrorLike(error)) {
         if (error.code === "28000" || error.code === "42501") {
@@ -1242,6 +1357,22 @@ function isStartNextRoundRow(value: unknown): value is StartNextRoundRow {
     );
 }
 
+function isEndSessionRow(value: unknown): value is EndSessionRow {
+    const row = value as Partial<EndSessionRow>;
+
+    return (
+        typeof row.ended === "boolean" &&
+        typeof row.already_ended === "boolean" &&
+        row.state === "finished" &&
+        typeof row.round_count === "number" &&
+        Number.isInteger(row.round_count) &&
+        row.round_count >= 1 &&
+        Array.isArray(row.winner_player_ids) &&
+        row.winner_player_ids.length >= 1 &&
+        row.winner_player_ids.every((playerId) => typeof playerId === "string")
+    );
+}
+
 function isMyGameStateRow(value: unknown): value is MyGameStateRow {
     const row = value as Partial<MyGameStateRow>;
 
@@ -1254,13 +1385,60 @@ function isMyGameStateRow(value: unknown): value is MyGameStateRow {
             row.state !== "voting_second" &&
             row.state !== "impostor_guess" &&
             row.state !== "round_result" &&
-            row.state !== "scoreboard"
+            row.state !== "scoreboard" &&
+            row.state !== "finished"
         ) ||
         typeof row.round_number !== "number" ||
         !Number.isInteger(row.round_number) ||
         row.round_number < 1
     ) {
         return false;
+    }
+
+    if (row.state === "finished") {
+        return (
+            row.role === null &&
+            row.word === null &&
+            (row.candidates === null || typeof row.candidates === "undefined") &&
+            (row.my_vote_target_player_id === null ||
+                typeof row.my_vote_target_player_id === "undefined") &&
+            (row.has_voted === false || typeof row.has_voted === "undefined") &&
+            (row.vote_results === null || typeof row.vote_results === "undefined") &&
+            row.can_submit_impostor_guess === false &&
+            (row.winner === null || typeof row.winner === "undefined") &&
+            (row.impostor_guess_text === null ||
+                typeof row.impostor_guess_text === "undefined") &&
+            (row.impostor_guess_correct === null ||
+                typeof row.impostor_guess_correct === "undefined") &&
+            (row.scoreboard_players === null ||
+                typeof row.scoreboard_players === "undefined") &&
+            (row.round_impostor === null ||
+                typeof row.round_impostor === "undefined") &&
+            row.can_start_next_round === false &&
+            row.can_end_session === false &&
+            (row.available_unused_words_count === null ||
+                typeof row.available_unused_words_count === "undefined") &&
+            (row.next_round_block_reason === null ||
+                typeof row.next_round_block_reason === "undefined") &&
+            typeof row.finished_at === "string" &&
+            row.finished_at.length > 0 &&
+            typeof row.round_count === "number" &&
+            Number.isInteger(row.round_count) &&
+            row.round_count >= 1 &&
+            row.round_number === row.round_count &&
+            Array.isArray(row.final_scores) &&
+            row.final_scores.length >= 1 &&
+            row.final_scores.every(isFinalScoreRow) &&
+            Array.isArray(row.winner_player_ids) &&
+            row.winner_player_ids.length >= 1 &&
+            row.winner_player_ids.every((playerId) => typeof playerId === "string") &&
+            Array.isArray(row.winners) &&
+            row.winners.length >= 1 &&
+            row.winners.every(isFinalScoreRow) &&
+            Array.isArray(row.rounds_summary) &&
+            row.rounds_summary.length === row.round_count &&
+            row.rounds_summary.every(isRoundSummaryRow)
+        );
     }
 
     if (row.role === "player") {
@@ -1409,6 +1587,40 @@ function isScoreboardPlayerRow(value: unknown): value is ScoreboardPlayerRow {
     );
 }
 
+function isFinalScoreRow(value: unknown): value is FinalScoreRow {
+    const row = value as Partial<FinalScoreRow>;
+
+    return (
+        isVoteCandidateRow(value) &&
+        typeof row.score === "number" &&
+        Number.isInteger(row.score) &&
+        row.score >= 0
+    );
+}
+
+function isRoundSummaryRow(value: unknown): value is RoundSummaryRow {
+    const row = value as Partial<RoundSummaryRow>;
+
+    return (
+        typeof row.number === "number" &&
+        Number.isInteger(row.number) &&
+        row.number >= 1 &&
+        (row.round_winner === "impostor" || row.round_winner === "group") &&
+        typeof row.discovered_by_vote === "boolean" &&
+        (
+            typeof row.impostor_guess_text === "string" ||
+            row.impostor_guess_text === null
+        ) &&
+        (
+            typeof row.impostor_guess_correct === "boolean" ||
+            row.impostor_guess_correct === null
+        ) &&
+        typeof row.scoring_summary === "object" &&
+        row.scoring_summary !== null &&
+        !Array.isArray(row.scoring_summary)
+    );
+}
+
 function isRoundImpostorRow(value: unknown): value is RoundImpostorRow {
     return isVoteCandidateRow(value);
 }
@@ -1454,6 +1666,33 @@ function toScoreboardPlayers(value: unknown): ScoreboardPlayer[] | null {
         nickname: player.nickname,
         score: player.score,
         isSelf: player.is_self === true
+    }));
+}
+
+function toFinalScores(value: unknown): FinalScore[] {
+    if (!Array.isArray(value) || !value.every(isFinalScoreRow)) {
+        return [];
+    }
+
+    return value.map((player) => ({
+        playerId: player.player_id,
+        nickname: player.nickname,
+        score: player.score
+    }));
+}
+
+function toRoundSummaries(value: unknown): RoundSummary[] {
+    if (!Array.isArray(value) || !value.every(isRoundSummaryRow)) {
+        return [];
+    }
+
+    return value.map((round) => ({
+        number: round.number,
+        winner: round.round_winner,
+        discoveredByVote: round.discovered_by_vote,
+        impostorGuessText: round.impostor_guess_text,
+        impostorGuessCorrect: round.impostor_guess_correct,
+        scoringSummary: round.scoring_summary
     }));
 }
 
@@ -1572,7 +1811,38 @@ function toStartNextRoundResult(row: StartNextRoundRow): StartNextRoundResult {
     };
 }
 
+function toEndSessionResult(row: EndSessionRow): EndSessionResult {
+    return {
+        ended: row.ended,
+        alreadyEnded: row.already_ended,
+        state: row.state,
+        roundCount: row.round_count,
+        winnerPlayerIds: row.winner_player_ids
+    };
+}
+
 function toMyGameState(row: MyGameStateRow): MyGameState {
+    if (row.state === "finished") {
+        return {
+            state: "finished",
+            roundNumber: row.round_number,
+            privateView: { role: "player", word: null },
+            candidates: null,
+            voting: null,
+            voteResults: null,
+            finished: {
+                finishedAt: row.finished_at as string,
+                roundCount: row.round_count as number,
+                finalScores: toFinalScores(row.final_scores),
+                winnerPlayerIds: row.winner_player_ids as string[],
+                winners: toFinalScores(row.winners),
+                roundsSummary: toRoundSummaries(row.rounds_summary),
+                canStartNextRound: false,
+                canEndSession: false
+            }
+        };
+    }
+
     const voteResults = toVoteResults(row.vote_results);
     const candidates = toVoteCandidates(row.candidates);
     const scoreboardPlayers = toScoreboardPlayers(row.scoreboard_players);
@@ -2253,6 +2523,24 @@ export async function startNextRound(
     }
 
     return toStartNextRoundResult(rows[0]);
+}
+
+export async function endSession(
+    supabase: ImpostorRoomsClient
+): Promise<EndSessionResult> {
+    const result = await supabase.rpc("end_session");
+
+    if (result.error) {
+        throw new Error(getEndSessionErrorMessage(result.error));
+    }
+
+    const rows = Array.isArray(result.data) ? result.data : [];
+
+    if (rows.length !== 1 || !isEndSessionRow(rows[0])) {
+        throw new Error("No pudimos confirmar el cierre de la tanda.");
+    }
+
+    return toEndSessionResult(rows[0]);
 }
 
 export async function getMyGameState(
