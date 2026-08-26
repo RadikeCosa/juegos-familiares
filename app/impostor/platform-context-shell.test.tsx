@@ -9,7 +9,10 @@ import {
   shareInvitation
 } from "./admin-invitation-panel";
 import { ImpostorAnonymousOnboardingActions } from "./anonymous-onboarding-actions";
-import { renderImpostorPlatformContext } from "./platform-context-shell";
+import {
+  isShareCancellation,
+  renderImpostorPlatformContext
+} from "./platform-context-shell";
 import type { PlatformBootstrapState } from "../../lib/supabase/platform-bootstrap";
 
 vi.mock("../../lib/supabase/browser-client", () => ({
@@ -88,6 +91,7 @@ describe("renderImpostorPlatformContext", () => {
     expect(text).toContain("Tu grupo");
     expect(text).toContain("Familia");
     expect(text).toContain("Ver grupo");
+    expect(text).toContain("Compartir invitación");
     expect(text).not.toContain("Crear sala");
     expect(text).not.toContain("Agregar palabra");
     expect(text).not.toContain("Invitar personas");
@@ -118,6 +122,7 @@ describe("renderImpostorPlatformContext", () => {
     expect(text).toContain("Ver grupo");
     expect(text).not.toContain("Invitá a los demás");
     expect(text).not.toContain("Invitar personas");
+    expect(text).not.toContain("Compartir invitación");
   });
 
   it("shows connection errors without onboarding", () => {
@@ -131,6 +136,20 @@ describe("renderImpostorPlatformContext", () => {
     expect(text).toContain("Revisá tu conexión");
     expect(text).not.toContain("Crear grupo");
     expect(text).not.toContain("Unirme a un grupo");
+  });
+});
+
+describe("isShareCancellation", () => {
+  it("recognizes a user-cancelled navigator.share() rejection", () => {
+    const abortError = new Error("The user aborted the request.");
+    abortError.name = "AbortError";
+
+    expect(isShareCancellation(abortError)).toBe(true);
+  });
+
+  it("does not treat other share/clipboard failures as a cancellation", () => {
+    expect(isShareCancellation(new Error("Share unavailable"))).toBe(false);
+    expect(isShareCancellation("not an error")).toBe(false);
   });
 });
 
