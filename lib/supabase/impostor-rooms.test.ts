@@ -47,6 +47,7 @@ const singleParticipantRow = {
     participant_player_id: "player-1",
     participant_nickname: "Ramiro",
     participant_is_host: true,
+    participant_is_self: true,
     participant_joined_at: "2026-08-19T12:00:00.000Z"
 };
 
@@ -337,7 +338,7 @@ describe("createRoom", () => {
                 code: "AB7KQ2M4",
                 status: "lobby"
             },
-            participants: [{ playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
+            participants: [{ playerId: "player-1", nickname: "Ramiro", isHost: true, isSelf: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
         });
 
         expect(supabase.rpc).toHaveBeenCalledWith("create_room");
@@ -570,7 +571,7 @@ describe("joinRoomByCode", () => {
                 code: "AB7KQ2M4",
                 status: "lobby"
             },
-            participants: [{ playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
+            participants: [{ playerId: "player-1", nickname: "Ramiro", isHost: true, isSelf: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
         });
 
         expect(supabase.rpc).toHaveBeenCalledWith("join_room_by_code", {
@@ -671,7 +672,7 @@ describe("getMyActiveRoom", () => {
                 code: "AB7KQ2M4",
                 status: "lobby"
             },
-            participants: [{ playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
+            participants: [{ playerId: "player-1", nickname: "Ramiro", isHost: true, isSelf: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
         });
 
         expect(supabase.rpc).toHaveBeenCalledWith("get_my_active_room");
@@ -726,6 +727,69 @@ describe("getMyActiveRoom", () => {
         const supabase = {
             rpc: vi.fn(async () => ({
                 data: [{ room_join_code: "AB7KQ2M4" }],
+                error: null
+            }))
+        };
+
+        await expect(getMyActiveRoom(supabase)).rejects.toThrow(
+            "No pudimos confirmar tu sala activa."
+        );
+    });
+
+    it("rejects lobby rows without participant_is_self", async () => {
+        const { participant_is_self: _participantIsSelf, ...rowWithoutSelf } =
+            singleParticipantRow;
+        void _participantIsSelf;
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [rowWithoutSelf],
+                error: null
+            }))
+        };
+
+        await expect(getMyActiveRoom(supabase)).rejects.toThrow(
+            "No pudimos confirmar tu sala activa."
+        );
+    });
+
+    it("rejects lobby rows with null participant_is_self", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...singleParticipantRow, participant_is_self: null }],
+                error: null
+            }))
+        };
+
+        await expect(getMyActiveRoom(supabase)).rejects.toThrow(
+            "No pudimos confirmar tu sala activa."
+        );
+    });
+
+    it("rejects a lobby with no self participant", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...singleParticipantRow, participant_is_self: false }],
+                error: null
+            }))
+        };
+
+        await expect(getMyActiveRoom(supabase)).rejects.toThrow(
+            "No pudimos confirmar tu sala activa."
+        );
+    });
+
+    it("rejects a lobby with multiple self participants", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [
+                    singleParticipantRow,
+                    {
+                        ...singleParticipantRow,
+                        participant_player_id: "player-2",
+                        participant_nickname: "Pedro",
+                        participant_is_host: false
+                    }
+                ],
                 error: null
             }))
         };
@@ -2928,8 +2992,8 @@ describe("createLobbySyncController", () => {
         const readLobby = vi.fn(async () => ({
             room: { id: "11111111-1111-4111-8111-111111111111", code: "AB7KQ2M4", status: "lobby" },
             participants: [
-                { playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" },
-                { playerId: "player-2", nickname: "Pedro", isHost: false, joinedAt: "2026-08-19T12:05:00.000Z" }
+                { playerId: "player-1", nickname: "Ramiro", isHost: true, isSelf: true, joinedAt: "2026-08-19T12:00:00.000Z" },
+                { playerId: "player-2", nickname: "Pedro", isHost: false, isSelf: false, joinedAt: "2026-08-19T12:05:00.000Z" }
             ]
         }));
         const onSnapshot = vi.fn();
@@ -2944,8 +3008,8 @@ describe("createLobbySyncController", () => {
             lobby: {
                 room: { id: "11111111-1111-4111-8111-111111111111", code: "AB7KQ2M4", status: "lobby" },
                 participants: [
-                    { playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" },
-                    { playerId: "player-2", nickname: "Pedro", isHost: false, joinedAt: "2026-08-19T12:05:00.000Z" }
+                    { playerId: "player-1", nickname: "Ramiro", isHost: true, isSelf: true, joinedAt: "2026-08-19T12:00:00.000Z" },
+                    { playerId: "player-2", nickname: "Pedro", isHost: false, isSelf: false, joinedAt: "2026-08-19T12:05:00.000Z" }
                 ]
             }
         });
@@ -3019,12 +3083,14 @@ describe("getConnectedRoomParticipantIds", () => {
             playerId: "player-1",
             nickname: "Ramiro",
             isHost: true,
+            isSelf: true,
             joinedAt: "2026-08-19T12:00:00.000Z"
         },
         {
             playerId: "player-2",
             nickname: "Pedro",
             isHost: false,
+            isSelf: false,
             joinedAt: "2026-08-19T12:05:00.000Z"
         }
     ];

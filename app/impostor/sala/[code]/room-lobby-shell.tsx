@@ -1830,6 +1830,7 @@ export function renderRoomLobbyContent(
     lifecycleActionState.status === "closing" ||
     isStartingSession;
   const isHost = Boolean(selfParticipant?.isHost);
+  const isLobby = lobby.room.status === "lobby";
   const roomShareState = options.roomShareState ?? { status: "idle" };
 
   return (
@@ -1901,7 +1902,7 @@ export function renderRoomLobbyContent(
 
       {selfParticipant ? (
         <div className="impostor-room-danger-zone">
-          {isHost && lobby.room.status === "lobby" ? (
+          {isHost && isLobby ? (
             <>
               <button
                 className="impostor-action impostor-action--primary"
@@ -1917,6 +1918,11 @@ export function renderRoomLobbyContent(
                 </div>
               ) : null}
             </>
+          ) : null}
+          {!isHost && isLobby ? (
+            <p className="impostor-room-notice" aria-live="polite">
+              Esperando a que el host inicie la partida…
+            </p>
           ) : null}
 
           {selfParticipant.isHost ? (
