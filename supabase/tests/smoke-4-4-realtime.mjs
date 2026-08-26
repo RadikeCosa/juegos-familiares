@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
+import { markClientAsPlatformAdmin } from "./platform-admin-test-helpers.mjs";
 
 function readSupabaseEnv() {
   const output = execFileSync("npx", ["supabase", "status", "-o", "env"], {
@@ -12,7 +13,7 @@ function readSupabaseEnv() {
     env[match[1]] = match[2];
   }
 
-  for (const key of ["API_URL", "PUBLISHABLE_KEY"]) {
+  for (const key of ["API_URL", "PUBLISHABLE_KEY", "DB_URL"]) {
     if (!env[key]) {
       throw new Error(`Missing ${key} from local Supabase status.`);
     }
@@ -31,6 +32,26 @@ function createAnonymousClient() {
       persistSession: false
     }
   });
+}
+
+function psql(sql) {
+  return execFileSync("psql", [
+    supabaseEnv.DB_URL,
+    "--quiet",
+    "--tuples-only",
+    "--no-align",
+    "--set",
+    "ON_ERROR_STOP=1",
+    "--command",
+    sql
+  ], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"]
+  }).trim();
+}
+
+function sqlString(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
 }
 
 function assert(condition, message) {
@@ -67,6 +88,8 @@ function singleRow(data, message) {
 }
 
 async function createGroup(client, groupName, playerNickname) {
+  await markClientAsPlatformAdmin(client, psql, sqlString);
+
   const { data, error } = await client.rpc("create_group_with_admin_player", {
     group_name: groupName,
     player_nickname: playerNickname

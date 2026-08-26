@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createClient } from "@supabase/supabase-js";
+import { markClientAsPlatformAdmin } from "./platform-admin-test-helpers.mjs";
 
 function readSupabaseEnv() {
   const output = execFileSync("npx", ["supabase", "status", "-o", "env"], {
@@ -148,6 +149,8 @@ async function expectDirectReadBlocked(client, tableName, message) {
 }
 
 async function createGroup(client, groupName, playerNickname) {
+  await markClientAsPlatformAdmin(client, psql, sqlString);
+
   return singleRow(await rpcOk(client, "create_group_with_admin_player", {
     group_name: groupName,
     player_nickname: playerNickname
