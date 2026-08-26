@@ -13,6 +13,7 @@ import {
     getRoomInvitationUrl,
     getRoomShareData,
     renderRoomLobbyContent,
+    runAdvanceScoreboardCommand,
     runEndSessionCommand,
     runStartDiscussionCommand,
     runStartNextRoundCommand,
@@ -851,6 +852,57 @@ describe("runSubmitVoteCommand", () => {
 
         expect(refreshGameplay).toHaveBeenCalledTimes(1);
         expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+});
+
+describe("runAdvanceScoreboardCommand", () => {
+    it("advances authoritatively and refreshes into scoreboard", async () => {
+        const advance = vi.fn(async () => ({ advanced: true }));
+        const refreshGameplay = vi.fn(async () => scoreboardGameState);
+        const onError = vi.fn();
+
+        await runAdvanceScoreboardCommand({
+            advance,
+            refreshGameplay,
+            onError
+        });
+
+        expect(advance).toHaveBeenCalledTimes(1);
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(onError).not.toHaveBeenCalled();
+    });
+
+    it("recovers a lost scoreboard response when refresh already sees scoreboard", async () => {
+        const advance = vi.fn(async () => {
+            throw new Error("NetworkError");
+        });
+        const refreshGameplay = vi.fn(async () => scoreboardGameState);
+        const onError = vi.fn();
+
+        await runAdvanceScoreboardCommand({
+            advance,
+            refreshGameplay,
+            onError
+        });
+
+        expect(refreshGameplay).toHaveBeenCalledTimes(1);
+        expect(onError).not.toHaveBeenCalled();
+    });
+
+    it("reports a local error when scoring cannot be confirmed", async () => {
+        const advance = vi.fn(async () => {
+            throw new Error("No pudimos confirmar el marcador.");
+        });
+        const refreshGameplay = vi.fn(async () => roundResultGameState);
+        const onError = vi.fn();
+
+        await runAdvanceScoreboardCommand({
+            advance,
+            refreshGameplay,
+            onError
+        });
+
+        expect(onError).toHaveBeenLastCalledWith("No pudimos confirmar el marcador.");
     });
 });
 
@@ -1809,7 +1861,7 @@ describe("renderRoomLobbyContent", () => {
         );
 
         expect(markup).toContain("Puntaje");
-        expect(markup).toContain("El host actual puede abrir la próxima ronda.");
+        expect(markup).toContain("Esperando a que el host continúe...");
         expect(markup).not.toContain("Nueva ronda");
         expect(markup).not.toContain("Terminar tanda");
     });
@@ -1922,6 +1974,23 @@ describe("renderRoomLobbyContent", () => {
         expect(handler).toContain("start: () => startNextRound(createImpostorRoomsClient())");
         expect(handler).toContain("refreshGameplay: () => refreshGameplayStateNow(\"manual\")");
         expect(handler).not.toMatch(/secret|impostorPlayerId|roundNumber \+ 1|score \+/);
+    });
+
+    it("wires round_result to the authoritative scoreboard transition without client-owned facts", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+        const effect = source.slice(
+            source.indexOf("dataState.status !== \"round-result\""),
+            source.indexOf("async function runBootstrap()")
+        );
+
+        expect(effect).toContain("dataState.status !== \"round-result\"");
+        expect(effect).toContain("advance: () => advanceRoundResultToScoreboard(createImpostorRoomsClient())");
+        expect(effect).toContain("refreshGameplay: () => refreshGameplayStateNow(\"manual\")");
+        expect(effect).toContain("advancingScoreboardRoundKeyRef");
+        expect(effect).not.toMatch(/winner|secret|impostorPlayerId|roundNumber \+ 1|score \+/);
     });
 
     it("wires Terminar tanda through confirmation, 0-args endSession and finished refresh", () => {

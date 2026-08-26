@@ -16,6 +16,7 @@ import {
   createStartSessionController,
   clearRoomCreationIntent,
   clearRoomJoinIntent,
+  advanceRoundResultToScoreboard,
   getConnectedRoomParticipantIds,
   getMyGameState,
   getMyActiveRoom,
@@ -904,6 +905,37 @@ export async function runEndSessionCommand(options: EndSessionCommandOptions) {
   }
 }
 
+type AdvanceScoreboardCommandOptions = {
+  advance: () => Promise<unknown>;
+  refreshGameplay: () => Promise<MyGameState | null>;
+  onError?: (message: string) => void;
+};
+
+export async function runAdvanceScoreboardCommand(
+  options: AdvanceScoreboardCommandOptions,
+) {
+  try {
+    await options.advance();
+    await options.refreshGameplay();
+  } catch (error) {
+    let recoveredGameState: MyGameState | null = null;
+
+    try {
+      recoveredGameState = await options.refreshGameplay();
+    } catch {
+      recoveredGameState = null;
+    }
+
+    if (recoveredGameState?.state === "scoreboard") {
+      return;
+    }
+
+    options.onError?.(
+      getFriendlyError(error, "No pudimos mostrar el marcador todavía."),
+    );
+  }
+}
+
 export function formatPlayerCount(count: number) {
   return count === 1 ? "1 jugador" : `${count} jugadores`;
 }
@@ -1612,8 +1644,8 @@ export function renderRoomLobbyContent(
           : scoreboard?.nextRoundBlockReason === "session_not_ready"
             ? "La ronda todavía no está lista para abrir otra."
             : scoreboard?.nextRoundBlockReason === "not_host"
-              ? "El host actual puede abrir la próxima ronda."
-              : "Esperando que el host abra la próxima ronda.";
+              ? "Esperando a que el host continúe..."
+              : "Esperando a que el host continúe...";
 
       return (
         <section
@@ -2016,6 +2048,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   const isMountedRef = useRef(false);
   const refreshSequenceRef = useRef(0);
   const authoritativeRefreshInFlightCountRef = useRef(0);
+  const advancingScoreboardRoundKeyRef = useRef<string | undefined>(undefined);
   const gameStatePollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -2337,6 +2370,38 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
       refreshAuthoritativeRoomState,
     ],
   );
+
+  useEffect(() => {
+    if (
+      bootstrapState.status !== "recognized" ||
+      !activeRoomId ||
+      !currentRoomPlayerId ||
+      dataState.status !== "round-result"
+    ) {
+      advancingScoreboardRoundKeyRef.current = undefined;
+      return;
+    }
+
+    const roundKey = `${activeRoomId}:${dataState.gameState.roundNumber}`;
+
+    if (advancingScoreboardRoundKeyRef.current === roundKey) {
+      return;
+    }
+
+    advancingScoreboardRoundKeyRef.current = roundKey;
+
+    void runAdvanceScoreboardCommand({
+      advance: () => advanceRoundResultToScoreboard(createImpostorRoomsClient()),
+      refreshGameplay: () => refreshGameplayStateNow("manual"),
+      onError: (message) => console.warn(message),
+    });
+  }, [
+    activeRoomId,
+    bootstrapState.status,
+    currentRoomPlayerId,
+    dataState,
+    refreshGameplayStateNow,
+  ]);
 
   async function runBootstrap() {
     const requestId = refreshSequenceRef.current + 1;
