@@ -6,8 +6,10 @@ import type { PlatformBootstrapState } from "../../../../lib/supabase/platform-b
 import type { MyGameState, RoomLobby } from "../../../../lib/supabase/impostor-rooms";
 import {
     createGameplayPollLoop,
+    confirmEndSession,
     formatPlayerCount,
     renderRoomLobbyContent,
+    runEndSessionCommand,
     runStartDiscussionCommand,
     runStartNextRoundCommand,
     runStartSecondVotingCommand,
@@ -218,7 +220,7 @@ const scoreboardGameState: MyGameState = {
         ],
         roundImpostor: { playerId: "player-2", nickname: "Pedro" },
         canStartNextRound: true,
-        canEndSession: false,
+        canEndSession: true,
         availableUnusedWordsCount: 3,
         nextRoundBlockReason: null
     }
@@ -249,6 +251,63 @@ const roundResultWithGuessGameState: MyGameState = {
         winner: "group",
         impostorGuessText: "Mesa",
         impostorGuessCorrect: false
+    }
+};
+
+const finishedGameState: MyGameState = {
+    state: "finished",
+    roundNumber: 2,
+    privateView: { role: "player", word: null },
+    candidates: null,
+    voting: null,
+    voteResults: null,
+    finished: {
+        finishedAt: "2026-08-26T01:30:00.000Z",
+        roundCount: 2,
+        finalScores: [
+            { playerId: "player-1", nickname: "Ramiro", score: 3 },
+            { playerId: "player-2", nickname: "Pedro", score: 5 },
+            { playerId: "player-3", nickname: "Ana", score: 1 }
+        ],
+        winnerPlayerIds: ["player-2"],
+        winners: [{ playerId: "player-2", nickname: "Pedro", score: 5 }],
+        roundsSummary: [
+            {
+                number: 1,
+                winner: "impostor",
+                discoveredByVote: false,
+                impostorGuessText: null,
+                impostorGuessCorrect: null,
+                scoringSummary: { rule: "impostor_only" }
+            },
+            {
+                number: 2,
+                winner: "group",
+                discoveredByVote: true,
+                impostorGuessText: "Mesa",
+                impostorGuessCorrect: false,
+                scoringSummary: { rule: "group_without_impostor" }
+            }
+        ],
+        canStartNextRound: false,
+        canEndSession: false
+    }
+};
+
+const tiedFinishedGameState: MyGameState = {
+    ...finishedGameState,
+    finished: {
+        ...(finishedGameState.finished as NonNullable<MyGameState["finished"]>),
+        finalScores: [
+            { playerId: "player-1", nickname: "Ramiro", score: 4 },
+            { playerId: "player-2", nickname: "Pedro", score: 4 },
+            { playerId: "player-3", nickname: "Ana", score: 2 }
+        ],
+        winnerPlayerIds: ["player-1", "player-2"],
+        winners: [
+            { playerId: "player-1", nickname: "Ramiro", score: 4 },
+            { playerId: "player-2", nickname: "Pedro", score: 4 }
+        ]
     }
 };
 
@@ -362,6 +421,13 @@ describe("toGameplayDataState", () => {
         });
         expect(toGameplayDataState(playingHostLobby, scoreboardGameState)).toMatchObject({
             status: "scoreboard"
+        });
+    });
+
+    it("recognizes finished without requiring an active Room lobby", () => {
+        expect(toGameplayDataState(playingHostLobby, finishedGameState)).toMatchObject({
+            status: "finished",
+            gameState: finishedGameState
         });
     });
 });
@@ -659,6 +725,55 @@ describe("runStartNextRoundCommand", () => {
 
         expect(setError).toHaveBeenLastCalledWith("Ya no sos el host actual.");
         expect(refreshAuthoritative).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe("runEndSessionCommand", () => {
+    it("confirms with irreversible Room close copy", () => {
+        const confirm = vi.fn(() => false);
+
+        expect(confirmEndSession(confirm)).toBe(false);
+        expect(confirm).toHaveBeenCalledWith(expect.stringContaining("cerrará esta sala"));
+        expect(confirm).toHaveBeenCalledWith(expect.stringContaining("volver al grupo"));
+    });
+
+    it("calls the 0-args end operation once and refreshes finished read model", async () => {
+        const end = vi.fn(async () => ({ ended: true }));
+        const refreshFinished = vi.fn(async () => finishedGameState);
+        const setError = vi.fn();
+
+        await runEndSessionCommand({ end, refreshFinished, setError });
+
+        expect(end).toHaveBeenCalledTimes(1);
+        expect(end).toHaveBeenCalledWith();
+        expect(refreshFinished).toHaveBeenCalledTimes(1);
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it("recovers a lost close response when the refreshed read model is finished", async () => {
+        const end = vi.fn(async () => {
+            throw new Error("NetworkError");
+        });
+        const refreshFinished = vi.fn(async () => finishedGameState);
+        const setError = vi.fn();
+
+        await runEndSessionCommand({ end, refreshFinished, setError });
+
+        expect(refreshFinished).toHaveBeenCalledTimes(1);
+        expect(setError).toHaveBeenLastCalledWith(undefined);
+    });
+
+    it("keeps the scoreboard error local when refresh does not reach finished", async () => {
+        const end = vi.fn(async () => {
+            throw new Error("No pudimos terminar la tanda. Intentá de nuevo.");
+        });
+        const refreshFinished = vi.fn(async () => scoreboardGameState);
+        const setError = vi.fn();
+
+        await runEndSessionCommand({ end, refreshFinished, setError });
+
+        expect(refreshFinished).toHaveBeenCalledTimes(1);
+        expect(setError).toHaveBeenLastCalledWith("No pudimos terminar la tanda. Intentá de nuevo.");
     });
 });
 
@@ -1611,10 +1726,11 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("Ramiro");
         expect(markup).toContain("2 puntos");
         expect(markup).toContain("Nueva ronda");
+        expect(markup).toContain("Terminar tanda");
         expect(markup).not.toMatch(/next_secret|next_impostor|normalized|player-\d/);
     });
 
-    it("does not render the next-round action for non-hosts", () => {
+    it("does not render host-only scoreboard actions for non-hosts", () => {
         const markup = renderToStaticMarkup(
             renderRoomLobbyContent(
                 recognizedState,
@@ -1630,6 +1746,7 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("Puntaje");
         expect(markup).toContain("El host actual puede abrir la próxima ronda.");
         expect(markup).not.toContain("Nueva ronda");
+        expect(markup).not.toContain("Terminar tanda");
     });
 
     it("shows a manageable no-word block for the host without creating a round", () => {
@@ -1667,6 +1784,23 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("disabled=\"\"");
     });
 
+    it("disables scoreboard actions while ending the session", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "scoreboard",
+                    lobby: playingHostLobby,
+                    gameState: scoreboardGameState
+                },
+                { roomCode: "AB7KQ2M4", isEndingSession: true }
+            )
+        );
+
+        expect(markup).toContain("Terminando tanda...");
+        expect(markup.match(/disabled=""/g)?.length).toBe(2);
+    });
+
     it("shows next-round command feedback in scoreboard", () => {
         const markup = renderToStaticMarkup(
             renderRoomLobbyContent(
@@ -1687,6 +1821,27 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("Nueva ronda");
     });
 
+    it("shows end-session command feedback while preserving scoreboard retry actions", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "scoreboard",
+                    lobby: playingHostLobby,
+                    gameState: scoreboardGameState
+                },
+                {
+                    roomCode: "AB7KQ2M4",
+                    endSessionError: "No pudimos terminar la tanda. Intentá de nuevo."
+                }
+            )
+        );
+
+        expect(markup).toContain("No pudimos terminar la tanda. Intentá de nuevo.");
+        expect(markup).toContain("Puntaje");
+        expect(markup).toContain("Terminar tanda");
+    });
+
     it("wires Nueva ronda to the authoritative startNextRound wrapper and refreshes gameplay", () => {
         const source = readFileSync(
             join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
@@ -1702,6 +1857,65 @@ describe("renderRoomLobbyContent", () => {
         expect(handler).toContain("start: () => startNextRound(createImpostorRoomsClient())");
         expect(handler).toContain("refreshGameplay: () => refreshGameplayStateNow(\"manual\")");
         expect(handler).not.toMatch(/secret|impostorPlayerId|roundNumber \+ 1|score \+/);
+    });
+
+    it("wires Terminar tanda through confirmation, 0-args endSession and finished refresh", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+        const handler = source.slice(
+            source.indexOf("async function handleEndSession()"),
+            source.indexOf("async function handleSubmitVote()")
+        );
+
+        expect(handler).toContain("confirmEndSession()");
+        expect(handler).toContain("runEndSessionCommand({");
+        expect(handler.indexOf("confirmEndSession()")).toBeLessThan(
+            handler.indexOf("runEndSessionCommand({")
+        );
+        expect(handler).toContain("end: () => endSession(createImpostorRoomsClient())");
+        expect(handler).toContain("refreshFinished: refreshFinishedGameStateNow");
+        expect(handler).not.toMatch(/winner|finalScores|scoreboard\\.players|roundsSummary/);
+    });
+
+    it("renders finished with a single winner, final ranking and round count", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "finished", gameState: finishedGameState },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Resultado final");
+        expect(markup).toContain("Ganó Pedro");
+        expect(markup).toContain("Clasificación final");
+        expect(markup).toContain("Pedro");
+        expect(markup).toContain("5 puntos");
+        expect(markup).toContain("Ramiro");
+        expect(markup).toContain("3 puntos");
+        expect(markup).toContain("2 rondas jugadas");
+        expect(markup).toContain("Volver al grupo");
+        expect(markup).toContain("href=\"/impostor/grupo\"");
+        expect(markup).not.toMatch(/Nueva ronda|Terminar tanda|voto|Casa|Mesa|impostor_guess|roundsSummary/i);
+    });
+
+    it("renders tied winners without choosing an artificial single winner", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "finished", gameState: tiedFinishedGameState },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Empataron Pedro, Ramiro");
+        expect(markup.match(/Ganador/g)?.length).toBe(2);
+        expect(markup).toContain("Pedro");
+        expect(markup).toContain("Ramiro");
+        expect(markup).not.toContain("Ganó Pedro");
+        expect(markup).not.toContain("Ganó Ramiro");
     });
 
     it("renders excluded state without role, word, participants or Start", () => {

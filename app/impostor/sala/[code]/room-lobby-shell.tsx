@@ -20,6 +20,7 @@ import {
   getMyGameState,
   getMyActiveRoom,
   refreshMyRoomLiveness,
+  endSession,
   submitImpostorGuess,
   submitRoundVote,
   subscribeToRoomPresence,
@@ -92,6 +93,10 @@ type RoomLobbyDataState =
       lobby: RoomLobby;
       gameState: MyGameState;
     }
+  | {
+      status: "finished";
+      gameState: MyGameState;
+    }
   | { status: "excluded"; lobby: RoomLobby; message: string }
   | { status: "error"; message: string }
   | { status: "awaiting-join"; error?: string }
@@ -133,6 +138,8 @@ const START_NEXT_ROUND_NOT_HOST_UI_MESSAGE = "Ya no sos el host actual.";
 const START_NEXT_ROUND_INCONSISTENT_MESSAGE =
   "No pudimos reconstruir la tanda para iniciar otra ronda.";
 const START_NEXT_ROUND_EXCLUDED_MESSAGE = "No participás de la tanda actual.";
+const END_SESSION_FALLBACK_MESSAGE =
+  "No pudimos terminar la tanda. Intentá de nuevo.";
 const SUBMIT_GUESS_FALLBACK_MESSAGE =
   "No pudimos enviar el intento. Intentá de nuevo.";
 const EXCLUDED_GAME_STATE_MESSAGE = "No participás de la tanda actual.";
@@ -279,6 +286,10 @@ function isSameScoreboardState(left: MyGameState, right: MyGameState) {
   return JSON.stringify(left.scoreboard) === JSON.stringify(right.scoreboard);
 }
 
+function isSameFinishedState(left: MyGameState, right: MyGameState) {
+  return JSON.stringify(left.finished) === JSON.stringify(right.finished);
+}
+
 function isSameGameState(left: MyGameState, right: MyGameState) {
   return (
     left.state === right.state &&
@@ -288,7 +299,8 @@ function isSameGameState(left: MyGameState, right: MyGameState) {
     isSameVoteResults(left, right) &&
     isSameImpostorGuessState(left, right) &&
     isSameRoundResultState(left, right) &&
-    isSameScoreboardState(left, right)
+    isSameScoreboardState(left, right) &&
+    isSameFinishedState(left, right)
   );
 }
 
@@ -307,6 +319,10 @@ export function toGameplayDataState(
   gameState: MyGameState,
   previousState?: RoomLobbyDataState,
 ): RoomLobbyDataState {
+  if (gameState.state === "finished") {
+    return { status: "finished", gameState };
+  }
+
   if (gameState.state === "voting_first") {
     return { status: "voting-first", lobby, gameState };
   }
@@ -779,6 +795,42 @@ export async function runSubmitVoteCommand(options: SubmitVoteCommandOptions) {
   }
 }
 
+export function confirmEndSession(confirmFn = globalThis.confirm) {
+  return confirmFn(
+    "Terminar la tanda cerrará esta sala para todos. Después verán el resultado final y deberán volver al grupo para crear otra sala.",
+  );
+}
+
+type EndSessionCommandOptions = {
+  end: () => Promise<unknown>;
+  refreshFinished: () => Promise<MyGameState | null>;
+  setError: (message: string | undefined) => void;
+};
+
+export async function runEndSessionCommand(options: EndSessionCommandOptions) {
+  options.setError(undefined);
+
+  try {
+    await options.end();
+    await options.refreshFinished();
+  } catch (error) {
+    let recoveredGameState: MyGameState | null = null;
+
+    try {
+      recoveredGameState = await options.refreshFinished();
+    } catch {
+      recoveredGameState = null;
+    }
+
+    if (recoveredGameState?.state === "finished") {
+      options.setError(undefined);
+      return;
+    }
+
+    options.setError(getFriendlyError(error, END_SESSION_FALLBACK_MESSAGE));
+  }
+}
+
 export function formatPlayerCount(count: number) {
   return count === 1 ? "1 jugador" : `${count} jugadores`;
 }
@@ -830,6 +882,7 @@ export function renderRoomLobbyContent(
     onStartVoting?: () => void;
     onStartSecondVoting?: () => void;
     onStartNextRound?: () => void;
+    onEndSession?: () => void;
     onSelectVoteTarget?: (targetPlayerId: string) => void;
     onSubmitVote?: () => void;
     onChangeImpostorGuessText?: (guessText: string) => void;
@@ -846,6 +899,8 @@ export function renderRoomLobbyContent(
     startSecondVotingError?: string;
     isStartingNextRound?: boolean;
     startNextRoundError?: string;
+    isEndingSession?: boolean;
+    endSessionError?: string;
     selectedVoteTargetPlayerId?: string | null;
     isSubmittingVote?: boolean;
     submitVoteError?: string;
@@ -1000,6 +1055,60 @@ export function renderRoomLobbyContent(
             </button>
           ) : null}
         </div>
+      </section>
+    );
+  }
+
+  if (dataState.status === "finished") {
+    const finished = dataState.gameState.finished;
+    const finalScores = [...(finished?.finalScores ?? [])].sort(
+      (left, right) =>
+        right.score - left.score || left.nickname.localeCompare(right.nickname),
+    );
+    const winnerIds = new Set(finished?.winnerPlayerIds ?? []);
+    const winners = [...(finished?.winners ?? [])].sort((left, right) =>
+      left.nickname.localeCompare(right.nickname),
+    );
+    const winnerCopy =
+      winners.length === 1
+        ? `Ganó ${winners[0]?.nickname}`
+        : `Empataron ${winners.map((winner) => winner.nickname).join(", ")}`;
+    const roundCount = finished?.roundCount ?? 0;
+
+    return (
+      <section
+        className="impostor-group-card impostor-room-role-reveal"
+        aria-labelledby="impostor-room-finished-title"
+      >
+        <p className="impostor-kicker">Resultado final</p>
+        <h1 id="impostor-room-finished-title">{winnerCopy}</h1>
+        <p>
+          {roundCount === 1
+            ? "1 ronda jugada"
+            : `${roundCount} rondas jugadas`}
+        </p>
+        <div
+          className="impostor-group-section"
+          aria-labelledby="impostor-room-final-score-title"
+        >
+          <h2 id="impostor-room-final-score-title">Clasificación final</h2>
+          <ol className="impostor-scoreboard-list">
+            {finalScores.map((player) => (
+              <li key={player.playerId}>
+                <span>
+                  {player.nickname}
+                  {winnerIds.has(player.playerId) ? <strong>Ganador</strong> : null}
+                </span>
+                <strong>
+                  {player.score === 1 ? "1 punto" : `${player.score} puntos`}
+                </strong>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <Link className="impostor-action impostor-action--primary" href="/impostor/grupo">
+          Volver al grupo
+        </Link>
       </section>
     );
   }
@@ -1415,8 +1524,12 @@ export function renderRoomLobbyContent(
       const word = dataState.gameState.privateView.word;
       const canUseNextRoundAction =
         scoreboard?.canStartNextRound === true && selfParticipant?.isHost === true;
+      const canUseEndSessionAction =
+        scoreboard?.canEndSession === true && selfParticipant?.isHost === true;
       const isHostBlockedFromNextRound =
         selfParticipant?.isHost === true && scoreboard?.canStartNextRound !== true;
+      const isAnyScoreboardActionPending =
+        options.isStartingNextRound === true || options.isEndingSession === true;
       const nextRoundBlockCopy =
         scoreboard?.nextRoundBlockReason === "no_words"
           ? "No quedan palabras nuevas. Agreguen más al banco del grupo para seguir."
@@ -1468,12 +1581,24 @@ export function renderRoomLobbyContent(
               <button
                 className="impostor-action impostor-action--primary"
                 type="button"
-                disabled={options.isStartingNextRound}
+                disabled={isAnyScoreboardActionPending}
                 onClick={options.onStartNextRound}
               >
                 {options.isStartingNextRound
                   ? "Abriendo nueva ronda..."
                   : "Nueva ronda"}
+              </button>
+            ) : null}
+            {canUseEndSessionAction ? (
+              <button
+                className="impostor-action impostor-action--danger"
+                type="button"
+                disabled={isAnyScoreboardActionPending}
+                onClick={options.onEndSession}
+              >
+                {options.isEndingSession
+                  ? "Terminando tanda..."
+                  : "Terminar tanda"}
               </button>
             ) : null}
             {isHostBlockedFromNextRound ? (
@@ -1498,6 +1623,11 @@ export function renderRoomLobbyContent(
             {options.startNextRoundError ? (
               <div className="impostor-group-error" aria-live="polite">
                 <p>{options.startNextRoundError}</p>
+              </div>
+            ) : null}
+            {options.endSessionError ? (
+              <div className="impostor-group-error" aria-live="polite">
+                <p>{options.endSessionError}</p>
               </div>
             ) : null}
           </div>
@@ -1737,6 +1867,8 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   const [startNextRoundError, setStartNextRoundError] = useState<
     string | undefined
   >();
+  const [isEndingSession, setIsEndingSession] = useState(false);
+  const [endSessionError, setEndSessionError] = useState<string | undefined>();
   const [selectedVoteTargetPlayerId, setSelectedVoteTargetPlayerId] = useState<
     string | null
   >(null);
@@ -1842,6 +1974,23 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
         }
 
         if (!activeLobby) {
+          let finalGameState: MyGameState | null = null;
+
+          try {
+            finalGameState = await getMyGameState(createImpostorRoomsClient());
+          } catch {
+            finalGameState = null;
+          }
+
+          if (!isLatestRefresh()) {
+            return;
+          }
+
+          if (finalGameState?.state === "finished") {
+            setDataState({ status: "finished", gameState: finalGameState });
+            return;
+          }
+
           if (options.absentDestination === "group") {
             router.replace("/impostor/grupo");
             return;
@@ -1933,6 +2082,17 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
       router,
     ],
   );
+
+  const refreshFinishedGameStateNow = useCallback(async () => {
+    const finalGameState = await getMyGameState(createImpostorRoomsClient());
+
+    if (finalGameState?.state === "finished" && isMountedRef.current) {
+      clearGameStatePollTimeout();
+      setDataState({ status: "finished", gameState: finalGameState });
+    }
+
+    return finalGameState;
+  }, [clearGameStatePollTimeout]);
 
   const refreshGameplayStateNow = useCallback(
     async (reason: "poll" | "foreground" | "manual") => {
@@ -2290,7 +2450,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   async function handleStartNextRound() {
-    if (isStartingNextRound || !isMountedRef.current) {
+    if (isStartingNextRound || isEndingSession || !isMountedRef.current) {
       return;
     }
 
@@ -2307,6 +2467,31 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     } finally {
       if (isMountedRef.current) {
         setIsStartingNextRound(false);
+      }
+    }
+  }
+
+  async function handleEndSession() {
+    if (isEndingSession || isStartingNextRound || !isMountedRef.current) {
+      return;
+    }
+
+    if (!confirmEndSession()) {
+      return;
+    }
+
+    setEndSessionError(undefined);
+    setIsEndingSession(true);
+
+    try {
+      await runEndSessionCommand({
+        end: () => endSession(createImpostorRoomsClient()),
+        refreshFinished: refreshFinishedGameStateNow,
+        setError: setEndSessionError,
+      });
+    } finally {
+      if (isMountedRef.current) {
+        setIsEndingSession(false);
       }
     }
   }
@@ -2601,6 +2786,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     onStartVoting: () => void handleStartVoting(),
     onStartSecondVoting: () => void handleStartSecondVoting(),
     onStartNextRound: () => void handleStartNextRound(),
+    onEndSession: () => void handleEndSession(),
     onSelectVoteTarget: handleSelectVoteTarget,
     onSubmitVote: () => void handleSubmitVote(),
     onChangeImpostorGuessText: handleChangeImpostorGuessText,
@@ -2617,6 +2803,8 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     startSecondVotingError,
     isStartingNextRound,
     startNextRoundError,
+    isEndingSession,
+    endSessionError,
     selectedVoteTargetPlayerId,
     isSubmittingVote,
     submitVoteError,

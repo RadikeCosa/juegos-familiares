@@ -373,7 +373,7 @@ async function validateImpostorScoringAndNextRound() {
   assertEqual(hostScoreboardState.round_number, 1, "Host scoreboard should show round 1.");
   assertEqual(hostScoreboardState.word, "Alfa", "Scoreboard should reveal resolved word.");
   assertEqual(hostScoreboardState.can_start_next_round, true, "Host should be allowed to start next round while words remain.");
-  assertEqual(hostScoreboardState.can_end_session, false, "11.5 should not expose an end-session action.");
+  assertEqual(hostScoreboardState.can_end_session, true, "Final read model should expose end-session action to the host.");
   assertEqual(hostScoreboardState.available_unused_words_count, 2, "Read model should count unused words server-side.");
   assertEqual(hostScoreboardState.next_round_block_reason, null, "Allowed host should not have a block reason.");
   assertEqual(hostScoreboardState.round_impostor.player_id, roundOneImpostorId, "Scoreboard should reveal only resolved impostor.");
@@ -466,7 +466,7 @@ async function validateGroupScoringAndNoWordsBlock() {
   assertEqual(hostScoreboardState.can_start_next_round, false, "Host should be blocked when no unused words remain.");
   assertEqual(hostScoreboardState.available_unused_words_count, 0, "No-word fixture should expose zero unused words.");
   assertEqual(hostScoreboardState.next_round_block_reason, "no_words", "Host block reason should be no_words.");
-  assertEqual(hostScoreboardState.can_end_session, false, "No-word state should not expose end-session action in 11.5.");
+  assertEqual(hostScoreboardState.can_end_session, true, "No-word scoreboard should still let the host end the session.");
 
   await expectRpcFailure(
     () => fixture.host.client.rpc("start_next_round"),
