@@ -98,12 +98,18 @@ El nickname se solicita dentro del flujo elegido.
 
 Formulario mínimo:
 
+En la etapa actual del MVP, la creación de grupos está restringida al admin de plataforma.
+
+Para ese caso habilitado, el formulario solicita:
+
 ```text
 Tu nombre
 Nombre del grupo
 
 [ Crear grupo ]
 ```
+
+Para usuarios comunes, la acción principal de entrada es unirse por invitación a un grupo existente.
 
 No incluye en este incremento:
 
@@ -113,7 +119,7 @@ No incluye en este incremento:
 * password o PIN;
 * onboarding adicional.
 
-El creador del grupo queda como administrador inicial.
+El admin de plataforma que crea el grupo queda como administrador inicial del Group.
 
 Para este incremento no se diseña:
 

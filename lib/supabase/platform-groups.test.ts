@@ -6,6 +6,7 @@ import {
   createResolveGroupInvitationController,
   createGroupWithAdminPlayer,
   createGroupWithAdminPlayerFromIntent,
+  getMyPlatformPermissions,
   getMyActiveGroupInvitation,
   joinGroupWithInvitation,
   joinGroupWithInvitationFromIntent,
@@ -112,6 +113,54 @@ describe("createGroupWithAdminPlayer", () => {
     ).rejects.toThrow(
       "No se pudo crear el grupo. Revisá los datos e intentá de nuevo."
     );
+  });
+
+  it("surfaces platform admin authorization failures with specific feedback", async () => {
+    const supabase = {
+      rpc: vi.fn(async () => ({
+        data: null,
+        error: { code: "42501" }
+      }))
+    };
+
+    await expect(
+      createGroupWithAdminPlayer(supabase, {
+        groupName: "Familia",
+        playerNickname: "Ramiro"
+      })
+    ).rejects.toThrow(
+      "Solo el admin de plataforma puede crear grupos en esta etapa."
+    );
+  });
+});
+
+describe("getMyPlatformPermissions", () => {
+  it("returns whether the current user can create groups", async () => {
+    const supabase = {
+      rpc: vi.fn(async () => ({
+        data: [{ can_create_groups: true }],
+        error: null
+      }))
+    };
+
+    await expect(getMyPlatformPermissions(supabase)).resolves.toEqual({
+      canCreateGroups: true
+    });
+
+    expect(supabase.rpc).toHaveBeenCalledWith("get_my_platform_permissions");
+  });
+
+  it("falls back to no group creation permission when the RPC is unavailable", async () => {
+    const supabase = {
+      rpc: vi.fn(async () => ({
+        data: null,
+        error: { code: "42501" }
+      }))
+    };
+
+    await expect(getMyPlatformPermissions(supabase)).resolves.toEqual({
+      canCreateGroups: false
+    });
   });
 });
 
