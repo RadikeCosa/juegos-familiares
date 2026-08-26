@@ -63,6 +63,7 @@ Incremento 12 cerrado técnicamente: el primer MVP jugable está alcanzado a niv
 * privacidad del banco validada local y remotamente: los integrantes conocen la cantidad total y sólo ven sus propios aportes;
 * UI local del banco en `/impostor/grupo` y `/impostor/grupo/palabras`;
 * Room + Lobby completado localmente con creación, join por código/enlace, reconstrucción tras refresh, Realtime por invalidación y lifecycle mínimo leave/close;
+* mejora UX de smoke #1 registrada: compartir Group/Room quedó visible en las pantallas de destino sin cambiar dominio ni backend;
 * Presence básica privada de lobby cerrada en 5.1, separando disponibilidad efímera, pertenencia persistida y host autoritativo;
 * liveness autoritativo mínimo cerrado en 5.2 con timestamp server-side, heartbeat proporcional y smoke productivo específico;
 * sucesión autoritativa de host cerrada en 5.3 con `reassign_room_host_if_stale()`, selección server-side, concurrencia consistente, feedback breve y smoke productivo multi-cliente;
@@ -581,6 +582,8 @@ LocalIdentity
 
 **Cierre en producción:** el modelo se validó primero localmente con tests y base limpia. El smoke manual encontró huecos de UX que los tests no mostraban: una pantalla reconocida sin próxima acción clara, una invitación creada pero no recuperable visualmente y la falta de una vista concreta para el grupo. Después de corregir esos puntos, la base remota se alineó mediante migrations versionadas y el flujo completo se volvió a probar en Vercel con dos identidades reales aisladas. El resultado de producto en producción es que una persona puede crear o unirse a un grupo, reabrir su contexto, entrar a la vista del grupo, ver integrantes e invitar de forma segura si es administradora.
 
+**Mejora UX posterior de smoke:** durante un smoke manual más avanzado apareció una fricción relacionada: después de crear un `Group` o una `Room`, la siguiente intención natural era compartir el acceso. El flujo funcionaba técnicamente, pero la acción estaba poco visible en la pantalla de destino. Se decidió no agregar pantalla de éxito y preservar `crear Group → Group` y `crear Room → lobby`; la mejora consistió en hacer visible la acción siguiente dentro de esas mismas pantallas. Como los contratos ya exponían la invitación activa del Group para admin y el `joinCode` reconstruible de Room, se resolvió en frontend: `Compartir invitación` y `Copiar código` para admin de Group, `Compartir sala` y `Copiar código` en lobby, Web Share API cuando existe y clipboard como fallback. No se cambiaron backend, schema, RPCs, RLS, dominio ni autorización. La validación automatizada quedó en 561 tests PASS, lint PASS, build PASS y `git diff --check` PASS; queda como evidencia deseable probar Web Share/clipboard en dispositivos móviles reales durante el smoke físico.
+
 **Trade-offs deliberados:** quedan fuera recovery avanzado de Auth perdida, múltiples grupos por identidad, `Membership`, múltiples admins, expiración/regeneración/revocación de invitaciones, rate limiting específico, `Room`, Realtime y Presence.
 
 ## Estado autoritativo
@@ -1053,6 +1056,8 @@ node supabase/tests/smoke-4-5-room-lifecycle-realtime.mjs PASS
 
 Realtime funcionó mejor como señal de invalidación que como autoridad. El modelo también confirmó que host de Room y administrador del Group deben permanecer separados: uno conduce una reunión temporal, el otro administra pertenencia social.
 
+Una mejora posterior de smoke confirmó que reconstruir el lobby no alcanza si la siguiente acción humana no queda a mano. El enlace `/impostor/sala/[code]` y el código de Room ya existían; la corrección proporcional fue hacer visible `Compartir sala` y `Copiar código` en el lobby, sin crear `RoomInvitation` ni alterar lifecycle.
+
 Para Presence, la decisión documental fue conservar ese mismo patrón: Presence puede ayudar a detectar disponibilidad, pero el host cambia solo cuando una autoridad valida staleness y persiste el nuevo `host_player_id`.
 
 Incremento 5.1 cerró la primera parte de esa decisión: Presence privada de lobby quedó implementada como disponibilidad efímera por Room activa, autorizada por `RoomParticipant` y validada en producción con múltiples sesiones. La prueba confirmó la separación clave: perder Presence muestra `desconectado`, pero no elimina pertenencia, no abandona la Room y no cambia el host persistido.
@@ -1309,7 +1314,40 @@ PENDIENTE.
 
 ## UX
 
-PENDIENTE.
+El smoke manual detectó una fricción que no era un bug técnico: después de crear un `Group` o una `Room`, el usuario llegaba correctamente al contexto, pero necesitaba compartirlo enseguida y la acción no estaba suficientemente visible.
+
+La decisión fue mantener los flujos directos:
+
+```text
+crear Group
+→ Group
+
+crear Room
+→ lobby
+```
+
+En lugar de agregar una pantalla intermedia de éxito, se hizo visible la siguiente acción natural en las pantallas existentes. El admin de Group puede compartir invitación o copiar código; el lobby permite compartir sala o copiar código. Se usa Web Share API cuando está disponible y clipboard como fallback.
+
+Aprendizaje para el case study:
+
+```text
+tests automatizados
+≠
+validación completa de UX
+```
+
+El ciclo útil fue:
+
+```text
+smoke real
+→ observar fricción
+→ clasificarla como UX
+→ definir alcance mínimo
+→ reutilizar contratos existentes
+→ implementar
+→ validar
+→ continuar smoke
+```
 
 ## Arquitectura
 
@@ -1329,7 +1367,9 @@ PENDIENTE.
 
 ## Testing
 
-PENDIENTE.
+La mejora de compartir Group/Room se validó con 561 tests automatizados en PASS, lint PASS, build PASS y `git diff --check` PASS. La cobertura agregada incluyó payloads de share/copy con mocks, visibilidad admin/no-admin y Room reconstruida después de refresh.
+
+Queda como evidencia adicional deseable una validación manual de Web Share API y clipboard en dispositivos móviles reales, porque esos comportamientos dependen del navegador y del sistema operativo.
 
 ## Desarrollo con IA
 
