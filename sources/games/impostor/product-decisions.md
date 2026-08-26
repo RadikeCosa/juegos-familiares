@@ -1336,7 +1336,7 @@ Por lo tanto el resultado final puede tener:
 
 No existe estado de “sin ganador” si la tanda llegó a `scoreboard` con al menos una ronda puntuada y roster válido.
 
-El cliente no decide ganador final, no arma historial, no envía scores finales y no cierra Room/tanda por sí mismo. La operación futura debe derivar contexto desde:
+El cliente no decide ganador final, no arma historial, no envía scores finales y no cierra Room/tanda por sí mismo. La operación `end_session()` deriva contexto desde:
 
 ```text
 auth.uid()
@@ -1363,6 +1363,8 @@ Host y no-host ven el mismo resultado final. El host puede tener CTA para volver
 `can_start_next_round = false` en `finished`.
 
 `can_end_session = false` en `finished`, porque la tanda ya terminó.
+
+En `scoreboard`, `can_end_session` es un permiso autoritativo del read model. Queda en `true` sólo para el host actual cuando la ronda vigente está puntuada. El cliente lo usa para mostrar la acción `Terminar tanda`, pero no calcula ese permiso por su cuenta.
 
 El historial de tanda conserva:
 
@@ -1391,6 +1393,8 @@ Las palabras usadas completas quedan fuera del historial mínimo inicial. La pal
 Los votos individuales históricos quedan fuera. Se pueden conservar resultados agregados mínimos si son necesarios para derivar “impostor descubierto”, pero no quién votó a quién.
 
 No se persiste historial de hosts por ronda. Solo se conserva, como auditoría mínima, el host que cerró la tanda.
+
+La UI final del MVP muestra resultado final, ganador único o ganadores empatados, clasificación completa, puntajes finales, cantidad de rondas jugadas y `Volver al grupo`. No muestra detalle ronda por ronda, votos históricos ni palabras usadas.
 
 ## Motivo
 

@@ -39,7 +39,7 @@ Integrantes
       ↓
 Invitar personas (solo admin)
       ↓
-Futuro: sala / lobby
+Sala / lobby
       ↓
 ┌───────────────┬────────────────┬────────────────┐
 │ Crear sala    │ Unirse a sala  │ Agregar palabra│
@@ -272,7 +272,7 @@ Después:
 
 El jugador puede continuar agregando más palabras o volver al inicio.
 
-La pantalla futura permite agregar una palabra o frase por vez, ver la cantidad total disponible, consultar aportes propios y borrar aportes propios.
+La pantalla permite agregar una palabra o frase por vez, ver la cantidad total disponible, consultar aportes propios y borrar aportes propios.
 
 ---
 
@@ -670,7 +670,7 @@ Acciones del host:
 
 `Nueva ronda`
 
-`Terminar partida`
+`Terminar tanda`
 
 El marcador muestra puntuación individual acumulada dentro de la tanda.
 
@@ -721,7 +721,9 @@ Si varios jugadores empatan en el mayor puntaje, todos se muestran como ganadore
 
 Para jugar otra tanda, el grupo vuelve al grupo y crea una nueva Room.
 
-No se muestran votos individuales históricos.
+La pantalla final del MVP muestra resultado final, ganador único o ganadores empatados, clasificación completa, puntajes, cantidad de rondas y `Volver al grupo`.
+
+No muestra detalle de rondas, votos individuales históricos ni palabras.
 
 ---
 
@@ -836,7 +838,7 @@ Si falló:
 
 > Gana el grupo
 
-Scoring, marcador y nueva ronda pertenecen al Incremento 11. Historial y cierre final de tanda pertenecen a incrementos posteriores.
+Scoring, marcador y nueva ronda quedaron cerrados en el Incremento 11. Historial y cierre final de tanda quedaron cerrados técnicamente en el Incremento 12.
 
 ---
 
@@ -844,7 +846,7 @@ Scoring, marcador y nueva ronda pertenecen al Incremento 11. Historial y cierre 
 
 Cuando el host selecciona:
 
-`Terminar partida`
+`Terminar tanda`
 
 se muestra:
 
@@ -858,7 +860,7 @@ y debajo la clasificación completa.
 
 La tanda termina.
 
-El banco de palabras y el grupo permanecen disponibles para futuras partidas.
+El banco de palabras y el grupo permanecen disponibles para futuras tandas. Para jugar otra tanda, el grupo vuelve al grupo y crea una nueva Room.
 
 ---
 

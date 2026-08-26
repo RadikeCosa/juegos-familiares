@@ -27,7 +27,7 @@ El case study futuro debe mostrar tanto el resultado como el razonamiento que ll
 
 ```text
 Estado:
-Incremento 11 cerrado técnicamente: empate, segunda votación, intento final del impostor, scoring, scoreboard y nueva ronda están completos; `SessionPlayer.score`, `GameSession.state = scoreboard`, scoring idempotente, read model/UI de marcador y nueva ronda autoritativa quedan validados localmente, pero siguen pendientes historial, fin de tanda, deploy y validación física multi-dispositivo completa.
+Incremento 12 cerrado técnicamente: el primer MVP jugable está alcanzado a nivel técnico. Impostor ya permite jugar múltiples rondas, acumular marcador, terminar la tanda desde el host en `scoreboard`, cerrar la Room, conservar historial mínimo y reconstruir el resultado final compartido desde `get_my_game_state()` aunque no haya Room activa. Siguen pendientes deploy, robustez de reconexión/PWA, auditoría final y validación física multi-dispositivo completa.
 ```
 
 ## Ya existe
@@ -327,20 +327,22 @@ Completado:
   * locking y revalidación resuelven callers concurrentes;
   * host original no recupera rol automáticamente;
   * smoke productivo multi-cliente confirmó la progresión completa y cleanup sin residuos.
-* gameplay privado implementado hasta segunda votación:
-  * diseño e implementación de flujo autoritativo de tanda, rol privado, discusión, primera votación, empate y segunda votación;
+* gameplay completo implementado hasta cierre técnico de tanda:
+  * diseño e implementación de flujo autoritativo de tanda, rol privado, discusión, primera votación, empate, segunda votación, intento final, scoring, marcador, nueva ronda, cierre e historial mínimo;
   * modelado de privacidad por caller;
   * validación de seguridad de palabra e impostor;
-  * votación secreta y resolución backend sin tercera votación.
+  * votación secreta y resolución backend sin tercera votación;
+  * cierre autoritativo host-only desde `scoreboard`;
+  * resultado final compartido reconstruible desde historial aunque la Room ya no esté activa.
+  * hardening adversarial de 12.5, que detectó y corrigió `can_end_session = false` para el host en `scoreboard`;
+  * validación del historial único, idempotencia, ganadores múltiples, privacidad histórica y retry tardío sin afectar una Room nueva.
 
 PENDIENTE:
 
 * validación manual multi-dispositivo completa;
-* intento final del impostor;
-* reveal de palabra;
-* scoring, scoreboard, nueva ronda e historial;
-* diseño UI final;
+* deploy del cierre técnico de Incremento 12;
 * hardening mobile/concurrencia de 5.4, en suspenso hasta validación física;
+* robustez de reconexión/PWA de Incrementos 13 y 14;
 * playtesting;
 * iteración sobre uso real.
 
@@ -367,10 +369,14 @@ PENDIENTE:
 | Banco de palabras de Impostor | COMPLETADA LOCAL |
 | Room + Lobby | COMPLETADA LOCAL |
 | Contrato documental de Presence y sucesión | COMPLETADA DOCUMENTAL |
-| Gameplay privado hasta segunda votación | COMPLETADA TÉCNICAMENTE |
+| Gameplay completo hasta cierre técnico de tanda | COMPLETADA TÉCNICAMENTE |
 | Segunda votación | COMPLETADA TÉCNICAMENTE |
 | Intento final del impostor | COMPLETADA TÉCNICAMENTE |
-| Scoring | PENDIENTE |
+| Scoring, marcador y nueva ronda | COMPLETADA TÉCNICAMENTE |
+| Terminar tanda e historial mínimo | COMPLETADA TÉCNICAMENTE |
+| Reconexión básica | PENDIENTE |
+| Maduración PWA iOS/Android | PENDIENTE |
+| Auditoría final seguridad/testing/UX | PENDIENTE |
 | Playtesting | PENDIENTE |
 | Iteración | PENDIENTE |
 
@@ -743,7 +749,7 @@ Estado: REGISTRADA.
 
 La arquitectura está definida conceptualmente. La primera capa de plataforma ya está implementada para identidad, grupo, jugador, invitación y bootstrap. La capa específica de Impostor ya tiene banco de palabras, Room + Lobby, Presence/liveness/host succession, `GameSession`, `SessionPlayers`, `Round`, read model privado, primera votación, segunda votación e intento final del impostor.
 
-La tanda completa todavía no está cerrada: historial, fin de tanda, maduración PWA, deploy y validación física multi-dispositivo permanecen pendientes.
+La tanda completa quedó cerrada técnicamente en Incremento 12: historial mínimo, fin de tanda, resultado final compartido y reconstrucción histórica están implementados y validados localmente. Maduración PWA, deploy, reconexión robusta y validación física multi-dispositivo permanecen pendientes.
 
 Decisión preparada para el Incremento 3: el banco persistente se modelará como `GroupWord`, una entrada propia del grupo y distinta de la futura palabra seleccionada para una ronda. Esto permite alimentar el contenido entre partidas sin adelantar `Room`, `GameSession`, selección aleatoria ni registro de palabras usadas.
 
@@ -880,12 +886,16 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 11 | Puntuación, marcador y nueva ronda | CERRADO TÉCNICAMENTE | 11.0-11.5 cerrados; validación DB 11.5, tests focales, `npm test`, lint, build y `git diff --check` PASS |
 | 12.0 | Contrato documental de terminar tanda e historial mínimo | CERRADO DOCUMENTAL | Host-only desde `scoreboard`, `GameSession.state = finished`, `finished_at` server-side, Room cerrada/no reutilizable, ganadores por máximo puntaje con empates múltiples, historial mínimo sin votos individuales ni palabras completas |
 | 12.1 | Persistencia de `finished` e historial mínimo | CERRADO TÉCNICAMENTE | `game_sessions.finished_at`, estado `finished`, snapshots `game_session_history` y `round_history` con unicidad para idempotencia futura, ganadores múltiples, roster/scores finales y resumen de scoring sin votos individuales ni palabras secretas completas |
-| 12 | Terminar tanda e historial mínimo | EN CURSO | 12.0-12.1 cerrados; pendientes 12.2-12.5: RPC `end_session()`, read model `finished`, UI y hardening |
+| 12.2 | RPC autoritativa `end_session()` | CERRADO TÉCNICAMENTE | `end_session()` 0-args host-only desde `scoreboard`, fija `finished_at`, mueve `GameSession.state = finished`, cierra Room, crea snapshots únicos de tanda/rondas, calcula ganadores múltiples y valida idempotencia con `validate-12-2.mjs` |
+| 12.3 | Read model `finished` | CERRADO TÉCNICAMENTE | `get_my_game_state()` reconstruye la tanda cerrada desde historial aunque no haya slot activo, valida acceso por `SessionPlayers`, expone scores/ganadores/rondas mínimas sin secretos ni votos individuales y se valida con `validate-12-3.mjs` |
+| 12.4 | UI de cierre y resultado final | CERRADO TÉCNICAMENTE | Host ve `Terminar tanda` sólo con `can_end_session`, confirmación previa, loading/error reintentable, cierre 0-args, refresco autoritativo con `get_my_game_state()`, recuperación de `finished` sin Room activa y vista final compartida con ganadores, clasificación, puntajes, rondas y `Volver al grupo` |
+| 12.5 | Hardening multironda/cierre | CERRADO TÉCNICAMENTE | `validate-12-5.mjs` valida precondiciones, cierre host-only, historia única de tanda/rondas, ausencia de votos y palabras secretas, idempotencia, empates, read model histórico, denegación a no participantes, nueva Room posterior y retry tardío; detectó y corrigió `can_end_session` para host en `scoreboard` |
+| 12 | Terminar tanda e historial mínimo | CERRADO TÉCNICAMENTE | 12.0-12.5 cerrados; primer MVP jugable alcanzado técnicamente con cierre autoritativo, resultado final compartido, reconstrucción desde historial sin Room activa y validación adversarial local |
 | 13 | Reconexión básica | PENDIENTE | PENDIENTE |
 | 14 | Maduración PWA iOS/Android del MVP | PENDIENTE | PENDIENTE |
 | 15 | Auditoría final de seguridad, testing y UX del MVP | PENDIENTE | PENDIENTE |
 
-El primer MVP jugable está previsto al cerrar el Incremento 12.
+El primer MVP jugable quedó alcanzado técnicamente al cerrar el Incremento 12. No implica todavía deploy, validación presencial completa ni cierre de los incrementos 13-15.
 
 ---
 
