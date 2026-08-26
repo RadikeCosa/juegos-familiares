@@ -9,6 +9,7 @@ type PlatformGroupsClient = {
   rpc: (
     fn:
       | "create_group_with_admin_player"
+      | "get_my_platform_permissions"
       | "get_my_active_group_invitation"
       | "resolve_group_invitation"
       | "join_group_with_invitation",
@@ -31,6 +32,9 @@ const DUPLICATE_NICKNAME_JOIN_ERROR =
 
 const GENERIC_JOIN_ERROR =
   "No pudimos unirte al grupo. Revisá tu nombre e intentá de nuevo.";
+
+const PLATFORM_ADMIN_REQUIRED_CREATE_GROUP_ERROR =
+  "Solo el admin de plataforma puede crear grupos en esta etapa.";
 
 const MISSING_ACTIVE_INVITATION_ERROR =
   "No hay una invitación activa disponible.";
@@ -59,6 +63,10 @@ type JoinedGroupWithInvitationRow = {
 
 type GroupInvitationSummaryRow = {
   code: string;
+};
+
+type PlatformPermissionsRow = {
+  can_create_groups: boolean;
 };
 
 export type CreatedGroupWithAdminPlayer = {
@@ -110,6 +118,10 @@ export type GroupInvitationSummary = {
   path: string;
 };
 
+export type PlatformPermissions = {
+  canCreateGroups: boolean;
+};
+
 function getSingleRow<TRow>(data: unknown): TRow | null {
   if (Array.isArray(data)) {
     return data[0] ?? null;
@@ -139,6 +151,14 @@ function getJoinGroupErrorMessage(error: unknown) {
   }
 
   return GENERIC_JOIN_ERROR;
+}
+
+function getCreateGroupErrorMessage(error: unknown) {
+  if (isSupabaseErrorLike(error) && error.code === "42501") {
+    return PLATFORM_ADMIN_REQUIRED_CREATE_GROUP_ERROR;
+  }
+
+  return "No se pudo crear el grupo. Revisá los datos e intentá de nuevo.";
 }
 
 function getActiveGroupInvitationErrorMessage(error: unknown) {
@@ -204,6 +224,12 @@ function toGroupInvitationSummary(
   };
 }
 
+function toPlatformPermissions(row: PlatformPermissionsRow): PlatformPermissions {
+  return {
+    canCreateGroups: row.can_create_groups
+  };
+}
+
 export async function createGroupWithAdminPlayer(
   supabase: PlatformGroupsClient,
   input: CreateGroupWithAdminPlayerInput
@@ -214,7 +240,7 @@ export async function createGroupWithAdminPlayer(
   });
 
   if (result.error) {
-    throw new Error("No se pudo crear el grupo. Revisá los datos e intentá de nuevo.");
+    throw new Error(getCreateGroupErrorMessage(result.error));
   }
 
   const row = getSingleRow<CreatedGroupWithAdminPlayerRow>(result.data);
@@ -224,6 +250,24 @@ export async function createGroupWithAdminPlayer(
   }
 
   return toCreatedGroupWithAdminPlayer(row);
+}
+
+export async function getMyPlatformPermissions(
+  supabase: PlatformGroupsClient
+): Promise<PlatformPermissions> {
+  const result = await supabase.rpc("get_my_platform_permissions");
+
+  if (result.error) {
+    return { canCreateGroups: false };
+  }
+
+  const row = getSingleRow<PlatformPermissionsRow>(result.data);
+
+  if (!row) {
+    return { canCreateGroups: false };
+  }
+
+  return toPlatformPermissions(row);
 }
 
 export async function createGroupWithAdminPlayerFromIntent(

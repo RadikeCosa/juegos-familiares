@@ -54,6 +54,7 @@ Incremento 12 cerrado técnicamente: el primer MVP jugable está alcanzado a niv
 * bootstrap de contexto reconocido;
 * vista navegable de grupo con integrantes;
 * invitación administrativa recuperable desde contexto reconocido;
+* Smoke UX/Product #2: creación de `Group` restringida al admin de plataforma para beta curada;
 * persistencia local defensiva mediante `LocalIdentity`;
 * RLS y RPCs autoritativas para identidad, grupo e invitación;
 * tests unitarios, validaciones de base de datos y smoke browser/mobile para Incremento 2;
@@ -584,6 +585,8 @@ LocalIdentity
 
 **Mejora UX posterior de smoke:** durante un smoke manual más avanzado apareció una fricción relacionada: después de crear un `Group` o una `Room`, la siguiente intención natural era compartir el acceso. El flujo funcionaba técnicamente, pero la acción estaba poco visible en la pantalla de destino. Se decidió no agregar pantalla de éxito y preservar `crear Group → Group` y `crear Room → lobby`; la mejora consistió en hacer visible la acción siguiente dentro de esas mismas pantallas. Como los contratos ya exponían la invitación activa del Group para admin y el `joinCode` reconstruible de Room, se resolvió en frontend: `Compartir invitación` y `Copiar código` para admin de Group, `Compartir sala` y `Copiar código` en lobby, Web Share API cuando existe y clipboard como fallback. No se cambiaron backend, schema, RPCs, RLS, dominio ni autorización. La validación automatizada quedó en 561 tests PASS, lint PASS, build PASS y `git diff --check` PASS; queda como evidencia deseable probar Web Share/clipboard en dispositivos móviles reales durante el smoke físico.
 
+**Smoke UX/Product #2:** el smoke también mostró que, para esta etapa, permitir creación autónoma de grupos agregaba complejidad operativa innecesaria y riesgo de grupos duplicados o basura durante una beta curada. La decisión fue restringir `create_group_with_admin_player()` al admin de plataforma, ocultar la CTA de creación para usuarios comunes y mantener intacto el ingreso por invitación. El cambio se resolvió con una autorización real en backend, sin hardcodear identidades en frontend ni convertirlo en un sistema amplio de roles. La apertura futura puede tomar la forma de whitelist, solicitud de creación o creación autónoma cuando el producto lo justifique.
+
 **Trade-offs deliberados:** quedan fuera recovery avanzado de Auth perdida, múltiples grupos por identidad, `Membership`, múltiples admins, expiración/regeneración/revocación de invitaciones, rate limiting específico, `Room`, Realtime y Presence.
 
 ## Estado autoritativo
@@ -808,6 +811,7 @@ Resuelto técnicamente:
 * identidad técnica anónima sin cuentas tradicionales;
 * separación entre `AuthIdentity`, `Player`, `Group` y `LocalIdentity`;
 * creación atómica de grupo, jugador administrador e invitación inicial;
+* restricción de creación de grupos al admin de plataforma como decisión de etapa del MVP;
 * acceso por invitación desde segundo dispositivo;
 * nickname único dentro del grupo;
 * vista navegable del grupo con integrantes;
@@ -1310,7 +1314,11 @@ No completar con generalidades.
 
 ## Producto
 
-PENDIENTE.
+Smoke UX/Product #2 registró una decisión de etapa del MVP: la creación de `Group` queda reservada al admin de plataforma. Para usuarios comunes, el camino principal es entrar por invitación y jugar normalmente dentro de grupos existentes.
+
+El motivo no fue una limitación técnica sino una decisión operativa de beta: reducir grupos duplicados o basura, mantener el entorno curado y evitar diseñar prematuramente permisos, solicitudes o administración pública de grupos.
+
+La decisión queda abierta a revisión futura mediante whitelist, solicitud de creación o creación autónoma cuando exista una necesidad real.
 
 ## UX
 
@@ -1355,7 +1363,9 @@ PENDIENTE.
 
 ## Backend / seguridad
 
-PENDIENTE.
+La restricción de creación de grupos no se resolvió ocultando UI solamente. La autorización real vive en el punto de creación del `Group`: la RPC autoritativa valida si el caller es admin de plataforma antes de crear `Group`, `Player` administrador e invitación inicial.
+
+El join por invitación conserva su contrato existente para usuarios comunes, y los roles de admin de plataforma, admin de Group y host de Room siguen separados.
 
 ## Realtime
 
@@ -1367,7 +1377,7 @@ PENDIENTE.
 
 ## Testing
 
-La mejora de compartir Group/Room se validó con 561 tests automatizados en PASS, lint PASS, build PASS y `git diff --check` PASS. La cobertura agregada incluyó payloads de share/copy con mocks, visibilidad admin/no-admin y Room reconstruida después de refresh.
+La mejora de compartir Group/Room se validó con 561 tests automatizados en PASS, lint PASS, build PASS y `git diff --check` PASS. La cobertura agregada incluyó payloads de share/copy con mocks, visibilidad para admin de Group/no admin de Group y Room reconstruida después de refresh.
 
 Queda como evidencia adicional deseable una validación manual de Web Share API y clipboard en dispositivos móviles reales, porque esos comportamientos dependen del navegador y del sistema operativo.
 

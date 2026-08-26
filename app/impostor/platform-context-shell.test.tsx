@@ -8,6 +8,7 @@ import {
   renderAdminInvitationPanel,
   shareInvitation
 } from "./admin-invitation-panel";
+import { ImpostorAnonymousOnboardingActions } from "./anonymous-onboarding-actions";
 import { renderImpostorPlatformContext } from "./platform-context-shell";
 import type { PlatformBootstrapState } from "../../lib/supabase/platform-bootstrap";
 
@@ -60,8 +61,8 @@ describe("renderImpostorPlatformContext", () => {
       })
     );
 
-    expect(text).toContain("Crear grupo");
     expect(text).toContain("Unirme a un grupo");
+    expect(text).not.toContain("Crear grupo");
   });
 
   it("shows the recognized Player and Group with a clear group link", () => {
@@ -130,6 +131,30 @@ describe("renderImpostorPlatformContext", () => {
     expect(text).toContain("Revisá tu conexión");
     expect(text).not.toContain("Crear grupo");
     expect(text).not.toContain("Unirme a un grupo");
+  });
+});
+
+describe("ImpostorAnonymousOnboardingActions", () => {
+  it("shows group creation only to platform admins", () => {
+    const text = renderToStaticMarkup(
+      <ImpostorAnonymousOnboardingActions
+        initialPlatformPermissions={{ canCreateGroups: true }}
+      />
+    );
+
+    expect(text).toContain("Crear grupo");
+    expect(text).toContain("Unirme a un grupo");
+  });
+
+  it("keeps invitation join available for non-admin users without showing group creation", () => {
+    const text = renderToStaticMarkup(
+      <ImpostorAnonymousOnboardingActions
+        initialPlatformPermissions={{ canCreateGroups: false }}
+      />
+    );
+
+    expect(text).toContain("Unirme a un grupo");
+    expect(text).not.toContain("Crear grupo");
   });
 });
 

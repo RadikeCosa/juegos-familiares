@@ -119,7 +119,11 @@ Cada dispositivo mantiene una identidad sencilla del jugador dentro de su grupo.
 
 # Administrador
 
-El creador del grupo actúa inicialmente como administrador.
+En la etapa actual del MVP, solo el admin de plataforma puede crear grupos.
+
+Cuando el admin de plataforma crea un grupo, actúa inicialmente como administrador de ese Group.
+
+Los usuarios comunes entran a grupos existentes por invitación.
 
 Puede:
 
@@ -263,7 +267,7 @@ La interfaz de estadísticas no forma parte obligatoria del MVP visual.
 
 ## Grupo
 
-* crear grupo;
+* crear grupo desde admin de plataforma;
 * identidad sencilla del jugador;
 * recordar jugador y grupo;
 * administración básica.

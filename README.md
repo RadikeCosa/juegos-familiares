@@ -47,6 +47,35 @@ Advertencia: `supabase:reset` es DESTRUCTIVO SOLO PARA LA DB LOCAL. Borra los da
 
 No usar este comando como procedimiento de produccion.
 
+### Provisionar admin de plataforma
+
+En la etapa actual del MVP, solo el admin de plataforma puede crear grupos. El alta del primer admin es un paso operativo manual, no una pantalla publica del producto.
+
+Flujo recomendado para local o para un entorno remoto controlado:
+
+1. Abrir la app en el navegador/perfil que se va a usar como admin.
+2. Crear una identidad anonima en ese navegador. Si todavia no existe ningun grupo, se puede intentar unirse con cualquier codigo invalido desde `Unirme a un grupo`; ese intento crea la identidad anonima y luego falla al resolver la invitacion.
+3. Buscar el `id` de esa identidad en Supabase Auth. En SQL:
+
+```sql
+select id, created_at
+from auth.users
+order by created_at desc
+limit 5;
+```
+
+4. Insertar ese `id` en `public.platform_admins`:
+
+```sql
+insert into public.platform_admins (auth_user_id)
+values ('<auth-user-id>'::uuid)
+on conflict (auth_user_id) do nothing;
+```
+
+5. Refrescar la app en ese mismo navegador. La accion `Crear grupo` deberia quedar visible.
+
+No insertar usuarios de prueba en produccion salvo que se vaya a usarlos realmente como admins. No usar `service_role` en frontend ni exponer este paso como UI publica.
+
 ### Tests de DB
 
 ```bash
@@ -105,5 +134,7 @@ npm run supabase:stop
 ## Produccion
 
 Los comandos de reset documentados son para Supabase local. La migracion de produccion se realiza por un procedimiento controlado separado.
+
+Antes de una beta con usuarios reales, limpiar datos remotos solo si el entorno no contiene informacion que haya que conservar. Hacerlo desde Supabase Dashboard/SQL con una revision explicita de tablas afectadas; no usar `supabase:reset` como equivalente de produccion.
 
 Para el Incremento 2, las migrations remotas quedaron alineadas con el historial local y el smoke de produccion en Vercel fue aprobado de punta a punta.

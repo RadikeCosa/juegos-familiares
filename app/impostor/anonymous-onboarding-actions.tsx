@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createBrowserSupabaseClient } from "../../lib/supabase/browser-client";
 import {
   bootstrapPlatformContext,
@@ -11,8 +11,10 @@ import {
   createCreateGroupSubmitController,
   createJoinGroupSubmitController,
   createResolveGroupInvitationController,
+  getMyPlatformPermissions,
   type CreatedGroupWithAdminPlayer,
   type JoinedGroupWithInvitation,
+  type PlatformPermissions,
   type ResolvedGroupInvitation
 } from "../../lib/supabase/platform-groups";
 
@@ -44,6 +46,10 @@ type JoinByLinkState =
 
 type OnRecognizedContext = (context: RecognizedPlatformContext) => void;
 
+type PlatformPermissionsState =
+  | { status: "loading" }
+  | { status: "success"; permissions: PlatformPermissions };
+
 function getFriendlyError(error: unknown) {
   if (error instanceof Error) {
     return error.message;
@@ -65,11 +71,19 @@ function createPlatformBootstrapClient(): PlatformBootstrapClient {
 }
 
 export function ImpostorAnonymousOnboardingActions({
-  onRecognizedContext
+  onRecognizedContext,
+  initialPlatformPermissions
 }: {
   onRecognizedContext?: OnRecognizedContext;
+  initialPlatformPermissions?: PlatformPermissions;
 }) {
   const [state, setState] = useState<ActionState>({ status: "idle" });
+  const [platformPermissionsState, setPlatformPermissionsState] =
+    useState<PlatformPermissionsState>(
+      initialPlatformPermissions
+        ? { status: "success", permissions: initialPlatformPermissions }
+        : { status: "loading" }
+    );
   const createGroupSubmitController = useRef(createCreateGroupSubmitController());
   const resolveGroupInvitationController = useRef(
     createResolveGroupInvitationController()
@@ -97,7 +111,7 @@ export function ImpostorAnonymousOnboardingActions({
   ) {
     event.preventDefault();
 
-    if (state.status === "creating") {
+    if (state.status === "creating" || !canCreateGroups) {
       return;
     }
 
@@ -199,8 +213,31 @@ export function ImpostorAnonymousOnboardingActions({
     state.status === "creating" ||
     state.status === "resolving" ||
     state.status === "joining";
+  const canCreateGroups =
+    platformPermissionsState.status === "success" &&
+    platformPermissionsState.permissions.canCreateGroups;
   const resolvedJoinState =
     state.status === "resolved" || state.status === "joining" ? state : null;
+
+  useEffect(() => {
+    if (initialPlatformPermissions) {
+      return;
+    }
+
+    let isActive = true;
+
+    void getMyPlatformPermissions(createBrowserSupabaseClient()).then(
+      (permissions) => {
+        if (isActive) {
+          setPlatformPermissionsState({ status: "success", permissions });
+        }
+      }
+    );
+
+    return () => {
+      isActive = false;
+    };
+  }, [initialPlatformPermissions]);
 
   return (
     <section
@@ -209,16 +246,22 @@ export function ImpostorAnonymousOnboardingActions({
     >
       <h2 id="impostor-onboarding-title">Empezar</h2>
       <div className="impostor-onboarding__actions">
+        {canCreateGroups ? (
+          <button
+            className="impostor-action impostor-action--primary"
+            type="button"
+            disabled={isLoading}
+            onClick={() => handleIntent("create-group")}
+          >
+            Crear grupo
+          </button>
+        ) : null}
         <button
-          className="impostor-action impostor-action--primary"
-          type="button"
-          disabled={isLoading}
-          onClick={() => handleIntent("create-group")}
-        >
-          Crear grupo
-        </button>
-        <button
-          className="impostor-action"
+          className={
+            canCreateGroups
+              ? "impostor-action"
+              : "impostor-action impostor-action--primary"
+          }
           type="button"
           disabled={isLoading}
           onClick={() => handleIntent("join-group")}
@@ -227,7 +270,8 @@ export function ImpostorAnonymousOnboardingActions({
         </button>
       </div>
 
-      {state.status === "create-group-form" || state.status === "creating" ? (
+      {canCreateGroups &&
+      (state.status === "create-group-form" || state.status === "creating") ? (
         <form
           className="impostor-create-group"
           aria-labelledby="impostor-create-group-title"

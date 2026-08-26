@@ -121,7 +121,11 @@ Las mismas personas pueden jugar en diferentes momentos y el banco de palabras d
 
 ## Decisión
 
-El creador del grupo es inicialmente su administrador.
+En la etapa actual del MVP, solo el admin de plataforma puede crear grupos.
+
+Cuando el admin de plataforma crea un grupo, queda inicialmente como administrador de ese Group.
+
+Los usuarios comunes no crean grupos autónomamente: entran a grupos existentes por invitación.
 
 ## Permisos iniciales
 
@@ -137,6 +141,10 @@ En el MVP del banco de palabras, el administrador no tiene una excepción para e
 El contexto familiar permite mantener una administración sencilla sin construir un sistema complejo de roles.
 
 La moderación completa del banco queda diferida hasta que aparezca un problema real de contenido.
+
+La restricción de creación de grupos surge del `Smoke UX/Product #2`: para una beta curada, reduce complejidad operativa, evita grupos duplicados o basura y mantiene el onboarding enfocado en unirse por invitación.
+
+Esta decisión puede revisarse más adelante con whitelist, solicitud de creación o creación autónoma si el producto necesita abrirse a más grupos.
 
 ---
 
