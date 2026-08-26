@@ -428,7 +428,7 @@ type RoomLobbyRow = {
     participant_player_id: string;
     participant_nickname: string;
     participant_is_host: boolean;
-    participant_is_self?: boolean;
+    participant_is_self: boolean;
     participant_joined_at: string;
 };
 
@@ -436,7 +436,7 @@ export type RoomLobbyParticipant = {
     playerId: string;
     nickname: string;
     isHost: boolean;
-    isSelf?: boolean;
+    isSelf: boolean;
     joinedAt: string;
 };
 
@@ -1233,6 +1233,7 @@ function isRoomLobbyRow(value: unknown): value is RoomLobbyRow {
         typeof row.room_status === "string" &&
         typeof row.participant_nickname === "string" &&
         typeof row.participant_is_host === "boolean" &&
+        typeof row.participant_is_self === "boolean" &&
         typeof row.participant_joined_at === "string"
     );
 }
@@ -1905,8 +1906,13 @@ function toMyGameState(row: MyGameStateRow): MyGameState {
     };
 }
 
-function toRoomLobby(rows: RoomLobbyRow[]): RoomLobby {
+function toRoomLobby(rows: RoomLobbyRow[], invalidMessage: string): RoomLobby {
     const [firstRow] = rows;
+    const selfCount = rows.filter((row) => row.participant_is_self).length;
+
+    if (selfCount !== 1) {
+        throw new Error(invalidMessage);
+    }
 
     return {
         room: {
@@ -1919,12 +1925,9 @@ function toRoomLobby(rows: RoomLobbyRow[]): RoomLobby {
                 playerId: row.participant_player_id,
                 nickname: row.participant_nickname,
                 isHost: row.participant_is_host,
+                isSelf: row.participant_is_self,
                 joinedAt: row.participant_joined_at
             };
-
-            if (typeof row.participant_is_self === "boolean") {
-                participant.isSelf = row.participant_is_self;
-            }
 
             return participant;
         })
@@ -2273,7 +2276,7 @@ export async function createRoom(
         throw new Error("No pudimos confirmar que la sala fue creada.");
     }
 
-    return toRoomLobby(rows);
+    return toRoomLobby(rows, "No pudimos confirmar que la sala fue creada.");
 }
 
 export function createCreateRoomController() {
@@ -2314,7 +2317,7 @@ export async function joinRoomByCode(
         throw new Error("No pudimos confirmar que te uniste a la sala.");
     }
 
-    return toRoomLobby(rows);
+    return toRoomLobby(rows, "No pudimos confirmar que te uniste a la sala.");
 }
 
 export async function getMyActiveRoom(
@@ -2336,7 +2339,7 @@ export async function getMyActiveRoom(
         throw new Error("No pudimos confirmar tu sala activa.");
     }
 
-    return toRoomLobby(rows);
+    return toRoomLobby(rows, "No pudimos confirmar tu sala activa.");
 }
 
 export function createJoinRoomByCodeController() {

@@ -51,7 +51,7 @@ const singlePlayerLobby: RoomLobby = {
 const twoPlayerLobby: RoomLobby = {
     room: { code: "AB7KQ2M4", status: "lobby" },
     participants: [
-        { playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" },
+        { playerId: "player-1", nickname: "Ramiro", isHost: true, isSelf: false, joinedAt: "2026-08-19T12:00:00.000Z" },
         { playerId: "player-2", nickname: "Pedro", isHost: false, isSelf: true, joinedAt: "2026-08-19T12:05:00.000Z" }
     ]
 };
@@ -60,17 +60,17 @@ const hostLobby: RoomLobby = {
     room: { id: "room-1", code: "AB7KQ2M4", status: "lobby" },
     participants: [
         { playerId: "player-1", nickname: "Ramiro", isHost: true, isSelf: true, joinedAt: "2026-08-19T12:00:00.000Z" },
-        { playerId: "player-2", nickname: "Pedro", isHost: false, joinedAt: "2026-08-19T12:05:00.000Z" },
-        { playerId: "player-3", nickname: "Ana", isHost: false, joinedAt: "2026-08-19T12:06:00.000Z" }
+        { playerId: "player-2", nickname: "Pedro", isHost: false, isSelf: false, joinedAt: "2026-08-19T12:05:00.000Z" },
+        { playerId: "player-3", nickname: "Ana", isHost: false, isSelf: false, joinedAt: "2026-08-19T12:06:00.000Z" }
     ]
 };
 
 const nonHostLobby: RoomLobby = {
     ...hostLobby,
     participants: [
-        { playerId: "player-1", nickname: "Ramiro", isHost: true, joinedAt: "2026-08-19T12:00:00.000Z" },
+        { playerId: "player-1", nickname: "Ramiro", isHost: true, isSelf: false, joinedAt: "2026-08-19T12:00:00.000Z" },
         { playerId: "player-2", nickname: "Pedro", isHost: false, isSelf: true, joinedAt: "2026-08-19T12:05:00.000Z" },
-        { playerId: "player-3", nickname: "Ana", isHost: false, joinedAt: "2026-08-19T12:06:00.000Z" }
+        { playerId: "player-3", nickname: "Ana", isHost: false, isSelf: false, joinedAt: "2026-08-19T12:06:00.000Z" }
     ]
 };
 
@@ -1174,8 +1174,11 @@ describe("renderRoomLobbyContent", () => {
         );
 
         expect(hostMarkup).toContain("Iniciar tanda");
+        expect(hostMarkup).not.toContain("Esperando a que el host inicie la partida");
         expect(nonHostMarkup).not.toContain("Iniciar tanda");
+        expect(nonHostMarkup).toContain("Esperando a que el host inicie la partida");
         expect(playingMarkup).not.toContain("Iniciar tanda");
+        expect(playingMarkup).not.toContain("Esperando a que el host inicie la partida");
     });
 
     it("disables Start and shows loading copy while start_session is in flight", () => {
