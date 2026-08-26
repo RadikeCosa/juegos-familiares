@@ -7,7 +7,11 @@ import type { MyGameState, RoomLobby } from "../../../../lib/supabase/impostor-r
 import {
     createGameplayPollLoop,
     confirmEndSession,
+    copyRoomCode,
     formatPlayerCount,
+    getRoomInvitationPath,
+    getRoomInvitationUrl,
+    getRoomShareData,
     renderRoomLobbyContent,
     runEndSessionCommand,
     runStartDiscussionCommand,
@@ -15,6 +19,7 @@ import {
     runStartSecondVotingCommand,
     runStartVotingCommand,
     runSubmitVoteCommand,
+    shareRoom,
     toGameplayDataState
 } from "./room-lobby-shell";
 
@@ -897,6 +902,9 @@ describe("renderRoomLobbyContent", () => {
         );
 
         expect(markup).toContain("Sala AB7KQ2M4");
+        expect(markup).toContain("/impostor/sala/AB7KQ2M4");
+        expect(markup).toContain("Compartir sala");
+        expect(markup).toContain("Copiar código");
         expect(markup).toContain("Ramiro");
         expect(markup).toContain("Host");
         expect(markup).toContain("Vos");
@@ -906,6 +914,60 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).not.toContain("player-1");
         expect(markup).not.toContain("group-1");
         expect(markup).not.toContain("auth_user_id");
+    });
+
+    it("builds room share and copy payloads from the active lobby code after reconstruction", () => {
+        expect(getRoomInvitationPath(singlePlayerLobby.room.code)).toBe(
+            "/impostor/sala/AB7KQ2M4"
+        );
+        expect(getRoomInvitationUrl(singlePlayerLobby.room.code)).toBe(
+            "/impostor/sala/AB7KQ2M4"
+        );
+        expect(getRoomShareData(singlePlayerLobby.room.code)).toEqual({
+            title: "Sala de Impostor",
+            text: "Sumate a esta sala de Impostor.",
+            url: "/impostor/sala/AB7KQ2M4"
+        });
+    });
+
+    it("shows brief room share feedback", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "success", lobby: singlePlayerLobby },
+                {
+                    roomCode: "AB7KQ2M4",
+                    roomShareState: { status: "copied" }
+                }
+            )
+        );
+
+        expect(markup).toContain("Código copiado.");
+        expect(markup).toContain("aria-live=\"polite\"");
+    });
+
+    it("copies the active lobby join code through the provided clipboard", async () => {
+        const writeText = vi.fn(async () => undefined);
+
+        await copyRoomCode(singlePlayerLobby.room.code, {
+            clipboard: { writeText }
+        });
+
+        expect(writeText).toHaveBeenCalledWith("AB7KQ2M4");
+    });
+
+    it("shares the room link through native share when available", async () => {
+        const share = vi.fn(async () => undefined);
+
+        await expect(
+            shareRoom(singlePlayerLobby.room.code, { share })
+        ).resolves.toBe("shared");
+
+        expect(share).toHaveBeenCalledWith({
+            title: "Sala de Impostor",
+            text: "Sumate a esta sala de Impostor.",
+            url: "/impostor/sala/AB7KQ2M4"
+        });
     });
 
     it("shows both host and joined participant after B joins, without technical IDs", () => {

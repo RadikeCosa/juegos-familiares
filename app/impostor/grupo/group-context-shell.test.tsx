@@ -148,6 +148,8 @@ describe("renderImpostorGroupContext", () => {
     expect(markup).toContain("Ramiro");
     expect(markup).toContain("Admin");
     expect(markup).not.toContain("Invitar personas");
+    expect(markup).not.toContain("Compartir invitación");
+    expect(markup).not.toContain("Copiar código");
   });
 
   it("renders loading states for bootstrap and players", () => {

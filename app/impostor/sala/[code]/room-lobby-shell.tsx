@@ -108,6 +108,19 @@ type RoomLifecycleActionState =
   | { status: "closing" }
   | { status: "error"; message: string };
 
+type RoomShareState =
+  | { status: "idle" }
+  | { status: "copied" }
+  | { status: "shared" }
+  | { status: "error"; message: string };
+type ClipboardLike = {
+  writeText: (text: string) => PromiseLike<void> | void;
+};
+type ShareNavigatorLike = {
+  clipboard?: ClipboardLike;
+  share?: (data: ShareData) => PromiseLike<void> | void;
+};
+
 const GENERIC_ROOM_LOBBY_ERROR = "No pudimos cargar la sala. Intentá de nuevo.";
 const GENERIC_GAME_RECONSTRUCTION_ERROR = "No pudimos reconstruir la partida.";
 const GENERIC_START_AUTH_ERROR =
@@ -173,6 +186,66 @@ function createAnonymousAuthClient() {
 
 function getFriendlyError(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+export function getRoomInvitationPath(code: string) {
+  return `/impostor/sala/${encodeURIComponent(code)}`;
+}
+
+export function getRoomInvitationUrl(code: string) {
+  const path = getRoomInvitationPath(code);
+
+  if (typeof window === "undefined") {
+    return path;
+  }
+
+  return `${window.location.origin}${path}`;
+}
+
+export function getRoomShareData(code: string) {
+  return {
+    title: "Sala de Impostor",
+    text: "Sumate a esta sala de Impostor.",
+    url: getRoomInvitationUrl(code),
+  };
+}
+
+function getNavigator(): ShareNavigatorLike | undefined {
+  if (typeof navigator === "undefined") {
+    return undefined;
+  }
+
+  return navigator;
+}
+
+export async function shareRoom(
+  code: string,
+  shareNavigator: ShareNavigatorLike | undefined = getNavigator(),
+): Promise<"shared"> {
+  const shareData = getRoomShareData(code);
+
+  if (shareNavigator?.share) {
+    await shareNavigator.share(shareData);
+    return "shared";
+  }
+
+  if (shareNavigator?.clipboard) {
+    await shareNavigator.clipboard.writeText(shareData.url);
+    return "shared";
+  }
+
+  throw new Error("Share unavailable");
+}
+
+export async function copyRoomCode(
+  code: string,
+  shareNavigator: ShareNavigatorLike | undefined = getNavigator(),
+) {
+  if (!shareNavigator?.clipboard) {
+    throw new Error("Clipboard unavailable");
+  }
+
+  await shareNavigator.clipboard.writeText(code);
 }
 
 function logRoomLivenessError(error: unknown) {
@@ -909,6 +982,9 @@ export function renderRoomLobbyContent(
     submitImpostorGuessError?: string;
     connectedPlayerIds?: Set<string>;
     hostSuccessionNotice?: string;
+    roomShareState?: RoomShareState;
+    onShareRoom?: () => void;
+    onCopyRoomCode?: () => void;
   },
 ) {
   if (bootstrapState.status === "loading") {
@@ -1754,6 +1830,7 @@ export function renderRoomLobbyContent(
     lifecycleActionState.status === "closing" ||
     isStartingSession;
   const isHost = Boolean(selfParticipant?.isHost);
+  const roomShareState = options.roomShareState ?? { status: "idle" };
 
   return (
     <section
@@ -1762,6 +1839,45 @@ export function renderRoomLobbyContent(
     >
       <p className="impostor-kicker">Sala</p>
       <h1 id="impostor-room-title">Sala {lobby.room.code}</h1>
+
+      <div
+        className="impostor-group-section impostor-room-share"
+        aria-labelledby="impostor-room-share-title"
+      >
+        <h2 id="impostor-room-share-title">Invitar a la sala</h2>
+        <p>{getRoomInvitationUrl(lobby.room.code)}</p>
+        <div className="impostor-room-share__actions">
+          <button
+            className="impostor-action impostor-action--primary"
+            type="button"
+            onClick={options.onShareRoom}
+          >
+            Compartir sala
+          </button>
+          <button
+            className="impostor-action"
+            type="button"
+            onClick={options.onCopyRoomCode}
+          >
+            Copiar código
+          </button>
+        </div>
+        {roomShareState.status === "shared" ? (
+          <p className="impostor-platform-context__meta" aria-live="polite">
+            Sala lista para compartir.
+          </p>
+        ) : null}
+        {roomShareState.status === "copied" ? (
+          <p className="impostor-platform-context__meta" aria-live="polite">
+            Código copiado.
+          </p>
+        ) : null}
+        {roomShareState.status === "error" ? (
+          <p className="impostor-onboarding__status" aria-live="polite">
+            {roomShareState.message}
+          </p>
+        ) : null}
+      </div>
 
       <div
         className="impostor-group-section"
@@ -1853,6 +1969,9 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   const [startAuthError, setStartAuthError] = useState<string | undefined>();
   const [lifecycleActionState, setLifecycleActionState] =
     useState<RoomLifecycleActionState>({ status: "idle" });
+  const [roomShareState, setRoomShareState] = useState<RoomShareState>({
+    status: "idle",
+  });
   const [isStartingDiscussion, setIsStartingDiscussion] = useState(false);
   const [startDiscussionError, setStartDiscussionError] = useState<
     string | undefined
@@ -2573,6 +2692,46 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     setSubmitImpostorGuessError(undefined);
   }
 
+  async function handleShareRoom() {
+    const lobby = getLobbyFromDataState(dataState);
+
+    if (!lobby) {
+      return;
+    }
+
+    try {
+      const result = await shareRoom(lobby.room.code);
+      setRoomShareState({ status: result });
+    } catch {
+      setRoomShareState({
+        status: "error",
+        message: "No pudimos compartir la sala.",
+      });
+    }
+  }
+
+  async function handleCopyRoomCode() {
+    const lobby = getLobbyFromDataState(dataState);
+
+    if (!lobby || typeof navigator === "undefined" || !navigator.clipboard) {
+      setRoomShareState({
+        status: "error",
+        message: "No pudimos copiar el código.",
+      });
+      return;
+    }
+
+    try {
+      await copyRoomCode(lobby.room.code);
+      setRoomShareState({ status: "copied" });
+    } catch {
+      setRoomShareState({
+        status: "error",
+        message: "No pudimos copiar el código.",
+      });
+    }
+  }
+
   useEffect(() => {
     let isActive = true;
     isMountedRef.current = true;
@@ -2813,5 +2972,8 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     submitImpostorGuessError,
     connectedPlayerIds,
     hostSuccessionNotice,
+    roomShareState,
+    onShareRoom: () => void handleShareRoom(),
+    onCopyRoomCode: () => void handleCopyRoomCode(),
   });
 }

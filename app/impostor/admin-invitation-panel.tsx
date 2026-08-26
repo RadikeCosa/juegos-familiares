@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createBrowserSupabaseClient } from "../../lib/supabase/browser-client";
 import {
   createGetMyActiveGroupInvitationController,
@@ -14,13 +14,22 @@ type AdminInvitationState =
       status: "success";
       invitation: GroupInvitationSummary;
       copied?: "code" | "link";
+      shared?: boolean;
       copyError?: string;
+      shareError?: string;
     }
   | { status: "error"; message: string };
 
 type CopyTarget = "code" | "link";
+type ClipboardLike = {
+  writeText: (text: string) => PromiseLike<void> | void;
+};
+type ShareNavigatorLike = {
+  clipboard?: ClipboardLike;
+  share?: (data: ShareData) => PromiseLike<void> | void;
+};
 
-function getInvitationUrl(path: string) {
+export function getInvitationUrl(path: string) {
   if (typeof window === "undefined") {
     return path;
   }
@@ -28,7 +37,17 @@ function getInvitationUrl(path: string) {
   return `${window.location.origin}${path}`;
 }
 
-function getCopyText(
+export function getInvitationShareData(invitation: GroupInvitationSummary) {
+  const url = getInvitationUrl(invitation.path);
+
+  return {
+    title: "Invitación a Impostor",
+    text: "Sumate a mi grupo de Impostor.",
+    url
+  };
+}
+
+export function getCopyText(
   invitation: GroupInvitationSummary,
   target: CopyTarget
 ) {
@@ -39,14 +58,61 @@ function getCopyText(
   return getInvitationUrl(invitation.path);
 }
 
+function getLoadInvitationErrorMessage(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : "No pudimos recuperar la invitación. Intentá de nuevo.";
+}
+
+function getNavigator(): ShareNavigatorLike | undefined {
+  if (typeof navigator === "undefined") {
+    return undefined;
+  }
+
+  return navigator;
+}
+
+export async function copyInvitation(
+  invitation: GroupInvitationSummary,
+  target: CopyTarget,
+  shareNavigator: ShareNavigatorLike | undefined = getNavigator()
+) {
+  if (!shareNavigator?.clipboard) {
+    throw new Error("Clipboard unavailable");
+  }
+
+  await shareNavigator.clipboard.writeText(getCopyText(invitation, target));
+}
+
+export async function shareInvitation(
+  invitation: GroupInvitationSummary,
+  shareNavigator: ShareNavigatorLike | undefined = getNavigator()
+): Promise<"shared" | "copied"> {
+  const shareData = getInvitationShareData(invitation);
+
+  if (shareNavigator?.share) {
+    await shareNavigator.share(shareData);
+    return "shared";
+  }
+
+  if (shareNavigator?.clipboard) {
+    await shareNavigator.clipboard.writeText(shareData.url);
+    return "copied";
+  }
+
+  throw new Error("Share unavailable");
+}
+
 export function AdminInvitationPanel({
   state,
   onLoadInvitation,
-  onCopy
+  onCopy,
+  onShare
 }: {
   state: AdminInvitationState;
   onLoadInvitation: () => void;
   onCopy: (target: CopyTarget) => void;
+  onShare: () => void;
 }) {
   const isLoading = state.status === "loading";
 
@@ -79,6 +145,13 @@ export function AdminInvitationPanel({
             <dt>Enlace de invitación</dt>
             <dd>{getInvitationUrl(state.invitation.path)}</dd>
             <button
+              className="impostor-action impostor-action--primary"
+              type="button"
+              onClick={onShare}
+            >
+              Compartir invitación
+            </button>
+            <button
               className="impostor-action"
               type="button"
               onClick={() => onCopy("link")}
@@ -95,9 +168,21 @@ export function AdminInvitationPanel({
         </p>
       ) : null}
 
+      {state.status === "success" && state.shared ? (
+        <p className="impostor-platform-context__meta" aria-live="polite">
+          Invitación lista para compartir.
+        </p>
+      ) : null}
+
       {state.status === "success" && state.copyError ? (
         <p className="impostor-onboarding__status" aria-live="polite">
           {state.copyError}
+        </p>
+      ) : null}
+
+      {state.status === "success" && state.shareError ? (
+        <p className="impostor-onboarding__status" aria-live="polite">
+          {state.shareError}
         </p>
       ) : null}
 
@@ -115,6 +200,7 @@ export function renderAdminInvitationPanel(
   options: {
     onLoadInvitation: () => void;
     onCopy: (target: CopyTarget) => void;
+    onShare: () => void;
   }
 ) {
   return (
@@ -122,13 +208,14 @@ export function renderAdminInvitationPanel(
       state={state}
       onLoadInvitation={options.onLoadInvitation}
       onCopy={options.onCopy}
+      onShare={options.onShare}
     />
   );
 }
 
 export function AdminInvitationSection() {
   const [invitationState, setInvitationState] = useState<AdminInvitationState>({
-    status: "idle"
+    status: "loading"
   });
   const invitationController = useRef(createGetMyActiveGroupInvitationController());
 
@@ -146,12 +233,36 @@ export function AdminInvitationSection() {
 
       setInvitationState({ status: "success", invitation });
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "No pudimos recuperar la invitación. Intentá de nuevo.";
+      setInvitationState({
+        status: "error",
+        message: getLoadInvitationErrorMessage(error)
+      });
+    }
+  }
 
-      setInvitationState({ status: "error", message });
+  async function handleShareInvitation() {
+    if (invitationState.status !== "success") {
+      return;
+    }
+
+    try {
+      const result = await shareInvitation(invitationState.invitation);
+
+      setInvitationState({
+        ...invitationState,
+        copied: result === "copied" ? "link" : undefined,
+        shared: result === "shared",
+        copyError: undefined,
+        shareError: undefined
+      });
+    } catch {
+      setInvitationState({
+        ...invitationState,
+        copied: undefined,
+        shared: undefined,
+        copyError: undefined,
+        shareError: "No pudimos compartir la invitación."
+      });
     }
   }
 
@@ -166,7 +277,9 @@ export function AdminInvitationSection() {
           ? {
               ...currentState,
               copied: undefined,
-              copyError: "No pudimos copiar la invitación."
+              shared: undefined,
+              copyError: "No pudimos copiar la invitación.",
+              shareError: undefined
             }
           : currentState
       );
@@ -175,29 +288,56 @@ export function AdminInvitationSection() {
     }
 
     try {
-      await navigator.clipboard.writeText(
-        getCopyText(invitationState.invitation, target)
-      );
+      await copyInvitation(invitationState.invitation, target);
 
       setInvitationState({
         ...invitationState,
         copied: target,
-        copyError: undefined
+        shared: undefined,
+        copyError: undefined,
+        shareError: undefined
       });
     } catch {
       setInvitationState({
         ...invitationState,
         copied: undefined,
-        copyError: "No pudimos copiar la invitación."
+        shared: undefined,
+        copyError: "No pudimos copiar la invitación.",
+        shareError: undefined
       });
     }
   }
+
+  useEffect(() => {
+    let isActive = true;
+
+    void invitationController.current
+      .submit(createBrowserSupabaseClient())
+      .then((invitation) => {
+        if (isActive) {
+          setInvitationState({ status: "success", invitation });
+        }
+      })
+      .catch((error) => {
+        if (isActive) {
+          setInvitationState({
+            status: "error",
+            message: getLoadInvitationErrorMessage(error)
+          });
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   return (
     <AdminInvitationPanel
       state={invitationState}
       onLoadInvitation={() => void handleLoadInvitation()}
       onCopy={(target) => void handleCopyInvitation(target)}
+      onShare={() => void handleShareInvitation()}
     />
   );
 }

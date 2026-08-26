@@ -1,7 +1,13 @@
 import { isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { renderAdminInvitationPanel } from "./admin-invitation-panel";
+import {
+  copyInvitation,
+  getCopyText,
+  getInvitationShareData,
+  renderAdminInvitationPanel,
+  shareInvitation
+} from "./admin-invitation-panel";
 import { renderImpostorPlatformContext } from "./platform-context-shell";
 import type { PlatformBootstrapState } from "../../lib/supabase/platform-bootstrap";
 
@@ -134,7 +140,7 @@ describe("renderAdminInvitationPanel", () => {
     const markup = renderToStaticMarkup(
       renderAdminInvitationPanel(
         { status: "loading" },
-        { onLoadInvitation: noop, onCopy: noop }
+        { onLoadInvitation: noop, onCopy: noop, onShare: noop }
       )
     );
 
@@ -152,15 +158,65 @@ describe("renderAdminInvitationPanel", () => {
             path: "/impostor/join/K7M4Q9XA"
           }
         },
-        { onLoadInvitation: noop, onCopy: noop }
+        { onLoadInvitation: noop, onCopy: noop, onShare: noop }
       )
     );
 
     expect(markup).toContain("Código de invitación");
     expect(markup).toContain("K7M4Q9XA");
     expect(markup).toContain("/impostor/join/K7M4Q9XA");
+    expect(markup).toContain("Compartir invitación");
     expect(markup).toContain("Copiar código");
     expect(markup).toContain("Copiar enlace");
+  });
+
+  it("builds group share and copy payloads from the recovered active invitation", () => {
+    const invitation = {
+      code: "K7M4Q9XA",
+      path: "/impostor/join/K7M4Q9XA"
+    };
+
+    expect(getCopyText(invitation, "code")).toBe("K7M4Q9XA");
+    expect(getInvitationShareData(invitation)).toEqual({
+      title: "Invitación a Impostor",
+      text: "Sumate a mi grupo de Impostor.",
+      url: "/impostor/join/K7M4Q9XA"
+    });
+  });
+
+  it("copies the group invitation code through the provided clipboard", async () => {
+    const writeText = vi.fn(async () => undefined);
+
+    await copyInvitation(
+      {
+        code: "K7M4Q9XA",
+        path: "/impostor/join/K7M4Q9XA"
+      },
+      "code",
+      { clipboard: { writeText } }
+    );
+
+    expect(writeText).toHaveBeenCalledWith("K7M4Q9XA");
+  });
+
+  it("shares the group invitation link through native share when available", async () => {
+    const share = vi.fn(async () => undefined);
+
+    await expect(
+      shareInvitation(
+        {
+          code: "K7M4Q9XA",
+          path: "/impostor/join/K7M4Q9XA"
+        },
+        { share }
+      )
+    ).resolves.toBe("shared");
+
+    expect(share).toHaveBeenCalledWith({
+      title: "Invitación a Impostor",
+      text: "Sumate a mi grupo de Impostor.",
+      url: "/impostor/join/K7M4Q9XA"
+    });
   });
 
   it("renders recoverable error feedback", () => {
@@ -170,7 +226,7 @@ describe("renderAdminInvitationPanel", () => {
           status: "error",
           message: "No pudimos recuperar la invitación. Intentá de nuevo."
         },
-        { onLoadInvitation: noop, onCopy: noop }
+        { onLoadInvitation: noop, onCopy: noop, onShare: noop }
       )
     );
 
