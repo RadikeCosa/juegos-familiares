@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createBrowserSupabaseClient } from "../../lib/supabase/browser-client";
 import {
   bootstrapPlatformContext,
@@ -10,16 +10,69 @@ import {
   type PlatformBootstrapState,
   type RecognizedPlatformContext
 } from "../../lib/supabase/platform-bootstrap";
+import { createGetMyActiveGroupInvitationController } from "../../lib/supabase/platform-groups";
+import { shareInvitation } from "./admin-invitation-panel";
 import { ImpostorAnonymousOnboardingActions } from "./anonymous-onboarding-actions";
 
 function createPlatformBootstrapClient(): PlatformBootstrapClient {
   return createBrowserSupabaseClient() as unknown as PlatformBootstrapClient;
 }
 
+type ShareGroupInvitationState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "success"; message: string }
+  | { status: "error"; message: string };
+
+export function isShareCancellation(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
+}
+
 function ImpostorRecognizedContext({
   group,
   player
 }: RecognizedPlatformContext) {
+  const isAdmin = group.adminPlayerId === player.id;
+  const [shareState, setShareState] = useState<ShareGroupInvitationState>({
+    status: "idle"
+  });
+  const invitationController = useRef(
+    createGetMyActiveGroupInvitationController()
+  );
+
+  async function handleShareInvitation() {
+    if (shareState.status === "loading") {
+      return;
+    }
+
+    setShareState({ status: "loading" });
+
+    try {
+      const invitation = await invitationController.current.submit(
+        createBrowserSupabaseClient()
+      );
+      const result = await shareInvitation(invitation);
+
+      setShareState({
+        status: "success",
+        message:
+          result === "shared"
+            ? "Invitación lista para compartir."
+            : "Enlace copiado."
+      });
+    } catch (error) {
+      if (isShareCancellation(error)) {
+        setShareState({ status: "idle" });
+        return;
+      }
+
+      setShareState({
+        status: "error",
+        message: "No pudimos compartir la invitación. Intentá de nuevo."
+      });
+    }
+  }
+
   return (
     <section
       className="impostor-platform-context"
@@ -39,6 +92,28 @@ function ImpostorRecognizedContext({
       >
         Ver grupo
       </Link>
+      {isAdmin ? (
+        <button
+          className="impostor-action"
+          type="button"
+          disabled={shareState.status === "loading"}
+          onClick={() => void handleShareInvitation()}
+        >
+          {shareState.status === "loading"
+            ? "Preparando invitación..."
+            : "Compartir invitación"}
+        </button>
+      ) : null}
+      {isAdmin && shareState.status === "success" ? (
+        <p className="impostor-platform-context__meta" aria-live="polite">
+          {shareState.message}
+        </p>
+      ) : null}
+      {isAdmin && shareState.status === "error" ? (
+        <p className="impostor-onboarding__status" aria-live="polite">
+          {shareState.message}
+        </p>
+      ) : null}
     </section>
   );
 }
