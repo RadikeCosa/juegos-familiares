@@ -12,6 +12,7 @@
     "test:db:12.2": "node supabase/tests/validate-12-2.mjs",
     "test:db:12.3": "node supabase/tests/validate-12-3.mjs",
     "test:db:12.5": "node supabase/tests/validate-12-5.mjs",
+    "local:make-platform-admin": "node supabase/scripts/local-make-platform-admin.mjs",
     "supabase:reset": "supabase db reset",
     "supabase:start": "supabase start -x storage-api,imgproxy,studio,mailpit,postgres-meta,edge-runtime,logflare,vector,supavisor",
     "supabase:stop": "supabase stop"
