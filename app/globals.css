@@ -849,6 +849,17 @@ body {
   font-weight: 700;
 }
 
+.impostor-active-room {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+}
+
+.impostor-active-room p {
+  color: var(--success);
+  font-weight: 700;
+}
+
 .impostor-presence {
   flex: 0 0 auto;
   border: 1px solid var(--border);

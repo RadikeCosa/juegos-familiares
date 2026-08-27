@@ -14,10 +14,12 @@ import {
 import {
   createCreateRoomController,
   createJoinRoomByCodeController,
+  getMyActiveRoom,
   normalizeRoomJoinCode,
   recordRoomCreationIntent,
   recordRoomJoinIntent,
   type ImpostorRoomsClient,
+  type RoomLobby,
 } from "../../../lib/supabase/impostor-rooms";
 import {
   bootstrapPlatformContext,
@@ -52,6 +54,13 @@ export type RoomJoinState =
   | { status: "idle" }
   | { status: "form" }
   | { status: "joining" }
+  | { status: "error"; message: string };
+
+export type ActiveRoomState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "absent" }
+  | { status: "success"; room: RoomLobby["room"] }
   | { status: "error"; message: string };
 
 function createPlatformBootstrapClient(): PlatformBootstrapClient {
@@ -117,6 +126,7 @@ export function renderImpostorGroupContext(
     groupWordsState?: GroupWordsSummaryState;
     roomCreationState?: RoomCreationState;
     roomJoinState?: RoomJoinState;
+    activeRoomState?: ActiveRoomState;
     onRetryBootstrap?: () => void;
     onRetryPlayers?: () => void;
     onRetryGroupWords?: () => void;
@@ -189,6 +199,11 @@ export function renderImpostorGroupContext(
   const groupWordsState = options.groupWordsState ?? { status: "idle" };
   const roomCreationState = options.roomCreationState ?? { status: "idle" };
   const roomJoinState = options.roomJoinState ?? { status: "idle" };
+  const activeRoomState = options.activeRoomState ?? { status: "absent" };
+  const hasActiveRoom =
+    activeRoomState.status === "success" &&
+    (activeRoomState.room.status === "lobby" ||
+      activeRoomState.room.status === "playing");
 
   return (
     <section
@@ -234,67 +249,98 @@ export function renderImpostorGroupContext(
       >
         <h2 id="impostor-play-title">Jugar</h2>
 
-        <button
-          className="impostor-action impostor-action--primary"
-          type="button"
-          disabled={roomCreationState.status === "creating"}
-          onClick={options.onCreateRoom}
-        >
-          {roomCreationState.status === "creating"
-            ? "Creando sala..."
-            : "Crear sala"}
-        </button>
+        {activeRoomState.status === "idle" ||
+        activeRoomState.status === "loading" ? (
+          <p aria-live="polite">Comprobando sala activa...</p>
+        ) : null}
 
-        {roomCreationState.status === "error" ? (
-          <div className="impostor-group-error" aria-live="polite">
-            <p>{roomCreationState.message}</p>
+        {hasActiveRoom ? (
+          <div className="impostor-active-room" aria-live="polite">
+            <p>Sala activa</p>
+            <Link
+              className="impostor-action impostor-action--primary"
+              href={`/impostor/sala/${encodeURIComponent(activeRoomState.room.code)}`}
+            >
+              Volver a la sala
+            </Link>
           </div>
         ) : null}
 
-        <button
-          className="impostor-action"
-          type="button"
-          disabled={roomJoinState.status === "joining"}
-          onClick={options.onShowJoinRoomForm}
-        >
-          Unirme a una sala
-        </button>
+        {activeRoomState.status === "absent" ||
+        activeRoomState.status === "error" ||
+        (activeRoomState.status === "success" && !hasActiveRoom) ? (
+          <>
+            {activeRoomState.status === "error" ? (
+              <div className="impostor-group-error" aria-live="polite">
+                <p>{activeRoomState.message}</p>
+              </div>
+            ) : null}
 
-        {roomJoinState.status === "form" ||
-        roomJoinState.status === "joining" ? (
-          <form
-            className="impostor-create-group"
-            aria-labelledby="impostor-join-room-title"
-            onSubmit={options.onJoinRoomSubmit}
-          >
-            <h3 id="impostor-join-room-title">Unirme a una sala</h3>
-            <label className="impostor-field">
-              <span>Código de sala</span>
-              <input
-                name="roomCode"
-                type="text"
-                autoCapitalize="characters"
-                autoCorrect="off"
-                spellCheck={false}
-                maxLength={8}
-                required
-                disabled={roomJoinState.status === "joining"}
-              />
-            </label>
             <button
               className="impostor-action impostor-action--primary"
-              type="submit"
-              disabled={roomJoinState.status === "joining"}
+              type="button"
+              disabled={roomCreationState.status === "creating"}
+              onClick={options.onCreateRoom}
             >
-              {roomJoinState.status === "joining" ? "Uniéndote..." : "Unirme"}
+              {roomCreationState.status === "creating"
+                ? "Creando sala..."
+                : "Crear sala"}
             </button>
-          </form>
-        ) : null}
 
-        {roomJoinState.status === "error" ? (
-          <div className="impostor-group-error" aria-live="polite">
-            <p>{roomJoinState.message}</p>
-          </div>
+            {roomCreationState.status === "error" ? (
+              <div className="impostor-group-error" aria-live="polite">
+                <p>{roomCreationState.message}</p>
+              </div>
+            ) : null}
+
+            <button
+              className="impostor-action"
+              type="button"
+              disabled={roomJoinState.status === "joining"}
+              onClick={options.onShowJoinRoomForm}
+            >
+              Unirme a una sala
+            </button>
+
+            {roomJoinState.status === "form" ||
+            roomJoinState.status === "joining" ? (
+              <form
+                className="impostor-create-group"
+                aria-labelledby="impostor-join-room-title"
+                onSubmit={options.onJoinRoomSubmit}
+              >
+                <h3 id="impostor-join-room-title">Unirme a una sala</h3>
+                <label className="impostor-field">
+                  <span>Código de sala</span>
+                  <input
+                    name="roomCode"
+                    type="text"
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    maxLength={8}
+                    required
+                    disabled={roomJoinState.status === "joining"}
+                  />
+                </label>
+                <button
+                  className="impostor-action impostor-action--primary"
+                  type="submit"
+                  disabled={roomJoinState.status === "joining"}
+                >
+                  {roomJoinState.status === "joining"
+                    ? "Uniéndote..."
+                    : "Unirme"}
+                </button>
+              </form>
+            ) : null}
+
+            {roomJoinState.status === "error" ? (
+              <div className="impostor-group-error" aria-live="polite">
+                <p>{roomJoinState.message}</p>
+              </div>
+            ) : null}
+          </>
         ) : null}
       </div>
 
@@ -370,6 +416,9 @@ export function ImpostorGroupContextShell() {
   const [roomJoinState, setRoomJoinState] = useState<RoomJoinState>({
     status: "idle",
   });
+  const [activeRoomState, setActiveRoomState] = useState<ActiveRoomState>({
+    status: "idle",
+  });
   const createRoomController = useState(() => createCreateRoomController())[0];
   const joinRoomController = useState(() =>
     createJoinRoomByCodeController(),
@@ -380,6 +429,7 @@ export function ImpostorGroupContextShell() {
       setBootstrapState({ status: "loading" });
       setPlayersState({ status: "idle" });
       setGroupWordsState({ status: "idle" });
+      setActiveRoomState({ status: "idle" });
     }
 
     setBootstrapState(
@@ -588,10 +638,51 @@ export function ImpostorGroupContextShell() {
     };
   }, [bootstrapState]);
 
+  useEffect(() => {
+    if (bootstrapState.status !== "recognized") {
+      return;
+    }
+
+    let isActive = true;
+
+    void Promise.resolve()
+      .then(() => {
+        if (isActive) {
+          setActiveRoomState({ status: "loading" });
+        }
+
+        return getMyActiveRoom(createImpostorRoomsClient());
+      })
+      .then((lobby) => {
+        if (isActive) {
+          setActiveRoomState(
+            lobby
+              ? { status: "success", room: lobby.room }
+              : { status: "absent" },
+          );
+        }
+      })
+      .catch((error) => {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "No pudimos confirmar si tenés una sala activa.";
+
+        if (isActive) {
+          setActiveRoomState({ status: "error", message });
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [bootstrapState]);
+
   return renderImpostorGroupContext(bootstrapState, playersState, {
     groupWordsState,
     roomCreationState,
     roomJoinState,
+    activeRoomState,
     onRetryBootstrap: () => void runBootstrap(true),
     onRetryPlayers:
       bootstrapState.status === "recognized"
