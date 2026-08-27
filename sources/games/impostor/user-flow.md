@@ -150,17 +150,15 @@ Una vez asociado, el dispositivo recuerda:
 
 Las visitas siguientes deberían evitar repetir esa configuración.
 
-Visitar `/impostor`, `/impostor/join/[code]` o `/impostor/grupo` no debe crear Auth automáticamente. La identidad anónima se crea o reutiliza cuando la persona confirma una intención de producto, como crear grupo o unirse.
+Visitar `/`, `/impostor`, `/impostor/join/[code]` o `/impostor/grupo` no debe crear Auth automáticamente. La identidad anónima se crea o reutiliza cuando la persona confirma una intención de producto, como crear grupo o unirse.
 
 ---
 
 # Inicio habitual
 
-Para un jugador ya reconocido:
+Desde A.1, para un jugador ya reconocido la portada `/` muestra:
 
 > Hola, Ramiro
-
-En el Incremento 2, la pantalla muestra:
 
 > Tu grupo
 
@@ -168,11 +166,25 @@ En el Incremento 2, la pantalla muestra:
 
 > Ver grupo
 
-La acción principal es entrar al grupo.
+La misma persona puede entrar a Impostor desde la lista de juegos. Durante A.1,
+`/impostor` conserva también la señal de contexto reconocida; su simplificación
+definitiva queda para un incremento posterior.
+
+La acción principal de contexto es entrar al grupo.
 
 ## Vista de grupo
 
-Flujo actual:
+Flujo actual para acceder al grupo desde la portada:
+
+```text
+/
+↓
+Ver grupo
+↓
+/impostor/grupo
+```
+
+Flujo heredado todavía compatible:
 
 ```text
 /impostor

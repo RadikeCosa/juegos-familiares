@@ -621,6 +621,12 @@ El cierre local consolida lo implementado en los subincrementos 2.1 a 2.5:
 * el administrador puede recuperar su invitación activa mediante `get_my_active_group_invitation()` bajo `auth.uid()`, sin parámetros y sin abrir acceso directo a `group_invitations`;
 * un jugador no administrador ve integrantes, pero no CTA administrativa ni código/enlace de invitación.
 
+A.1 agrega una mejora de navegación de Platform sobre ese cierre: la portada
+`/` reutiliza el bootstrap existente para expresar contexto reconocido
+`Player -> Group` cuando lo hay, con acceso temporal a `/impostor/grupo` y a
+Impostor. La portada sin contexto reconocido sigue siendo liviana y no crea
+Auth, Player ni Group por renderizar.
+
 Endurecimiento aplicado en 2.5:
 
 * el error de nickname duplicado al unirse por invitación se muestra como mensaje de producto específico;

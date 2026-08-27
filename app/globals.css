@@ -140,6 +140,75 @@ body {
   line-height: 1.5;
 }
 
+.home-platform-context {
+  display: grid;
+  gap: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+  padding: var(--space-4);
+}
+
+.home-platform-context h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-family:
+    var(--font-display),
+    system-ui,
+    sans-serif;
+  font-size: clamp(1.75rem, 8vw, 2.5rem);
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.home-platform-context p {
+  margin: 0;
+  color: var(--foreground-muted);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.home-group-summary {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.home-group-summary p {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.home-group-summary strong {
+  color: var(--foreground);
+  font-size: 1.25rem;
+  line-height: 1.2;
+}
+
+.home-secondary-cta {
+  display: inline-flex;
+  min-height: 3rem;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  color: var(--foreground);
+  padding: 0 var(--space-6);
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.home-secondary-cta:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.home-secondary-cta:active {
+  transform: translateY(1px);
+}
+
 .game-entry {
   display: grid;
   gap: var(--space-4);
@@ -1052,6 +1121,10 @@ body {
   .game-entry {
     grid-template-columns: auto 1fr;
     align-items: center;
+    padding: var(--space-6);
+  }
+
+  .home-platform-context {
     padding: var(--space-6);
   }
 

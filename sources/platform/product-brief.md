@@ -25,6 +25,28 @@ La aplicación tendrá una portada raíz:
 
 La portada mostrará los juegos disponibles.
 
+Desde A.1, si el dispositivo conserva una `AuthIdentity` válida y el
+bootstrap remoto resuelve `Player -> Group`, la portada también puede expresar
+ese contexto persistente de Platform antes de entrar a un juego:
+
+```text
+Juegos Familiares
+
+Hola, Ramiro
+
+Tu grupo
+Familia
+
+[ Ver grupo ]
+
+Juegos
+[ Impostor ]
+```
+
+Si no hay contexto reconocido, la portada sigue siendo liviana: no crea
+`AuthIdentity`, `Player` ni `Group` por renderizar, no fuerza onboarding y
+mantiene el acceso a Impostor.
+
 Ejemplo conceptual:
 
 ```text
@@ -214,7 +236,10 @@ La recuperación avanzada queda fuera del MVP de este incremento.
 
 ## Grupo reconocido
 
-Cuando una persona ya pertenece a un grupo, `/impostor` debe expresar claramente ese contexto:
+Cuando una persona ya pertenece a un grupo, `/` puede expresar el contexto
+persistente de Platform. Durante A.1, `/impostor` conserva temporalmente la
+misma señal reconocida para evitar mezclar el cambio con la simplificación
+definitiva de la entrada del juego:
 
 ```text
 Hola, Ramiro
@@ -225,7 +250,10 @@ Familia
 [ Ver grupo ]
 ```
 
-`/impostor/grupo` funciona como espacio persistente del grupo:
+En A.1, la acción `Ver grupo` sigue navegando a `/impostor/grupo`. La ruta
+definitiva de administración de Group queda para un incremento posterior.
+
+`/impostor/grupo` funciona todavía como espacio persistente del grupo:
 
 ```text
 Familia
