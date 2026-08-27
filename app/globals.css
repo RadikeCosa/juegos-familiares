@@ -785,6 +785,18 @@ body {
   gap: var(--space-3);
 }
 
+.platform-group-section-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-3);
+}
+
+.platform-group-count {
+  color: var(--success);
+  font-weight: 700;
+}
+
 .impostor-group-members {
   display: grid;
   gap: var(--space-2);
