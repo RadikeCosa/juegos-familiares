@@ -267,15 +267,19 @@ Orientación conceptual:
 ```text
 /
 → Juegos Familiares
+→ puede reconstruir y expresar contexto reconocido de Platform
 
 /impostor
 → Impostor
 
 /impostor/grupo
-→ contexto persistente del Group para Impostor
+→ contexto persistente del Group, todavía bajo ruta de Impostor
 ```
 
-La portada permitirá acceder a juegos disponibles.
+La portada permite acceder a juegos disponibles. Desde A.1, también reutiliza
+el bootstrap `AuthIdentity -> Player -> Group` para mostrar jugador y grupo
+cuando existe contexto reconocido. Si no hay contexto reconocido, no crea
+`AuthIdentity`, `Player` ni `Group` por renderizar.
 
 Un juego futuro podría usar:
 
@@ -285,7 +289,9 @@ Un juego futuro podría usar:
 
 No se diseñan todavía componentes, layouts ni estética.
 
-`/impostor/grupo` pertenece a plataforma aplicada al primer juego: muestra `Group` y `Player` y ofrece entradas a Room, pero no es un lobby ni contiene el estado de una Room.
+`/impostor/grupo` pertenece conceptualmente a Platform aunque siga
+temporalmente bajo la ruta de Impostor: muestra `Group` y `Player` y ofrece
+entradas a Room, pero no es un lobby ni contiene el estado de una Room.
 
 ---
 

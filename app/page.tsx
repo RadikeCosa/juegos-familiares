@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { PlatformHomeContextShell } from "./platform-home-context-shell";
 
 export default function Home() {
   return (
@@ -26,7 +27,9 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="game-entry" aria-labelledby="impostor-title">
+        <PlatformHomeContextShell />
+
+        <section className="game-entry" aria-labelledby="games-title">
           <div className="game-entry__art" aria-hidden="true">
             <span />
             <span />
@@ -34,8 +37,10 @@ export default function Home() {
             <span />
           </div>
           <div className="game-entry__content">
-            <p className="game-entry__label">Juego disponible</p>
-            <h2 id="impostor-title">Impostor</h2>
+            <p className="game-entry__label" id="games-title">
+              Juegos
+            </p>
+            <h2>Impostor</h2>
             <p>
               Encontrá al impostor sin revelar demasiado.
             </p>
