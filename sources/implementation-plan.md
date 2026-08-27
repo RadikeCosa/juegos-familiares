@@ -3596,9 +3596,11 @@ Incremento 6 quedó cerrado técnicamente: inicio de tanda autoritativo, `GameSe
 
 Incrementos 7 a 12 agregan transición a conversación presencial, votación, scoring e historial.
 
-## Incrementos 13 y 14
+## Incrementos 13 a 15
 
-Se endurece reconexión, lifecycle PWA, service worker y cache sin convertir la partida en offline.
+Siguen pendientes como próximos incrementos formales: reconexión básica, maduración PWA iOS/Android y auditoría final de seguridad, testing y UX.
+
+El service worker/cache pertenece al Incremento 14 y no debe presentarse como implementado antes de ejecutarlo.
 
 ---
 
@@ -3684,15 +3686,20 @@ Si una skill no está disponible en una sesión concreta, se usa como referencia
 
 ---
 
-# 12. Decisiones diferidas
+# 12. Decisiones diferidas e históricas
 
-Estas decisiones no bloquean el Incremento 0.
+Estas decisiones fueron diferidas al comienzo del plan y no bloquearon el Incremento 0. Varias ya fueron resueltas por los Incrementos 0 a 12; se conservan aquí como registro histórico, no como estado vigente.
+
+Ya resuelto o cerrado técnicamente:
 
 * mecanismo exacto de invitación al grupo;
+* estrategia de Realtime para Room y gameplay hasta Incremento 12;
+* forma de operaciones autoritativas en Supabase para identidad, grupo, Room y gameplay hasta cierre de tanda;
+* esquema SQL y políticas RLS detalladas hasta historial mínimo;
+
+Pendiente o futuro:
+
 * comportamiento de conexión, reconexión avanzada y background móvil;
-* estrategia de realtime para GameSession y fases posteriores;
-* forma exacta de operaciones autoritativas en Supabase;
-* esquema SQL y políticas RLS detalladas;
 * limpieza automática de salas viejas;
 * tolerancias precisas de desconexión;
 * comportamiento de entrada o salida de jugadores durante una tanda;
@@ -3734,41 +3741,49 @@ La arquitectura ya resolvió la elección de Supabase de forma proporcional al M
 
 El plan no debe reabrir esa comparación.
 
-## Decisión pendiente
+## Aclaración documental
 
-`technical-requirements.md` todavía dice que no define stack ni proveedor, mientras `architecture.md` ya define Supabase.
+`technical-requirements.md` conserva el registro de que originalmente no definía stack ni proveedor, mientras `architecture.md` ya define Supabase.
 
 No es una contradicción práctica si se interpreta que `technical-requirements.md` es anterior o más abstracto, y `architecture.md` es la decisión posterior.
 
-Corrección futura opcional: agregar una nota breve en requisitos técnicos indicando que la arquitectura ya eligió Supabase para el MVP.
+La aclaración vigente en requisitos técnicos indica que el documento conserva su valor como marco conceptual independiente de proveedor, mientras arquitectura y este plan registran la selección de Next.js y Supabase para el MVP.
 
-## Decisión pendiente
+## Aclaración histórica
 
-El framework frontend exacto aparece como diferido en arquitectura.
+El framework frontend exacto apareció como diferido en la etapa conceptual inicial.
 
-Este plan propone cerrar Next.js antes del Incremento 0.
+La implementación vigente cerró Next.js para el MVP.
 
-## Problema operativo a verificar
+## Problema operativo histórico
 
-Antes de ejecutar Incremento 0 hay que confirmar el estado real de Git en la carpeta raíz.
+Antes de ejecutar Incremento 0 había que confirmar el estado real de Git en la carpeta raíz.
 
-Si la carpeta contiene restos de `.git` pero no es un repositorio válido, eso debe resolverse conscientemente antes de inicializar el repositorio.
+Ese riesgo pertenece al arranque del proyecto y ya no representa el próximo paso vigente.
 
 ---
 
 # 14. Próximo paso recomendado
 
-El siguiente paso lógico es cerrar las decisiones mínimas del Incremento 0:
+El siguiente paso lógico es cerrar el smoke test manual actual antes de avanzar el roadmap formal:
 
-* Next.js;
-* `npm`;
-* runner mínimo de tests;
-* estrategia segura para inicializar el frontend en la raíz existente;
-* workflow Git simple;
-* estructura mínima inicial.
+1. continuar y cerrar el smoke test actual sin inventar resultados;
+2. clasificar hallazgos como defecto funcional, regresión bloqueante, mejora UX no bloqueante o decisión futura;
+3. resolver defectos funcionales o regresiones bloqueantes antes de continuar;
+4. agrupar mejoras UX no bloqueantes de manera acotada, sin ampliar el MVP;
+5. completar la validación pendiente de 5.4 si todavía corresponde: mobile, background/reconnect, múltiples conexiones y concurrencia de sucesión;
+6. ejecutar Incremento 13, reconexión básica;
+7. ejecutar Incremento 14, maduración PWA iOS/Android con service worker/cache acotados;
+8. ejecutar Incremento 15, auditoría final de seguridad, testing y UX;
+9. declarar el cierre del MVP solamente cuando se cumplan sus criterios técnicos, de validación manual y de riesgo.
 
-Después de eso, ejecutar Incremento 0.
+Estado consolidado vigente:
 
-No hace falta crear otro modelo conceptual antes de empezar.
+* Incrementos 0 a 4 cerrados;
+* Incrementos 5.1 a 5.3 cerrados;
+* Incremento 5.4 pendiente de validación mobile/concurrencia;
+* Incrementos 6 a 12 cerrados técnicamente;
+* smoke manual general en curso;
+* Incrementos 13 a 15 pendientes.
 
-El modelo de estados de la partida ya existe y es suficiente para orientar los incrementos funcionales.
+Las mejoras y defectos encontrados durante el smoke se tratan antes de continuar cuando afecten el uso real o introduzcan riesgo. Las mejoras no bloqueantes deben mantenerse acotadas para no reabrir decisiones de producto ni ampliar el MVP.
