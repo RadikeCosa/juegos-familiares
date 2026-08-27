@@ -921,17 +921,40 @@ La aplicación debe estar presente cuando coordina información entre dispositiv
 
 ---
 
-# Flujos que todavía requieren diseño
+# Estado de flujos
 
-Antes de implementar debemos resolver con mayor precisión:
+## Ya diseñados e implementados
+
+Estos flujos ya están respaldados por el diseño y la implementación vigente:
+
+* creación inicial de grupo;
+* unión a grupo por código o enlace;
+* vista de grupo con integrantes y contexto recuperable;
+* compartir/copiar invitación de grupo para administrador de Group;
+* creación de Room desde el grupo;
+* unión a sala por código o enlace;
+* compartir/copiar invitación de sala desde el lobby;
+* salida de participante no-host y cierre de Room por host;
+* sucesión autoritativa de host cuando la autoridad valida que el host está stale y existe un sucesor active.
+
+## Implementados pero pendientes de validación smoke específica
+
+Estos flujos existen técnicamente, pero todavía requieren prueba real en teléfonos, sesiones independientes, pérdida de conexión, background/reconnect o concurrencia:
+
+* comportamiento mobile/background de Presence y liveness;
+* cadencia 30s/90s/30s de heartbeat, stale y evaluación de sucesión en condiciones reales;
+* reasignación de host bajo pérdida de conexión, múltiples conexiones, refresh y carreras de clientes;
+* continuidad de la tanda completa en dispositivos físicos durante el smoke manual general.
+
+La reasignación de host no está pendiente como contrato ni como implementación central: 5.3 cerró la sucesión autoritativa. Lo pendiente corresponde al hardening y la validación mobile/concurrencia de 5.4.
+
+## Flujos todavía abiertos o futuros
+
+Siguen pendientes dentro del roadmap o como decisiones explícitamente diferidas:
 
 * primera instalación de la PWA;
-* creación inicial de grupo;
-* invitación al grupo;
-* mecanismo para compartir una sala;
 * reconexión si un dispositivo pierde internet;
 * salida o incorporación de un jugador durante una tanda;
-* experiencia de reasignación del host;
 * capacidades de instalación y cache de la PWA.
 
-Estas cuestiones pertenecen principalmente al diseño de experiencia y arquitectura, no a las reglas centrales del juego.
+Estas cuestiones pertenecen principalmente a Incrementos 13 a 15 y al diseño de experiencia/arquitectura pendiente, no a las reglas centrales ya implementadas del juego.

@@ -14,7 +14,7 @@ Responde:
 
 > ¿Qué capacidades técnicas necesita realmente el MVP para soportar correctamente el producto que diseñamos?
 
-No define todavía:
+Este documento nació como marco de requisitos independiente de proveedor. Por eso, en su formulación conceptual original no definía:
 
 * stack;
 * base de datos;
@@ -24,6 +24,8 @@ No define todavía:
 * APIs;
 * tablas;
 * arquitectura final.
+
+Para el MVP actual, la implementación ya eligió Next.js y Supabase. La selección tecnológica vigente se desarrolla en `sources/architecture.md` y `sources/implementation-plan.md`; los requisitos de este documento siguen siendo útiles para evaluar si esa implementación respeta las capacidades, límites y riesgos del producto.
 
 Los requisitos buscan preservar:
 
@@ -1868,7 +1870,7 @@ La futura solución técnica debería favorecer:
 
 El costo cognitivo debe formar parte de la comparación de arquitecturas.
 
-Esto no elige todavía framework, proveedor ni infraestructura.
+Este criterio no eligió por sí mismo framework, proveedor ni infraestructura. Esa selección se cerró después para el MVP con Next.js y Supabase.
 
 ---
 

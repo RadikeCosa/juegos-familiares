@@ -198,11 +198,11 @@ Retos asociados:
 * comportarse como PWA en iOS y Android;
 * usar infraestructura proporcional al caso familiar inicial.
 
-Estado: `IMPLEMENTACIÓN PARCIAL`.
+Estado: `MVP JUGABLE ALCANZADO TÉCNICAMENTE`.
 
-La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras, Room + Lobby, Presence básica privada, liveness autoritativo mínimo y sucesión de host validados en producción, más gameplay privado implementado técnicamente hasta marcador y nueva ronda.
+La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras, Room + Lobby, Presence básica privada, liveness autoritativo mínimo y sucesión de host validados en producción, más gameplay privado implementado técnicamente hasta cierre de tanda.
 
-Todavía no hay tanda completa cerrable. Historial y fin de tanda siguen en incrementos futuros, y falta deploy y validación física multi-dispositivo completa.
+Ya existe una tanda completa cerrable: el host puede terminarla desde el marcador, `GameSession` pasa a `finished`, la Room se cierra, existe resultado final compartido y se conserva historial mínimo de tanda y rondas. Estas capacidades fueron validadas técnicamente. Siguen pendientes el smoke manual general, deploy, robustez de reconexión/PWA, auditoría final, validación física multi-dispositivo completa y los Incrementos 13 a 15.
 
 ---
 
@@ -330,7 +330,7 @@ Completado:
   * host original no recupera rol automáticamente;
   * smoke productivo multi-cliente confirmó la progresión completa y cleanup sin residuos.
 * gameplay completo implementado hasta cierre técnico de tanda:
-  * diseño e implementación de flujo autoritativo de tanda, rol privado, discusión, primera votación, empate, segunda votación, intento final, scoring, marcador, nueva ronda, cierre e historial mínimo;
+  * diseño e implementación de flujo autoritativo de tanda, rol privado, discusión, primera votación, empate, segunda votación, intento final, scoring, marcador, nueva ronda, cierre de tanda e historial mínimo;
   * modelado de privacidad por caller;
   * validación de seguridad de palabra e impostor;
   * votación secreta y resolución backend sin tercera votación;
@@ -782,7 +782,7 @@ Impostor
 - GameSession / SessionPlayers / Round
 - read model privado
 - primera votación
-- scoring e historial futuros
+- scoring, cierre e historial mínimo
 
         │
         ▼
@@ -833,19 +833,23 @@ Resuelto técnicamente:
 * lost-response recovery por read model;
 * segunda votación con candidatos empatados reconstruidos desde `voting_round = 1`;
 * ausencia de tercera votación;
-* `round_votes` sin grants cliente ni Realtime.
+* `round_votes` sin grants cliente ni Realtime;
+* intento final del impostor;
+* scoring, marcador y nueva ronda;
+* cierre de tanda por host;
+* `GameSession.finished`, Room cerrada, resultado final e historial mínimo.
 
 Pendiente:
 
 * validación física multi-dispositivo;
-* intento final;
-* scoring/historial;
 * lifecycle PWA en mobile;
 * diferencias iOS/Safari y Android/Chrome;
 * cache sin exponer datos sensibles;
+* reconexión básica y auditoría final de Incrementos 13 a 15;
+* deploy del cierre técnico;
 * playtesting real.
 
-La parte resuelta no implica una tanda completa jugable. Sí cierra técnicamente la base transversal, la sala, el primer tramo de gameplay privado y la primera votación.
+La parte resuelta ya implica una tanda completa jugable a nivel técnico: múltiples rondas, marcador, cierre por host, Room cerrada, resultado final e historial mínimo. No implica todavía smoke manual general cerrado, deploy, robustez de reconexión/PWA ni cierre de Incrementos 13 a 15.
 
 ---
 
@@ -1540,16 +1544,16 @@ Este archivo no debe convertirse en changelog.
 
 ## Nota: requisitos técnicos y arquitectura
 
-`technical-requirements.md` declara que no define stack ni proveedor, mientras `architecture.md` ya define Supabase para el MVP.
+`technical-requirements.md` conserva el registro de que originalmente no definía stack ni proveedor, mientras `architecture.md` ya define Supabase para el MVP.
 
-Interpretación: no es una contradicción bloqueante si se entiende que requisitos técnicos conserva el nivel de capacidades y arquitectura registra una decisión posterior.
+Interpretación: no es una contradicción bloqueante. Requisitos técnicos conserva el nivel de capacidades y arquitectura registra la decisión tecnológica posterior.
 
 Estado: NO BLOQUEANTE.
 
 ## Nota: framework frontend
 
-`architecture.md` mantiene el framework frontend exacto como decisión diferida, mientras `implementation-plan.md` propone cerrar Next.js antes del Incremento 0.
+`architecture.md` conserva como registro histórico que el framework frontend exacto estaba diferido en la etapa conceptual inicial. La implementación vigente cerró Next.js para el MVP.
 
-Interpretación: no es una contradicción. Es una decisión pendiente prevista para el inicio de implementación.
+Interpretación: no es una contradicción vigente. Es una decisión histórica ya resuelta por la implementación.
 
 Estado: NO BLOQUEANTE.
