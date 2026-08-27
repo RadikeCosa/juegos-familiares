@@ -253,7 +253,8 @@ Familia
 En A.1, la acción `Ver grupo` sigue navegando a `/impostor/grupo`. La ruta
 definitiva de administración de Group queda para un incremento posterior.
 
-`/impostor/grupo` funciona todavía como espacio persistente del grupo:
+Desde A.2.1, `/grupo` es la superficie canónica de Platform para consultar el
+grupo reconocido:
 
 ```text
 Familia
@@ -263,11 +264,16 @@ Integrantes
 Ramiro · Admin
 Pedro
 Camila
+
+3 integrantes
 ```
 
 El administrador ve una acción para invitar personas. Un jugador común entiende que pertenece al mismo grupo, pero no ve controles administrativos.
 
 Esta vista no es una sala de juego. Resuelve la pertenencia social antes de introducir `Room`.
+
+`/impostor/grupo` se mantiene temporalmente como compatibilidad y conserva las
+acciones específicas de Impostor hasta un incremento posterior.
 
 ---
 
