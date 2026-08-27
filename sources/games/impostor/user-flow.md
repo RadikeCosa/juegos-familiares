@@ -481,7 +481,7 @@ La interfaz debe evitar que otra persona pueda verla accidentalmente antes de qu
 
 La pantalla muestra:
 
-# SOS EL IMPOSTOR
+# Sos el impostor
 
 No muestra la palabra secreta.
 
@@ -532,14 +532,10 @@ La aplicación puede mostrar únicamente un estado discreto:
 Los jugadores pueden volver a consultar localmente su información privada mediante una acción explícita:
 
 ```text
-Ver mi palabra
-```
-
-o:
-
-```text
 Ver mi rol
 ```
+
+La acción previa al reveal es la misma para todos los jugadores; no depende de si la vista privada contiene rol de impostor o palabra.
 
 La información queda oculta por defecto para reducir exposición física. Este reveal local no se persiste.
 

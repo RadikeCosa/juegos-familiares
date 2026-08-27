@@ -1338,9 +1338,7 @@ export function renderRoomLobbyContent(
               type="button"
               onClick={options.onRevealPrivateView}
             >
-              {dataState.gameState.privateView.role === "player"
-                ? "Ver mi palabra"
-                : "Ver mi rol"}
+              Ver mi rol
             </button>
             {startVotingAction}
             {!canStartVoting ? startVotingErrorFeedback : null}
@@ -1356,13 +1354,13 @@ export function renderRoomLobbyContent(
           <p className="impostor-kicker">Ronda {dataState.gameState.roundNumber}</p>
           {dataState.gameState.privateView.role === "player" ? (
             <>
-              <h1 id="impostor-room-discussion-title">Tu palabra</h1>
+              <h1 id="impostor-room-discussion-title">Tu palabra es</h1>
               <p className="impostor-room-secret-word">
                 {dataState.gameState.privateView.word}
               </p>
             </>
           ) : (
-            <h1 id="impostor-room-discussion-title">SOS EL IMPOSTOR</h1>
+            <h1 id="impostor-room-discussion-title">Sos el impostor</h1>
           )}
           {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
           <button
@@ -1826,7 +1824,7 @@ export function renderRoomLobbyContent(
           aria-labelledby="impostor-role-impostor-title"
         >
           <p className="impostor-kicker">Ronda {dataState.gameState.roundNumber}</p>
-          <h1 id="impostor-role-impostor-title">SOS EL IMPOSTOR</h1>
+          <h1 id="impostor-role-impostor-title">Sos el impostor</h1>
           {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
           {startDiscussionAction}
           {!canStartDiscussion ? startDiscussionErrorFeedback : null}
@@ -1840,7 +1838,7 @@ export function renderRoomLobbyContent(
         aria-labelledby="impostor-role-player-title"
       >
         <p className="impostor-kicker">Ronda {dataState.gameState.roundNumber}</p>
-        <h1 id="impostor-role-player-title">Tu palabra</h1>
+        <h1 id="impostor-role-player-title">Tu palabra es</h1>
         <p className="impostor-room-secret-word">
           {dataState.gameState.privateView.word}
         </p>

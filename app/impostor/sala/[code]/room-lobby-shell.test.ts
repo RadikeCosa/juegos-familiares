@@ -1296,7 +1296,7 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("Tu rol está listo");
         expect(markup).toContain("Ver mi rol");
         expect(markup).not.toContain("Casa");
-        expect(markup).not.toContain("SOS EL IMPOSTOR");
+        expect(markup).not.toContain("Sos el impostor");
         expect(markup).not.toContain("Sala AB7KQ2M4");
     });
 
@@ -1334,7 +1334,7 @@ describe("renderRoomLobbyContent", () => {
             )
         );
 
-        expect(markup).toContain("Tu palabra");
+        expect(markup).toContain("Tu palabra es");
         expect(markup).toContain("Casa");
         expect(markup).not.toContain("Empezar ronda");
         expect(markup).not.toMatch(/esperando permiso|disabled/i);
@@ -1405,7 +1405,7 @@ describe("renderRoomLobbyContent", () => {
             )
         );
 
-        expect(markup).toContain("Tu palabra");
+        expect(markup).toContain("Tu palabra es");
         expect(markup).toContain("Casa");
         expect(markup).toContain("Empezando ronda...");
         expect(markup).toContain("disabled=\"\"");
@@ -1428,7 +1428,7 @@ describe("renderRoomLobbyContent", () => {
             )
         );
 
-        expect(markup).toContain("SOS EL IMPOSTOR");
+        expect(markup).toContain("Sos el impostor");
         expect(markup).toContain("Empezar ronda");
         expect(markup).toContain("No pudimos empezar la ronda. Intentá de nuevo.");
     });
@@ -1447,9 +1447,9 @@ describe("renderRoomLobbyContent", () => {
             )
         );
 
-        expect(markup).toContain("Tu palabra");
+        expect(markup).toContain("Tu palabra es");
         expect(markup).toContain("Casa");
-        expect(markup).not.toContain("SOS EL IMPOSTOR");
+        expect(markup).not.toContain("Sos el impostor");
         expect(markup).not.toMatch(/normalized|impostor_player_id|player-\d/);
     });
 
@@ -1467,9 +1467,9 @@ describe("renderRoomLobbyContent", () => {
             )
         );
 
-        expect(markup).toContain("SOS EL IMPOSTOR");
+        expect(markup).toContain("Sos el impostor");
         expect(markup).not.toContain("Casa");
-        expect(markup).not.toContain("Tu palabra");
+        expect(markup).not.toContain("Tu palabra es");
     });
 
     it("renders normal discussion hidden without exposing the private word anywhere in markup", () => {
@@ -1488,7 +1488,8 @@ describe("renderRoomLobbyContent", () => {
 
         expect(markup).toContain("Ronda en juego");
         expect(markup).toContain("Ronda 1");
-        expect(markup).toContain("Ver mi palabra");
+        expect(markup).toContain("Ver mi rol");
+        expect(markup).not.toContain("Ver mi palabra");
         expect(markup).toContain("Host actual: Ramiro");
         expect(markup).not.toContain("Casa");
         expect(markup).not.toContain("Empezar ronda");
@@ -1520,7 +1521,7 @@ describe("renderRoomLobbyContent", () => {
             )
         );
 
-        expect(revealedMarkup).toContain("Tu palabra");
+        expect(revealedMarkup).toContain("Tu palabra es");
         expect(revealedMarkup).toContain("Casa");
         expect(revealedMarkup).toContain("Ocultar");
         expect(hiddenMarkup).not.toContain("Casa");
@@ -1542,7 +1543,7 @@ describe("renderRoomLobbyContent", () => {
 
         expect(markup).toContain("Ronda en juego");
         expect(markup).toContain("Ver mi rol");
-        expect(markup).not.toContain("SOS EL IMPOSTOR");
+        expect(markup).not.toContain("Sos el impostor");
         expect(markup).not.toContain("Casa");
     });
 
@@ -1572,10 +1573,10 @@ describe("renderRoomLobbyContent", () => {
             )
         );
 
-        expect(revealedMarkup).toContain("SOS EL IMPOSTOR");
+        expect(revealedMarkup).toContain("Sos el impostor");
         expect(revealedMarkup).toContain("Ocultar");
         expect(revealedMarkup).not.toContain("Casa");
-        expect(hiddenMarkup).not.toContain("SOS EL IMPOSTOR");
+        expect(hiddenMarkup).not.toContain("Sos el impostor");
     });
 
     it("keeps discussion separate from voting", () => {
@@ -2068,7 +2069,7 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("La tanda ya empezó y no quedaste incluido");
         expect(markup).toContain("Esperá a la próxima");
         expect(markup).not.toContain("Casa");
-        expect(markup).not.toContain("SOS EL IMPOSTOR");
+        expect(markup).not.toContain("Sos el impostor");
         expect(markup).not.toContain("Jugadores");
         expect(markup).not.toContain("Iniciar tanda");
     });
