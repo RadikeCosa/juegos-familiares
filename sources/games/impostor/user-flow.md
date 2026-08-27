@@ -226,6 +226,31 @@ Si no hay sesión, la vista no crea Auth, no muestra un grupo ajeno y ofrece una
 
 Acciones disponibles desde el cierre del Incremento 4:
 
+### Sala activa
+
+Si el jugador no tiene una Room activa, la vista de grupo ofrece:
+
+```text
+Crear sala
+Unirme a una sala
+```
+
+Si el jugador tiene una Room activa en `lobby` o `playing`, la vista de grupo muestra:
+
+```text
+Sala activa
+Volver a la sala
+```
+
+`Volver a la sala` aplica tanto a host como guest y reconstruye la Room activa autoritativamente.
+
+Cuando una Room queda `closed`, deja de considerarse activa y vuelven a mostrarse:
+
+```text
+Crear sala
+Unirme a una sala
+```
+
 ### Crear sala
 
 Crea una Room en estado `lobby`. Cualquier integrante puede hacerlo; no requiere ser administrador. Si ya pertenece a una Room activa, recupera esa Room.
