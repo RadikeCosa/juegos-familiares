@@ -3565,6 +3565,63 @@ La PWA cumple el alcance MVP: instalable cuando corresponde, usable sin instalac
 
 ## Incremento 15 — Auditoría final de seguridad, testing y UX del MVP
 
+### Tarea transversal — Diseño y construcción del relato técnico accesible
+
+#### Propósito, audiencia y límites
+
+Durante Incremento 15 se construirá `sources/technical-narrative.md`: un relato técnico extenso y accesible que explique Juegos Familiares / Impostor mediante problemas reales, conceptos de ingeniería, decisiones, implementación, trade-offs, resultados observables y aprendizaje.
+
+Prioriza aprendizaje, comprensión profunda, transferencia de conocimiento y capacidad de explicar decisiones. Sus audiencias primarias son el autor/desarrollador y una persona desarrolladora junior/intermedia. Como audiencias secundarias, debe ayudar a un entrevistador técnico o hiring manager y a una persona de producto técnicamente curiosa. El cuerpo principal debe entenderse sin leer el repositorio, empezando accesible y profundizando después.
+
+No será API reference, manual de código, README grande, duplicado de requisitos, changelog, documentación operativa para agentes ni tutorial genérico de tecnologías. Es pedagógico y explicativo, no normativo: ante discrepancias prevalecen los documentos autoritativos vigentes y el código, SQL/migrations y tests.
+
+El archivo futuro vivirá en `sources/`, no en `source/`. No forma parte del contexto operativo mínimo por defecto para agentes; sólo se consulta para tareas de aprendizaje, onboarding humano, portfolio, explicación o documentación pedagógica. No crear el archivo, capítulos, glosario ni diagramas antes de ejecutar esta tarea.
+
+#### Fuentes y trazabilidad
+
+| Fuente | Qué aporta | Autoridad | Cuándo se usa |
+| --- | --- | --- | --- |
+| `sources/platform/product-brief.md`, `sources/project-principles.md`, `sources/games/impostor/product-decisions.md`, `sources/games/impostor/user-flow.md` y reglas de juego vigentes | problema, intención, reglas y decisiones de producto | autoritativa para intención | al explicar problema, experiencia o decisión de producto |
+| `sources/architecture.md`, `sources/games/impostor/technical-requirements.md`, `sources/games/impostor/conceptual-data-model.md`, `sources/games/impostor/game-state-model.md` | entidades, estado, privacidad, límites y arquitectura | autoritativa para diseño conceptual | al explicar modelo y responsabilidades |
+| `sources/implementation-plan.md`, `sources/portfolio-case-study.md`, historial Git, commits y PRs disponibles | orden real, problemas descubiertos y evolución | autoritativa para historia, verificada contra estado actual | en apartados "Cómo llegamos acá" |
+| código, SQL, migrations, RPCs, RLS y wrappers vigentes | comportamiento e implementación efectiva | máxima para comportamiento actual | antes de afirmar un detalle técnico actual |
+| unit tests, integración/DB tests y validadores | invariantes, seguridad, concurrencia, idempotencia y casos límite | máxima para comportamiento verificable | al explicar riesgos y garantías |
+| smoke tests y playtests | fricción visible, límites móviles y origen de decisiones UX | evidencia contextual | al conectar uso real con una decisión |
+| conversaciones ChatGPT/Codex | dudas, preguntas y formulaciones pedagógicas | no autoritativa | sólo como pista; todo hecho se contrasta |
+
+Mantener una matriz auxiliar por tema: `Tema | Problema | Decisión | Docs | Código/SQL | Tests | Estado final`. No tiene que publicarse completa, pero cada afirmación relevante debe poder rastrearse. Para comportamiento actual tienen máxima prioridad código/DB/tests y documentación vigente; para intención, decisiones, arquitectura y requisitos; para historia, plan, case study y Git. Un chat anterior nunca sobreescribe la realidad del repositorio.
+
+#### Método y patrón pedagógico
+
+1. Inventariar conceptos reales sin convertirlos todavía en capítulos.
+2. Mapear `problema → riesgo → concepto → solución → evidencia`.
+3. Ordenar el relato por comprensión humana, no por carpetas ni necesariamente cronología.
+4. Redactar una primera versión con capas: explicación simple, precisión técnica y materialización en Juegos Familiares.
+5. Hacer revisión técnica contra docs actuales, código, SQL y tests; clasificar afirmaciones como `correcta`, `simplificada pero fiel`, `obsoleta` o `no soportada`.
+6. Separar arquitectura final de evolución histórica y hacer revisión pedagógica: problema antes que solución, jargon definido, ejemplos concretos y simplificación fiel.
+7. Agregar sólo lo que aporte comprensión: diagramas, glosario y enlaces oficiales.
+8. Auditar nuevamente contra el proyecto terminado.
+
+El patrón preferente por concepto es: problema real, qué podría salir mal, concepto técnico, solución usada, motivo, alternativa descartada, trade-off, efecto observable y aprendizaje. No debe aplicarse rígidamente. El estándar es poder conectar un jugador que bloquea el teléfono, la partida que continúa, su UI stale al volver, el foreground como trigger de reconstrucción y el read model autoritativo que permite converger al estado actual.
+
+#### Estructura, alcance y derivados
+
+La estructura macro tentativa: problema y producto; identidad y pertenencia; modelado de una partida; estado compartido y privado; autoridad; sincronización entre dispositivos; interrupciones del mundo real; PWA y lifecycle; validación; decisiones no anticipadas; aprendizaje. No será una guía organizada por `app/`, `lib/`, `supabase/` o `sources/`.
+
+Agrupar, sin imponer un capítulo por término: Auth anónima; `AuthIdentity` versus `Player`; `Group`, admin, `Room` y host; `GameSession` y `Round`; estado privado/compartido; diseño server-authoritative, RLS, RPC y read models; Realtime, Presence, liveness, heartbeat, polling y sucesión; concurrencia, idempotencia, votación, empate, intento, puntaje e historial; refresh, reconstrucción, stale state, background/foreground, offline/reconnect y multi-tab; PWA, service worker/cache y el límite de no ofrecer gameplay offline; migrations, tests, smoke, playtest, entrega incremental, abstracciones evitadas y crecimiento futuro.
+
+Investigar y verificar antes de afirmar los trade-offs: no adelantar `GenericGame`/`GenericRoom`, no exigir cuentas tradicionales, no usar Presence como autorización, no usar frontend como autoridad, no ofrecer gameplay offline y no cachear secretos sin política explícita. Usar escenarios ficticios o genéricos, no datos personales. Explicar arquitectura con fragmentos breves sólo cuando aclaren un concepto, nunca con un recorrido archivo por archivo.
+
+El documento debe ser autosuficiente; enlaces oficiales de Supabase, PostgreSQL, Next.js y MDN/PWA serán complementarios y se verificarán al redactar. Evaluar diagramas de identidad/pertenencia, `Group` versus `Room`, `Room → GameSession → Round`, estado privado/compartido, Realtime versus RPC/read model, Presence versus liveness y reconexión; sucesión y capas de testing son opcionales. El glosario puede cubrir estado autoritativo, stale, RPC, RLS, Presence, liveness, heartbeat, idempotencia, concurrencia, read model, migration, smoke, PWA y service worker, sin sustituir explicaciones en contexto.
+
+`sources/portfolio-case-study.md` conserva una síntesis de evolución, decisiones, resultados y aprendizajes para portfolio; la narrativa explica el sistema en profundidad. `architecture`, `technical-requirements`, `game-state-model` y `product-decisions` siguen siendo las fuentes para construir y mantener correctamente.
+
+#### Criterios de terminado y pasos internos
+
+El relato estará terminado cuando sea comprensible sin repo, técnicamente fiel, trazable, distinga comportamiento actual de evolución histórica, defina jargon, use problemas y ejemplos reales, explique trade-offs, no contradiga docs/código, no duplique requisitos ni case study, no se vuelva normativo y permita explicar el proyecto en una entrevista y aprender conceptos transferibles.
+
+Pasos internos de esta tarea, sin reservar numeración `15.x` inexistente: contrato e índice tentativo; inventario de fuentes/evidencia; primer relato; revisión técnica; revisión histórica; revisión pedagógica; diagramas/glosario/recursos; versión final. Una versión breve de portfolio, guion de entrevista, presentación, posts, mapa conceptual o preguntas de estudio son derivados opcionales, no requisitos de Incremento 15.
+
 ### Objetivo
 
 Revisar el MVP completo antes de considerarlo listo para uso familiar sostenido.
