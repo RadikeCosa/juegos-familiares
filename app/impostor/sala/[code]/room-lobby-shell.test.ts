@@ -16,6 +16,7 @@ import {
     renderRoomLobbyContent,
     runAdvanceScoreboardCommand,
     runEndSessionCommand,
+    runHostSuccessionEvaluation,
     runStartDiscussionCommand,
     runStartNextRoundCommand,
     runStartSecondVotingCommand,
@@ -2245,6 +2246,7 @@ describe("renderRoomLobbyContent", () => {
         expect(source).toContain("acceptActiveRoom(activeLobby, options.startError)");
         expect(source).toContain("recordActiveRoomHost(activeLobby)");
         expect(source).toContain("`${nextHost.nickname} ahora es el host`");
+        expect(source).toContain("const refreshAuthoritativeRoomStateRef = useRef(refreshAuthoritativeRoomState)");
     });
 
     it("does not restart host succession recheck only because Presence changes", () => {
@@ -2255,6 +2257,7 @@ describe("renderRoomLobbyContent", () => {
 
         expect(source).toContain("activeHostPlayerId,\n    hostSuccessionController");
         expect(source).not.toContain("isActiveHostMissing,\n    hostSuccessionController");
+        expect(source).not.toContain("hostSuccessionController,\n    refreshAuthoritativeRoomState");
     });
 
     it("uses one authoritative refresh path for bootstrap, START success, retry, foreground, online and Realtime", () => {
@@ -2612,5 +2615,41 @@ describe("createRoomAuthoritativeRefreshController", () => {
 
         await controller.run(refresh);
         expect(refresh).toHaveBeenCalledTimes(2);
+    });
+});
+
+describe("runHostSuccessionEvaluation", () => {
+    it("requests authoritative room refresh when host succession changed the host", async () => {
+        const evaluate = vi.fn(async () => ({
+            hostChanged: true,
+            currentHostPlayerId: "player-2"
+        }));
+        const refreshAuthoritative = vi.fn(async () => undefined);
+
+        await expect(
+            runHostSuccessionEvaluation({ evaluate, refreshAuthoritative })
+        ).resolves.toEqual({
+            hostChanged: true,
+            currentHostPlayerId: "player-2"
+        });
+
+        expect(refreshAuthoritative).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not request an extra authoritative refresh when succession is no-op", async () => {
+        const evaluate = vi.fn(async () => ({
+            hostChanged: false,
+            currentHostPlayerId: "player-1"
+        }));
+        const refreshAuthoritative = vi.fn(async () => undefined);
+
+        await expect(
+            runHostSuccessionEvaluation({ evaluate, refreshAuthoritative })
+        ).resolves.toEqual({
+            hostChanged: false,
+            currentHostPlayerId: "player-1"
+        });
+
+        expect(refreshAuthoritative).not.toHaveBeenCalled();
     });
 });
