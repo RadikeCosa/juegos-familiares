@@ -1965,6 +1965,7 @@ function createRoomPresenceKey(playerId: string) {
 }
 
 export type RoomPresenceSubscription = {
+    recoverPresence: () => Promise<void>;
     unsubscribe: () => Promise<void>;
 };
 
@@ -1979,6 +1980,7 @@ export function subscribeToRoomPresence(
     }
 ): RoomPresenceSubscription {
     let isDisposed = false;
+    let activeTrackRequest: Promise<void> | null = null;
     const channel = supabase
         .channel(`impostor-room-presence:${options.roomId}`, {
             config: {
@@ -2007,21 +2009,42 @@ export function subscribeToRoomPresence(
             }
         });
 
+    function trackPresence() {
+        if (isDisposed) {
+            return Promise.resolve();
+        }
+
+        if (activeTrackRequest) {
+            return activeTrackRequest;
+        }
+
+        activeTrackRequest = Promise.resolve(
+            channel.track({ playerId: options.currentPlayerId })
+        )
+            .then(() => {
+                if (!isDisposed) {
+                    options.onSubscribed?.();
+                }
+            })
+            .catch((trackError) => {
+                if (!isDisposed) {
+                    options.onError?.(trackError);
+                }
+            })
+            .finally(() => {
+                activeTrackRequest = null;
+            });
+
+        return activeTrackRequest;
+    }
+
     channel.subscribe((status, error) => {
         if (isDisposed) {
             return;
         }
 
         if (status === "SUBSCRIBED") {
-            void Promise.resolve(
-                channel.track({ playerId: options.currentPlayerId })
-            )
-                .then(() => {
-                    if (!isDisposed) {
-                        options.onSubscribed?.();
-                    }
-                })
-                .catch((trackError) => options.onError?.(trackError));
+            void trackPresence();
         }
 
         if (status === "TIMED_OUT" || status === "CHANNEL_ERROR") {
@@ -2030,6 +2053,9 @@ export function subscribeToRoomPresence(
     });
 
     return {
+        recoverPresence() {
+            return trackPresence();
+        },
         async unsubscribe() {
             isDisposed = true;
 

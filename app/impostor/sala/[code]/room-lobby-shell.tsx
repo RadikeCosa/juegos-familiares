@@ -37,6 +37,7 @@ import {
   type ImpostorRoomPresenceClient,
   type ImpostorRoomsClient,
   type MyGameState,
+  type RoomPresenceSubscription,
   type RoomPresenceState,
   type RoomLobby,
 } from "../../../../lib/supabase/impostor-rooms";
@@ -2162,6 +2163,9 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   const refreshSequenceRef = useRef(0);
   const authoritativeRefreshInFlightCountRef = useRef(0);
   const advancingScoreboardRoundKeyRef = useRef<string | undefined>(undefined);
+  const roomPresenceSubscriptionRef = useRef<RoomPresenceSubscription | null>(
+    null,
+  );
   const gameStatePollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
@@ -3100,11 +3104,13 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
 
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
+        void roomPresenceSubscriptionRef.current?.recoverPresence();
         void refreshAuthoritativeRoomState("foreground");
       }
     }
 
     function handleOnline() {
+      void roomPresenceSubscriptionRef.current?.recoverPresence();
       void refreshAuthoritativeRoomState("online");
     }
 
@@ -3180,8 +3186,13 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
         onError: logRoomLivenessError,
       },
     );
+    roomPresenceSubscriptionRef.current = subscription;
 
     return () => {
+      if (roomPresenceSubscriptionRef.current === subscription) {
+        roomPresenceSubscriptionRef.current = null;
+      }
+
       void subscription.unsubscribe();
     };
   }, [bootstrapState.status, activeRoomId, currentRoomPlayerId]);

@@ -3230,6 +3230,77 @@ describe("subscribeToRoomPresence", () => {
         expect(channel.track).toHaveBeenCalledWith({ playerId: "player-1" });
     });
 
+    it("can explicitly recover Presence by tracking the same Player again", async () => {
+        const channel = {
+            on: vi.fn(() => channel),
+            presenceState: vi.fn(() => ({})),
+            subscribe: vi.fn((callback?: (status: "SUBSCRIBED") => void) => {
+                callback?.("SUBSCRIBED");
+                return channel;
+            }),
+            track: vi.fn(async () => "ok"),
+            untrack: vi.fn(async () => "ok")
+        };
+        const supabase = {
+            channel: vi.fn(() => channel),
+            removeChannel: vi.fn(async () => "ok")
+        };
+        const onSubscribed = vi.fn();
+
+        const subscription = subscribeToRoomPresence(supabase, {
+            roomId: "11111111-1111-4111-8111-111111111111",
+            currentPlayerId: "player-1",
+            onSync: vi.fn(),
+            onSubscribed
+        });
+
+        await vi.waitFor(() => expect(channel.track).toHaveBeenCalledTimes(1));
+        await vi.waitFor(() => expect(onSubscribed).toHaveBeenCalledTimes(1));
+        await Promise.resolve();
+        await Promise.resolve();
+        await subscription.recoverPresence();
+
+        expect(channel.track).toHaveBeenCalledTimes(2);
+        expect(channel.track).toHaveBeenLastCalledWith({ playerId: "player-1" });
+        expect(onSubscribed).toHaveBeenCalledTimes(2);
+    });
+
+    it("collapses overlapping explicit Presence recovery calls", async () => {
+        let resolveTrack: (value: string) => void = () => { };
+        const trackPromise = new Promise<string>((resolve) => {
+            resolveTrack = resolve;
+        });
+        const channel = {
+            on: vi.fn(() => channel),
+            presenceState: vi.fn(() => ({})),
+            subscribe: vi.fn(() => channel),
+            track: vi.fn(() => trackPromise),
+            untrack: vi.fn(async () => "ok")
+        };
+        const supabase = {
+            channel: vi.fn(() => channel),
+            removeChannel: vi.fn(async () => "ok")
+        };
+        const onSubscribed = vi.fn();
+
+        const subscription = subscribeToRoomPresence(supabase, {
+            roomId: "11111111-1111-4111-8111-111111111111",
+            currentPlayerId: "player-1",
+            onSync: vi.fn(),
+            onSubscribed
+        });
+
+        const firstRecovery = subscription.recoverPresence();
+        const secondRecovery = subscription.recoverPresence();
+
+        expect(channel.track).toHaveBeenCalledTimes(1);
+
+        resolveTrack("ok");
+        await Promise.all([firstRecovery, secondRecovery]);
+
+        expect(onSubscribed).toHaveBeenCalledTimes(1);
+    });
+
     it("does not emit Presence updates after unsubscribe cleanup", async () => {
         const callbacks: Array<() => void> = [];
         const channel = {
@@ -3260,5 +3331,29 @@ describe("subscribeToRoomPresence", () => {
         callbacks[0]();
 
         expect(onSync).not.toHaveBeenCalled();
+    });
+
+    it("does not recover Presence after unsubscribe cleanup", async () => {
+        const channel = {
+            on: vi.fn(() => channel),
+            presenceState: vi.fn(() => ({})),
+            subscribe: vi.fn(() => channel),
+            track: vi.fn(async () => "ok"),
+            untrack: vi.fn(async () => "ok")
+        };
+        const supabase = {
+            channel: vi.fn(() => channel),
+            removeChannel: vi.fn(async () => "ok")
+        };
+        const subscription = subscribeToRoomPresence(supabase, {
+            roomId: "11111111-1111-4111-8111-111111111111",
+            currentPlayerId: "player-1",
+            onSync: vi.fn()
+        });
+
+        await subscription.unsubscribe();
+        await subscription.recoverPresence();
+
+        expect(channel.track).not.toHaveBeenCalled();
     });
 });
