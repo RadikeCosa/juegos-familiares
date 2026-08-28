@@ -3409,6 +3409,8 @@ Implementado con la ruta autoritativa existente de Room/GameSession: mount, retr
 
 #### 13.2 — UI reconnecting/offline mínima
 
+Estado: cerrado técnicamente; pendiente de smoke manual focal.
+
 Objetivo:
 
 ```text
@@ -3418,6 +3420,17 @@ acciones seguras durante reconexión
 ```
 
 Debe cubrir estados locales `reconnecting`, `offline`, `error` y `retry` dentro de Room/gameplay si alcanza, sin diseñar un sistema global.
+
+Implementado localmente en el shell de Room/GameSession con un estado de confianza mínimo:
+
+```text
+stable
+offline
+reconnecting
+reconcile-error
+```
+
+El shell escucha `offline` y conserva el último estado compartido visible con feedback de "Sin conexión". Al recuperar `online`, foreground, Realtime o retry, usa la reconciliación autoritativa existente. Mientras el estado no es confiable, pausa acciones sensibles de Room/gameplay y no renderiza secretos privados stale; en error de reconciliación conserva contexto compartido seguro y ofrece `Reintentar`.
 
 #### 13.3 — Presence/liveness foreground recovery
 

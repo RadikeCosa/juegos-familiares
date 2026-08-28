@@ -114,6 +114,12 @@ type RoomShareState =
   | { status: "copied" }
   | { status: "shared" }
   | { status: "error"; message: string };
+
+type RoomConnectionState =
+  | { status: "stable" }
+  | { status: "offline" }
+  | { status: "reconnecting" }
+  | { status: "reconcile-error"; message: string };
 type ClipboardLike = {
   writeText: (text: string) => PromiseLike<void> | void;
 };
@@ -187,6 +193,10 @@ function createAnonymousAuthClient() {
 
 function getFriendlyError(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
+}
+
+function isBrowserOnline() {
+  return typeof navigator === "undefined" ? true : navigator.onLine !== false;
 }
 
 export function getRoomInvitationPath(code: string) {
@@ -993,6 +1003,44 @@ export function renderRoomParticipantsList(
   );
 }
 
+function renderRoomConnectionNotice(
+  connectionState: RoomConnectionState,
+  onRetry?: () => void,
+) {
+  if (connectionState.status === "stable") {
+    return null;
+  }
+
+  const title =
+    connectionState.status === "offline"
+      ? "Sin conexión"
+      : connectionState.status === "reconnecting"
+        ? "Reconectando..."
+        : "No pudimos actualizar la sala";
+  const message =
+    connectionState.status === "offline"
+      ? "Podés mirar el último estado compartido, pero las acciones quedan pausadas."
+      : connectionState.status === "reconnecting"
+        ? "Estamos recuperando el estado actual antes de habilitar acciones."
+        : connectionState.message;
+
+  return (
+    <div className="impostor-room-notice" aria-live="polite">
+      <strong>{title}</strong>
+      <p>{message}</p>
+      {connectionState.status === "reconcile-error" && onRetry ? (
+        <button
+          className="impostor-action impostor-action--primary"
+          type="button"
+          onClick={onRetry}
+        >
+          Reintentar
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function renderRoomLobbyContent(
   bootstrapState: PlatformBootstrapState,
   dataState: RoomLobbyDataState,
@@ -1040,8 +1088,12 @@ export function renderRoomLobbyContent(
     roomShareState?: RoomShareState;
     onShareRoom?: () => void;
     onCopyRoomCode?: () => void;
+    roomConnectionState?: RoomConnectionState;
   },
 ) {
+  const roomConnectionState = options.roomConnectionState ?? { status: "stable" };
+  const isRoomStateTrusted = roomConnectionState.status === "stable";
+
   if (bootstrapState.status === "loading") {
     return (
       <section className="impostor-group-card" aria-live="polite">
@@ -1067,7 +1119,7 @@ export function renderRoomLobbyContent(
         <button
           className="impostor-action impostor-action--primary"
           type="button"
-          disabled={options.isStartingAuth}
+          disabled={options.isStartingAuth || !isRoomStateTrusted}
           onClick={options.onStartAnonymousAuth}
         >
           {options.isStartingAuth ? "Un momento..." : "Continuar para unirme"}
@@ -1153,7 +1205,7 @@ export function renderRoomLobbyContent(
         <button
           className="impostor-action impostor-action--primary"
           type="button"
-          disabled={dataState.status === "joining"}
+          disabled={dataState.status === "joining" || !isRoomStateTrusted}
           onClick={options.onJoinRoom}
         >
           {dataState.status === "joining"
@@ -1253,11 +1305,17 @@ export function renderRoomLobbyContent(
     const hostParticipant = getHostParticipant(lobby);
     const selfParticipant = getSelfParticipant(lobby);
     const canStartDiscussion =
-      dataState.status === "role-reveal" && selfParticipant?.isHost === true;
+      isRoomStateTrusted &&
+      dataState.status === "role-reveal" &&
+      selfParticipant?.isHost === true;
     const canStartVoting =
-      dataState.status === "discussion" && selfParticipant?.isHost === true;
+      isRoomStateTrusted &&
+      dataState.status === "discussion" &&
+      selfParticipant?.isHost === true;
     const canStartSecondVoting =
-      dataState.status === "tie-discussion" && selfParticipant?.isHost === true;
+      isRoomStateTrusted &&
+      dataState.status === "tie-discussion" &&
+      selfParticipant?.isHost === true;
     const startDiscussionErrorFeedback =
       dataState.status === "role-reveal" && options.startDiscussionError ? (
         <div className="impostor-group-error" aria-live="polite">
@@ -1341,6 +1399,32 @@ export function renderRoomLobbyContent(
           <p>Esperá a la próxima.</p>
           <div className="impostor-group-error" aria-live="polite">
             <p>{dataState.message}</p>
+          </div>
+        </section>
+      );
+    }
+
+    if (!isRoomStateTrusted) {
+      return (
+        <section
+          className="impostor-group-card impostor-room-role-reveal"
+          aria-labelledby="impostor-room-reconnecting-title"
+        >
+          <p className="impostor-kicker">Sala</p>
+          <h1 id="impostor-room-reconnecting-title">
+            Revisando estado de la sala
+          </h1>
+          {renderRoomConnectionNotice(roomConnectionState, options.onRetryData)}
+          {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
+          <div
+            className="impostor-group-section"
+            aria-labelledby="impostor-room-safe-participants-title"
+          >
+            <h2 id="impostor-room-safe-participants-title">Jugadores</h2>
+            {renderRoomParticipantsList(
+              lobby.participants,
+              options.connectedPlayerIds,
+            )}
           </div>
         </section>
       );
@@ -1881,7 +1965,8 @@ export function renderRoomLobbyContent(
   const isLifecycleActionPending =
     lifecycleActionState.status === "leaving" ||
     lifecycleActionState.status === "closing" ||
-    isStartingSession;
+    isStartingSession ||
+    !isRoomStateTrusted;
   const isHost = Boolean(selfParticipant?.isHost);
   const isLobby = lobby.room.status === "lobby";
   const roomShareState = options.roomShareState ?? { status: "idle" };
@@ -1893,6 +1978,7 @@ export function renderRoomLobbyContent(
     >
       <p className="impostor-kicker">Sala</p>
       <h1 id="impostor-room-title">Sala {lobby.room.code}</h1>
+      {renderRoomConnectionNotice(roomConnectionState, options.onRetryData)}
 
       <div
         className="impostor-group-section impostor-room-share"
@@ -1904,6 +1990,7 @@ export function renderRoomLobbyContent(
           <button
             className="impostor-action impostor-action--primary"
             type="button"
+            disabled={!isRoomStateTrusted}
             onClick={options.onShareRoom}
           >
             Compartir sala
@@ -1911,6 +1998,7 @@ export function renderRoomLobbyContent(
           <button
             className="impostor-action"
             type="button"
+            disabled={!isRoomStateTrusted}
             onClick={options.onCopyRoomCode}
           >
             Copiar código
@@ -1960,7 +2048,7 @@ export function renderRoomLobbyContent(
               <button
                 className="impostor-action impostor-action--primary"
                 type="button"
-                disabled={isStartingSession}
+                disabled={isStartingSession || !isRoomStateTrusted}
                 onClick={options.onStartSession}
               >
                 {isStartingSession ? "Iniciando..." : "Iniciar tanda"}
@@ -2065,6 +2153,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   const [hostSuccessionNotice, setHostSuccessionNotice] = useState<
     string | undefined
   >();
+  const [roomConnectionState, setRoomConnectionState] =
+    useState<RoomConnectionState>(() =>
+      isBrowserOnline() ? { status: "stable" } : { status: "offline" },
+    );
   const isActiveHostMissingRef = useRef(false);
   const isMountedRef = useRef(false);
   const refreshSequenceRef = useRef(0);
@@ -2148,7 +2240,26 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
       }
 
       void reason;
-      setDataState({ status: "loading" });
+      const existingLobby = getLobbyFromDataState(dataState);
+      const canPreserveExistingState =
+        Boolean(existingLobby) &&
+        reason !== "bootstrap" &&
+        reason !== "start";
+      const isReconnectReason =
+        reason === "realtime" ||
+        reason === "retry" ||
+        reason === "foreground" ||
+        reason === "online" ||
+        reason === "authority" ||
+        reason === "poll-reconcile";
+
+      if (isReconnectReason && isBrowserOnline()) {
+        setRoomConnectionState({ status: "reconnecting" });
+      }
+
+      if (!canPreserveExistingState) {
+        setDataState({ status: "loading" });
+      }
 
       try {
         const activeLobby = await getMyActiveRoom(createImpostorRoomsClient());
@@ -2171,6 +2282,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
           }
 
           if (finalGameState?.state === "finished") {
+            setRoomConnectionState({ status: "stable" });
             setDataState({ status: "finished", gameState: finalGameState });
             return;
           }
@@ -2181,6 +2293,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
           }
 
           setDataState({ status: "awaiting-join" });
+          setRoomConnectionState({ status: "stable" });
           return;
         }
 
@@ -2197,12 +2310,15 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
         setLifecycleActionState({ status: "idle" });
 
         if (activeLobby.room.status !== "playing") {
+          setRoomConnectionState({ status: "stable" });
           acceptActiveRoom(activeLobby, options.startError);
           return;
         }
 
         recordActiveRoomHost(activeLobby);
-        setDataState({ status: "loading-game-state", lobby: activeLobby });
+        if (!canPreserveExistingState) {
+          setDataState({ status: "loading-game-state", lobby: activeLobby });
+        }
 
         let gameState: MyGameState | null;
 
@@ -2214,10 +2330,22 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
           }
 
           if (isExcludedGameStateError(error)) {
+            setRoomConnectionState({ status: "stable" });
             setDataState({
               status: "excluded",
               lobby: activeLobby,
               message: "Esperá a la próxima tanda para volver a jugar.",
+            });
+            return;
+          }
+
+          if (canPreserveExistingState) {
+            setRoomConnectionState({
+              status: "reconcile-error",
+              message: getFriendlyError(
+                error,
+                GENERIC_GAME_RECONSTRUCTION_ERROR,
+              ),
             });
             return;
           }
@@ -2234,6 +2362,14 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
         }
 
         if (!gameState) {
+          if (canPreserveExistingState) {
+            setRoomConnectionState({
+              status: "reconcile-error",
+              message: GENERIC_GAME_RECONSTRUCTION_ERROR,
+            });
+            return;
+          }
+
           setDataState({
             status: "error",
             message: GENERIC_GAME_RECONSTRUCTION_ERROR,
@@ -2241,9 +2377,18 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
           return;
         }
 
+        setRoomConnectionState({ status: "stable" });
         setDataState(toGameplayDataState(activeLobby, gameState));
       } catch (error) {
         if (!isLatestRefresh()) {
+          return;
+        }
+
+        if (canPreserveExistingState) {
+          setRoomConnectionState({
+            status: "reconcile-error",
+            message: getFriendlyError(error, GENERIC_ROOM_LOBBY_ERROR),
+          });
           return;
         }
 
@@ -2261,6 +2406,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     [
       acceptActiveRoom,
       clearGameStatePollTimeout,
+      dataState,
       recordActiveRoomHost,
       roomCode,
       router,
@@ -2469,6 +2615,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   async function handleJoinRoom() {
+    if (roomConnectionState.status !== "stable") {
+      return;
+    }
+
     setDataState({ status: "joining" });
 
     try {
@@ -2489,7 +2639,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   async function handleLeaveRoom() {
-    if (lifecycleActionState.status === "leaving") {
+    if (
+      lifecycleActionState.status === "leaving" ||
+      roomConnectionState.status !== "stable"
+    ) {
       return;
     }
 
@@ -2507,7 +2660,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   async function handleCloseRoom() {
-    if (lifecycleActionState.status === "closing") {
+    if (
+      lifecycleActionState.status === "closing" ||
+      roomConnectionState.status !== "stable"
+    ) {
       return;
     }
 
@@ -2529,6 +2685,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   async function handleStartAnonymousAuth() {
+    if (roomConnectionState.status !== "stable") {
+      return;
+    }
+
     setIsStartingAuth(true);
     setStartAuthError(undefined);
 
@@ -2559,7 +2719,12 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   async function handleStartSession() {
     const lobby = getLobbyFromDataState(dataState);
 
-    if (!lobby || dataState.status === "starting" || !isMountedRef.current) {
+    if (
+      !lobby ||
+      dataState.status === "starting" ||
+      !isMountedRef.current ||
+      roomConnectionState.status !== "stable"
+    ) {
       return;
     }
 
@@ -2593,6 +2758,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   function handleRevealPrivateView() {
+    if (roomConnectionState.status !== "stable") {
+      return;
+    }
+
     setDataState((currentState) => {
       if (!isGameplayDataState(currentState)) {
         return currentState;
@@ -2606,6 +2775,10 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   function handleHidePrivateView() {
+    if (roomConnectionState.status !== "stable") {
+      return;
+    }
+
     setDataState((currentState) => {
       if (!isGameplayDataState(currentState)) {
         return currentState;
@@ -2619,7 +2792,11 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   async function handleStartDiscussion() {
-    if (isStartingDiscussion || !isMountedRef.current) {
+    if (
+      isStartingDiscussion ||
+      !isMountedRef.current ||
+      roomConnectionState.status !== "stable"
+    ) {
       return;
     }
 
@@ -2641,7 +2818,11 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   async function handleStartVoting() {
-    if (isStartingVoting || !isMountedRef.current) {
+    if (
+      isStartingVoting ||
+      !isMountedRef.current ||
+      roomConnectionState.status !== "stable"
+    ) {
       return;
     }
 
@@ -2663,7 +2844,11 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   async function handleStartSecondVoting() {
-    if (isStartingSecondVoting || !isMountedRef.current) {
+    if (
+      isStartingSecondVoting ||
+      !isMountedRef.current ||
+      roomConnectionState.status !== "stable"
+    ) {
       return;
     }
 
@@ -2685,7 +2870,12 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   async function handleStartNextRound() {
-    if (isStartingNextRound || isEndingSession || !isMountedRef.current) {
+    if (
+      isStartingNextRound ||
+      isEndingSession ||
+      !isMountedRef.current ||
+      roomConnectionState.status !== "stable"
+    ) {
       return;
     }
 
@@ -2707,7 +2897,12 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   async function handleEndSession() {
-    if (isEndingSession || isStartingNextRound || !isMountedRef.current) {
+    if (
+      isEndingSession ||
+      isStartingNextRound ||
+      !isMountedRef.current ||
+      roomConnectionState.status !== "stable"
+    ) {
       return;
     }
 
@@ -2732,7 +2927,11 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   async function handleSubmitVote() {
-    if (isSubmittingVote || !isMountedRef.current) {
+    if (
+      isSubmittingVote ||
+      !isMountedRef.current ||
+      roomConnectionState.status !== "stable"
+    ) {
       return;
     }
 
@@ -2754,7 +2953,11 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   async function handleSubmitImpostorGuess() {
-    if (isSubmittingImpostorGuess || !isMountedRef.current) {
+    if (
+      isSubmittingImpostorGuess ||
+      !isMountedRef.current ||
+      roomConnectionState.status !== "stable"
+    ) {
       return;
     }
 
@@ -2799,11 +3002,19 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   }
 
   function handleSelectVoteTarget(targetPlayerId: string) {
+    if (roomConnectionState.status !== "stable") {
+      return;
+    }
+
     setSelectedVoteTargetPlayerId(targetPlayerId);
     setSubmitVoteError(undefined);
   }
 
   function handleChangeImpostorGuessText(nextGuessText: string) {
+    if (roomConnectionState.status !== "stable") {
+      return;
+    }
+
     setImpostorGuessText(nextGuessText);
     setSubmitImpostorGuessError(undefined);
   }
@@ -2811,7 +3022,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   async function handleShareRoom() {
     const lobby = getLobbyFromDataState(dataState);
 
-    if (!lobby) {
+    if (!lobby || roomConnectionState.status !== "stable") {
       return;
     }
 
@@ -2829,7 +3040,12 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   async function handleCopyRoomCode() {
     const lobby = getLobbyFromDataState(dataState);
 
-    if (!lobby || typeof navigator === "undefined" || !navigator.clipboard) {
+    if (
+      !lobby ||
+      roomConnectionState.status !== "stable" ||
+      typeof navigator === "undefined" ||
+      !navigator.clipboard
+    ) {
       setRoomShareState({
         status: "error",
         message: "No pudimos copiar el código.",
@@ -2892,12 +3108,17 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
       void refreshAuthoritativeRoomState("online");
     }
 
+    function handleOffline() {
+      setRoomConnectionState({ status: "offline" });
+    }
+
     if (typeof document !== "undefined") {
       document.addEventListener("visibilitychange", handleVisibilityChange);
     }
 
     if (typeof window !== "undefined") {
       window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
     }
 
     return () => {
@@ -2907,6 +3128,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
 
       if (typeof window !== "undefined") {
         window.removeEventListener("online", handleOnline);
+        window.removeEventListener("offline", handleOffline);
       }
     };
   }, [bootstrapState.status, refreshAuthoritativeRoomState]);
@@ -3123,6 +3345,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     connectedPlayerIds,
     hostSuccessionNotice,
     roomShareState,
+    roomConnectionState,
     onShareRoom: () => void handleShareRoom(),
     onCopyRoomCode: () => void handleCopyRoomCode(),
   });

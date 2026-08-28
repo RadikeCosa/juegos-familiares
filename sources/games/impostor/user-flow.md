@@ -987,12 +987,15 @@ Puede perderse sin considerarse error:
 
 La aplicación no promete jugar offline. Puede conservar el último estado compartido con un indicador de reconexión/offline, pero al recuperar conexión debe aceptar el estado autoritativo actual.
 
+Incremento 13.2 implementa la UX mínima para ese intervalo: muestra "Sin conexión", "Reconectando..." o error reintentable en Room/gameplay, pausa acciones sensibles y no renderiza secretos privados stale mientras la reconciliación no haya terminado.
+
 ## Implementados pero pendientes de validación smoke específica
 
 Estos flujos existen técnicamente, pero todavía requieren prueba real en teléfonos, sesiones independientes, pérdida de conexión, background/reconnect o concurrencia:
 
 * comportamiento mobile/background de Presence y liveness según contrato 13.0;
 * smoke manual focal de triggers de reconstrucción autoritativa implementados en 13.1;
+* smoke manual focal de UX offline/reconnecting y retry implementada en 13.2;
 * cadencia 30s/90s/30s de heartbeat, stale y evaluación de sucesión en condiciones reales;
 * reasignación de host bajo pérdida de conexión, múltiples conexiones, refresh y carreras de clientes;
 * continuidad de la tanda completa en dispositivos físicos durante el smoke manual general.
@@ -1004,7 +1007,7 @@ La reasignación de host no está pendiente como contrato ni como implementació
 Siguen pendientes dentro del roadmap o como decisiones explícitamente diferidas:
 
 * primera instalación de la PWA;
-* implementación de reconexión autoritativa 13.2–13.5;
+* implementación de reconexión autoritativa 13.3–13.5;
 * salida o incorporación de un jugador durante una tanda;
 * capacidades de instalación y cache de la PWA.
 

@@ -1301,6 +1301,74 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).not.toContain("Sala AB7KQ2M4");
     });
 
+    it("keeps private gameplay data out of the DOM while reconnecting", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "role-reveal",
+                    lobby: playingHostLobby,
+                    gameState: playerGameState,
+                    isPrivateViewRevealed: true
+                },
+                {
+                    roomCode: "AB7KQ2M4",
+                    roomConnectionState: { status: "reconnecting" },
+                    connectedPlayerIds: new Set(["player-1"])
+                }
+            )
+        );
+
+        expect(markup).toContain("Reconectando");
+        expect(markup).toContain("Revisando estado de la sala");
+        expect(markup).toContain("Ramiro");
+        expect(markup).not.toContain("Casa");
+        expect(markup).not.toContain("Ver mi rol");
+        expect(markup).not.toContain("Empezar ronda");
+    });
+
+    it("shows offline feedback and pauses lobby actions without deleting shared state", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "success", lobby: hostLobby },
+                {
+                    roomCode: "AB7KQ2M4",
+                    roomConnectionState: { status: "offline" }
+                }
+            )
+        );
+
+        expect(markup).toContain("Sin conexión");
+        expect(markup).toContain("Ramiro");
+        expect(markup).toContain("Pedro");
+        expect(markup).toContain("Iniciar tanda");
+        expect(markup).toContain("Cerrar sala");
+        expect(markup).toContain("disabled=\"\"");
+    });
+
+    it("offers retry after a failed reconciliation while keeping actions paused", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                { status: "success", lobby: hostLobby },
+                {
+                    roomCode: "AB7KQ2M4",
+                    roomConnectionState: {
+                        status: "reconcile-error",
+                        message: "No pudimos cargar la sala. Intentá de nuevo."
+                    },
+                    onRetryData: vi.fn()
+                }
+            )
+        );
+
+        expect(markup).toContain("No pudimos actualizar la sala");
+        expect(markup).toContain("Reintentar");
+        expect(markup).toContain("Iniciar tanda");
+        expect(markup).toContain("disabled=\"\"");
+    });
+
     it("shows Empezar ronda to the current host during role reveal without requiring local reveal", () => {
         const markup = renderToStaticMarkup(
             renderRoomLobbyContent(
@@ -2232,6 +2300,7 @@ describe("renderRoomLobbyContent", () => {
         );
 
         expect(playingBranch).toContain("recordActiveRoomHost(activeLobby)");
+        expect(playingBranch).toContain("if (!canPreserveExistingState)");
         expect(playingBranch).toContain("setDataState({ status: \"loading-game-state\", lobby: activeLobby })");
         expect(playingBranch).not.toContain("acceptActiveRoom(activeLobby)");
     });
