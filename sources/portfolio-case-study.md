@@ -343,7 +343,7 @@ PENDIENTE:
 
 * validación manual multi-dispositivo completa;
 * deploy del cierre técnico de Incremento 12;
-* smoke manual focal de 13.1 e implementación/validación de reconexión autoritativa 13.2–13.5;
+* smoke manual focal de 13.1, validación de 13.2 y ejecución de reconexión autoritativa 13.3–13.5;
 * robustez PWA/cache de Incremento 14;
 * playtesting;
 * iteración sobre uso real.
@@ -378,7 +378,7 @@ PENDIENTE:
 | Terminar tanda e historial mínimo | COMPLETADA TÉCNICAMENTE |
 | Contrato documental de reconexión | CERRADO DOCUMENTAL |
 | Triggers de reconexión autoritativa | IMPLEMENTADA TÉCNICAMENTE / SMOKE PENDIENTE |
-| Reconexión autoritativa 13.2–13.5 | PENDIENTE |
+| Reconexión autoritativa 13.2–13.5 | EN CURSO |
 | Maduración PWA iOS/Android | PENDIENTE |
 | Auditoría final seguridad/testing/UX | PENDIENTE |
 | Playtesting | PENDIENTE |
@@ -906,7 +906,7 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 12 | Terminar tanda e historial mínimo | CERRADO TÉCNICAMENTE | 12.0-12.5 cerrados; primer MVP jugable alcanzado técnicamente con cierre autoritativo, resultado final compartido, reconstrucción desde historial sin Room activa y validación adversarial local |
 | 13.0 | Contrato documental de reconexión + hardening 5.4 | CERRADO DOCUMENTAL | Servidor/DB como autoridad, frontend como cache temporal, orden de reconstrucción Auth→Player/Group→Room→GameSession/read model, contrato por fase, estado efímero vs autoritativo, foreground/offline, Presence/liveness, host succession, multi-tab/device, errores y matriz de validación |
 | 13.1 | Triggers de reconstrucción autoritativa | CERRADO TÉCNICAMENTE / SMOKE PENDIENTE | mount, retry, foreground, online y recovery Realtime convergen a reconciliación autoritativa con single-flight/dedupe, reutilizando `getMyActiveRoom()` y `getMyGameState()` |
-| 13.2 | UI reconnecting/offline mínima | PENDIENTE | feedback local y acciones seguras durante reconexión |
+| 13.2 | UI reconnecting/offline mínima | CERRADO TÉCNICAMENTE / SMOKE PENDIENTE | estado local `stable/offline/reconnecting/reconcile-error`, feedback mínimo, listener `offline`, retry autoritativo y bloqueo de acciones/privados stale mientras la Room/GameSession no es confiable |
 | 13.3 | Presence/liveness foreground recovery | PENDIENTE | heartbeat, resubscribe, multi-tab y suspensión móvil |
 | 13.4 | Host succession recovery | PENDIENTE | host stale, sucesor, retorno del host original y concurrencia |
 | 13.5 | Matriz final de validación | PENDIENTE | tests, DB validators, smoke físico acotado y documentación final 13 |
