@@ -262,7 +262,7 @@ PRIMER MVP JUGABLE
 
 ## Hito E — Robustez y PWA
 
-La experiencia se endurece para refresh, reconexión básica, lifecycle móvil, service worker, cache apropiado, actualización, iOS, Android, seguridad, pruebas y pulido UX.
+La experiencia se endurece para refresh, reconexión autoritativa, lifecycle móvil, service worker, cache apropiado, actualización, iOS, Android, seguridad, pruebas y pulido UX.
 
 Incluye incrementos 13 a 15.
 
@@ -1394,11 +1394,11 @@ Validación cerrada:
 
 #### Incremento 5.4 — UX + hardening mobile/concurrencia
 
-Estado: `EN SUSPENSO`.
+Estado: `ABSORBIDO EN INCREMENTO 13`.
 
 La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios.
 
-Las pruebas físicas mobile definidas para hardening no pudieron realizarse aún. No se observaron defectos funcionales que justifiquen bloquear el avance hacia gameplay.
+Las pruebas físicas mobile definidas para hardening no pudieron realizarse aún. No se observaron defectos funcionales que justifiquen bloquear el avance hacia gameplay. Desde 13.0, este hardening queda dentro del contrato de reconexión autoritativa y la validación 13.1–13.5.
 
 Los timings vigentes se aceptan provisionalmente hasta esa validación física:
 
@@ -1408,7 +1408,7 @@ stale threshold = 90s
 succession recheck ~= 30s
 ```
 
-5.4 deberá retomarse antes del cierre final del MVP para validar:
+Incremento 13 deberá validar:
 
 * background breve;
 * background 30-60s;
@@ -1439,9 +1439,9 @@ No muestra heartbeat, `last_seen_at`, métricas técnicas ni controles de tolera
 
 ### Decisiones técnicas restantes
 
-La decisión principal de sucesión quedó cerrada en 5.3. Lo restante para 5.4 es hardening y validación mobile/concurrencia, no rediseño de autoridad ni gameplay.
+La decisión principal de sucesión quedó cerrada en 5.3. Lo restante absorbido por 13 es hardening y validación mobile/concurrencia, no rediseño de autoridad ni gameplay.
 
-5.4 en suspenso no bloquea el inicio del Incremento 6: 5.1-5.3 ya proveen la arquitectura funcional necesaria de Room, RoomParticipant, Presence, liveness y sucesión de host. 5.4 debe retomarse antes del cierre final del MVP, pero no representa una capacidad de dominio faltante para comenzar gameplay.
+5.1-5.3 ya proveen la arquitectura funcional necesaria de Room, RoomParticipant, Presence, liveness y sucesión de host. La validación heredada de 5.4 queda incorporada al cierre de Incremento 13, pero no representa una capacidad de dominio faltante para gameplay.
 
 ### Tests / validación
 
@@ -1477,7 +1477,7 @@ La decisión principal de sucesión quedó cerrada en 5.3. Lo restante para 5.4 
 * sin candidatos active produce no-op y conserva Room `lobby`;
 * host original que vuelve no recupera automáticamente el rol.
 
-Para 5.4 queda pendiente:
+Para Incremento 13 queda pendiente validar:
 
 * iOS Safari: background, lock screen, app switching, reconnect y retorno;
 * Android Chrome: background, lock screen, app switching, reconnect y retorno;
@@ -1992,7 +1992,7 @@ Casos pendientes:
 * host succession durante `role_reveal`;
 * D excluido si se reproduce el caso de liveness stale.
 
-Esto no cierra 5.4, que sigue `EN SUSPENSO`.
+Esto no cerraba la validación mobile/concurrencia heredada de 5.4. Desde 13.0, esa validación queda absorbida por Incremento 13.
 
 Fuera de alcance:
 
@@ -3238,22 +3238,53 @@ La prueba presencial completa con 3 a 8 teléfonos, especialmente con 4, sigue p
 
 ---
 
-## Incremento 13 — Reconexión básica
+## Incremento 13 — Reconexión autoritativa y hardening mobile
 
 ### Objetivo
 
-Mejorar la recuperación ante refresh, reapertura, segundo plano y pérdida breve de red.
+Mejorar la recuperación ante refresh, reapertura, segundo plano, foreground, resuscripción Realtime, pérdida breve/larga de red y sucesión de host, tomando el contrato documental 13.0 como autoridad para implementación y validación.
+
+Incremento 13 absorbe formalmente el hardening pendiente de 5.4:
+
+```text
+background/foreground
+lock screen
+app switching
+short disconnect
+long disconnect
+heartbeat recovery
+host succession recovery
+multi-tab
+multi-device best-effort
+resubscription/reconciliation
+```
+
+La implementación vigente de Presence/liveness/sucesión no cambia por 13.0. Los timings vigentes se conservan:
+
+```text
+heartbeat cliente: 30s
+host succession recheck: 30s
+gameplay polling: ~3s
+host stale threshold DB: 90s
+liveness DB throttle: ~10s
+```
 
 ### Resultado observable
 
-Un jugador puede refrescar o volver a abrir la PWA y recuperar:
+Un jugador puede refrescar, reabrir o volver desde background/offline y recuperar desde servidor:
 
 * identidad;
 * grupo;
 * sala activa;
+* host actual;
 * fase actual;
 * información privada que todavía le corresponda;
-* estado de voto si ya votó.
+* estado de voto si ya votó;
+* elegibilidad de intento final;
+* marcador;
+* resultado final `finished` aunque la Room ya no esté activa.
+
+El estado local stale nunca sobreescribe autoridad actual.
 
 ### Dominio involucrado
 
@@ -3266,28 +3297,56 @@ Impostor:
 
 * recuperación de sala, ronda y fase;
 * vista privada de jugador;
-* presencia.
+* presencia;
+* liveness;
+* sucesión de host.
 
 ### Infraestructura necesaria
 
-* consultas de reconstrucción de estado autorizado;
-* manejo de suscripciones al volver;
-* estrategia básica para background/foreground;
-* señales de error o reconexión en UI.
+* consultas existentes de reconstrucción de estado autorizado;
+* manejo de triggers de reconciliación;
+* resuscripción Realtime/Presence al volver;
+* foreground recovery de liveness;
+* evaluación de sucesión cuando corresponda;
+* señales mínimas de error, offline, retry o reconexión en UI.
+
+Expectativa inicial:
+
+```text
+frontend + RPCs/read models existentes
+```
+
+No se prevé backend nuevo salvo que la validación revele un caso no representable con los read models actuales.
 
 ### Decisiones técnicas a cerrar
 
-* qué se considera pérdida breve;
-* qué ocurre si un jugador vuelve en otra fase;
-* cómo se muestra un estado de reconectando;
-* qué información privada puede reconstruirse y bajo qué guards;
-* comportamiento si el host se desconectó y ya fue reemplazado.
+13.0 cierra documentalmente:
+
+* qué se considera reconexión;
+* triggers conceptuales: mount, manual retry, `visibility → visible`, `online`, recovery/resuscripción Realtime;
+* `focus` como trigger no obligatorio salvo evidencia de valor real;
+* orden de reconstrucción: Auth → Player/Group → Room activa → GameSession/read model → privados/acción propia → Realtime/Presence/liveness/sucesión;
+* qué ocurre si el Player vuelve en otra fase;
+* qué ocurre si `/sala/[code]` no coincide con su Room activa;
+* qué ocurre si Room ya cerró pero `GameSession` está `finished`;
+* qué estado local puede perderse;
+* qué estado autoritativo debe reconstruirse;
+* private reveal oculto por defecto tras refresh/reconnect;
+* voto propio y `my_vote_target_player_id` reconstruidos desde read model cuando existen;
+* intento final: no reofrecer submit si ya se resolvió o si la fase avanzó;
+* host succession: DB decide, cliente sólo solicita evaluación;
+* multi-tab como múltiples refs de Presence del mismo Player con dedupe lógico;
+* multi-device misma identidad como best-effort, no requisito fuerte del flujo normal;
+* single-flight/dedupe/coalescing para triggers cercanos;
+* política conceptual de error.
 
 ### Tests / validación
 
 * integración: reconstrucción de estado por jugador;
-* e2e: refresh en lobby, `ROLE_REVEAL`, votación y marcador;
-* pruebas manuales bloqueando teléfono y cambiando de app;
+* e2e/browser: refresh en lobby, `role_reveal`, votaciones, scoreboard y `finished`;
+* DB/integration: voto propio, segunda votación, Room cerrada, `finished`, sucesión;
+* smoke manual: bloqueando teléfono, cambiando de app y alternando red;
+* smoke multi-tab del mismo Player;
 * validación específica en Safari iOS y Chrome Android cuando haya dispositivos disponibles.
 
 ### Riesgos
@@ -3295,18 +3354,27 @@ Impostor:
 * recuperar datos privados de otro jugador;
 * duplicar acciones al reconectar;
 * mostrar fase vieja por cache local;
+* dejar visible un secreto de una ronda anterior;
+* permitir voto/guess/host action desde una fase stale;
+* depender sólo de eventos Realtime perdidos;
 * depender de comportamiento móvil no confiable.
 
 ### Fuera de alcance
 
 * modo offline de partida;
-* recuperación de jugador que abandona por mucho tiempo;
 * edición de participantes durante tanda;
-* sincronización peer-to-peer.
+* sincronización peer-to-peer;
+* service worker;
+* estrategia de cache;
+* offline shell;
+* cache de secretos;
+* background sync;
+* install/update behavior de PWA;
+* playtest amplio y polish final.
 
 ### Criterio de terminado
 
-La experiencia tolera interrupciones móviles comunes sin romper la tanda ni exponer información privada.
+La experiencia tolera interrupciones móviles comunes y resuscripciones sin romper la tanda, sin exponer información privada, sin habilitar acciones stale y aceptando siempre la fase/host/Room/resultado actuales del servidor.
 
 ### Conceptos a aprender
 
@@ -3315,6 +3383,94 @@ La experiencia tolera interrupciones móviles comunes sin romper la tanda ni exp
 * estado local confiable y no confiable;
 * resuscripción realtime;
 * recuperación autorizada.
+
+### Subincrementos
+
+#### 13.0 — Contrato documental de reconexión + hardening 5.4
+
+Estado: contrato documental.
+
+Define qué debe ocurrir ante refresh, reapertura, foreground, lock screen, app switching, offline corto/largo, resuscripción Realtime, sucesión de host, Room cerrada y `finished`.
+
+No modifica código, tests, listeners, Realtime, Presence, heartbeat, RPCs, DB, RLS ni Auth.
+
+#### 13.1 — Triggers de reconstrucción autoritativa
+
+Objetivo:
+
+```text
+mount / retry / foreground / online
+→ una reconciliación coherente
+```
+
+Debe implementar single-flight/dedupe para triggers cercanos y reconstruir desde RPC/read models, no desde cache local ni payloads de Realtime.
+
+#### 13.2 — UI reconnecting/offline mínima
+
+Objetivo:
+
+```text
+feedback
++
+acciones seguras durante reconexión
+```
+
+Debe cubrir estados locales `reconnecting`, `offline`, `error` y `retry` dentro de Room/gameplay si alcanza, sin diseñar un sistema global.
+
+#### 13.3 — Presence/liveness foreground recovery
+
+Objetivo:
+
+```text
+heartbeat
+resubscribe
+multi-tab
+suspensión móvil
+```
+
+Debe validar que cerrar una pestaña no desconecte conceptualmente al Player si otra conexión válida sigue activa.
+
+#### 13.4 — Host succession recovery
+
+Objetivo:
+
+```text
+host stale
+successor
+host original vuelve
+concurrencia
+```
+
+La DB decide sucesión; el cliente sólo solicita evaluación. El host original no recupera el rol automáticamente.
+
+#### 13.5 — Matriz final de validación
+
+Objetivo:
+
+```text
+tests
+DB validators
+smoke físico acotado
+documentación final 13
+```
+
+Matriz mínima:
+
+| Escenario | Validación |
+| --- | --- |
+| refresh `role_reveal` | desktop + mobile real |
+| refresh `voting_first` después de votar | DB/integration + browser |
+| refresh `voting_second` después de votar | DB/integration + browser |
+| refresh `scoreboard` | browser |
+| refresh `finished` | DB/integration + browser |
+| background corto guest | mobile real |
+| background corto host | mobile real |
+| background largo host con succession | mobile real + DB |
+| offline corto voting | manual smoke |
+| fase avanza mientras Player está fuera | manual smoke + browser |
+| Room termina mientras Player está fuera | DB/integration + browser |
+| host original vuelve después de succession | DB/integration + manual |
+| multi-tab mismo Player | browser smoke |
 
 ---
 
@@ -3588,7 +3744,7 @@ Se agregó Room + Lobby: creación de Room, join por código/enlace, reconstrucc
 
 5.3 cerró sucesión autoritativa de host con RPC sin ownership cliente, liveness server-side, locking/revalidación, idempotencia, propagación por Realtime existente y smoke productivo PASS.
 
-5.4 queda en suspenso para hardening mobile/concurrencia y validación ampliada de la cadencia técnica 30s/90s/30s antes del cierre final del MVP. La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios y no se observaron defectos funcionales que bloqueen el avance hacia gameplay.
+5.4 queda absorbido por Incremento 13. El contrato documental 13.0 cubre hardening mobile/concurrencia y validación ampliada de la cadencia técnica 30s/90s/30s antes del cierre final del MVP. La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios y no se observaron defectos funcionales que bloqueen el avance.
 
 ## Incrementos 6 a 12
 
@@ -3598,7 +3754,7 @@ Incrementos 7 a 12 agregan transición a conversación presencial, votación, sc
 
 ## Incrementos 13 a 15
 
-Siguen pendientes como próximos incrementos formales: reconexión básica, maduración PWA iOS/Android y auditoría final de seguridad, testing y UX.
+Siguen pendientes como próximos incrementos formales: implementación y validación de reconexión autoritativa 13.1–13.5, maduración PWA iOS/Android y auditoría final de seguridad, testing y UX.
 
 El service worker/cache pertenece al Incremento 14 y no debe presentarse como implementado antes de ejecutarlo.
 
@@ -3699,7 +3855,7 @@ Ya resuelto o cerrado técnicamente:
 
 Pendiente o futuro:
 
-* comportamiento de conexión, reconexión avanzada y background móvil;
+* implementación y validación de conexión, reconexión avanzada y background móvil según contrato 13.0;
 * limpieza automática de salas viejas;
 * tolerancias precisas de desconexión;
 * comportamiento de entrada o salida de jugadores durante una tanda;
@@ -3771,8 +3927,8 @@ El siguiente paso lógico es cerrar el smoke test manual actual antes de avanzar
 2. clasificar hallazgos como defecto funcional, regresión bloqueante, mejora UX no bloqueante o decisión futura;
 3. resolver defectos funcionales o regresiones bloqueantes antes de continuar;
 4. agrupar mejoras UX no bloqueantes de manera acotada, sin ampliar el MVP;
-5. completar la validación pendiente de 5.4 si todavía corresponde: mobile, background/reconnect, múltiples conexiones y concurrencia de sucesión;
-6. ejecutar Incremento 13, reconexión básica;
+5. ejecutar Incremento 13.1–13.5 según contrato documental 13.0, incluyendo lo pendiente de 5.4;
+6. auditar el cierre de Incremento 13 contra matriz de validación;
 7. ejecutar Incremento 14, maduración PWA iOS/Android con service worker/cache acotados;
 8. ejecutar Incremento 15, auditoría final de seguridad, testing y UX;
 9. declarar el cierre del MVP solamente cuando se cumplan sus criterios técnicos, de validación manual y de riesgo.
@@ -3781,9 +3937,10 @@ Estado consolidado vigente:
 
 * Incrementos 0 a 4 cerrados;
 * Incrementos 5.1 a 5.3 cerrados;
-* Incremento 5.4 pendiente de validación mobile/concurrencia;
+* Incremento 5.4 absorbido en Incremento 13;
 * Incrementos 6 a 12 cerrados técnicamente;
 * smoke manual general en curso;
-* Incrementos 13 a 15 pendientes.
+* Incremento 13.0 documentado y 13.1–13.5 pendientes de implementación/validación;
+* Incrementos 14 a 15 pendientes.
 
 Las mejoras y defectos encontrados durante el smoke se tratan antes de continuar cuando afecten el uso real o introduzcan riesgo. Las mejoras no bloqueantes deben mantenerse acotadas para no reabrir decisiones de producto ni ampliar el MVP.

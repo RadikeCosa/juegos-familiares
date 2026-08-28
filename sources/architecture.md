@@ -1016,7 +1016,7 @@ cada cliente recupera su vista privada autorizada
 
 ---
 
-# 23. Consistencia y concurrencia
+# 24. Consistencia y concurrencia
 
 La arquitectura debe contemplar pocos clientes concurrentes, pero correctamente.
 
@@ -1040,7 +1040,7 @@ No definimos todavía implementación transaccional exacta.
 
 ---
 
-# 24. Host disconnect
+# 25. Host disconnect
 
 Comportamiento cerrado en 5.3:
 
@@ -1084,14 +1084,17 @@ Un RoomParticipant excluido del snapshot no puede adquirir autoridad de gameplay
 
 ---
 
-# 25. Reconexión
+# 26. Reconexión
 
 Cuando un cliente vuelve después de:
 
 * refresh;
 * lock/unlock;
 * background;
+* foreground;
 * pérdida de red;
+* recuperación online;
+* resuscripción Realtime;
 * cierre/reapertura;
 
 la secuencia conceptual debe ser:
@@ -1101,20 +1104,40 @@ recuperar identidad
 ↓
 recuperar grupo
 ↓
-detectar contexto activo
+recuperar Room activa si existe
 ↓
 consultar estado autoritativo
 ↓
 recuperar vista privada
 ↓
+recuperar acción propia persistida
+↓
 re-suscribirse
+↓
+refrescar liveness y evaluar sucesión si corresponde
 ```
+
+La autoridad vive en Supabase/Postgres y en RPCs/read models derivados desde `auth.uid()`. El cliente PWA conserva solamente cache temporal, estado visual y formularios locales. Tras una reconexión, el estado autoritativo actual reemplaza cualquier estado local stale.
+
+Realtime y Presence no son autoridad:
+
+```text
+Realtime
+→ invalida / avisa
+
+RPC/read model
+→ reconstruye la verdad actual
+```
+
+Por eso, después de resuscripción o eventos perdidos, el cliente debe releer estado completo en vez de intentar reproducir eventos históricos.
+
+Si no hay Room activa porque la Room cerró, el cliente no debe simular una sala viva. Si existe una `GameSession` en `finished` y el caller fue `SessionPlayer`, `get_my_game_state()` puede reconstruir el resultado final histórico aunque `get_my_active_room()` ya no devuelva Room.
 
 No diseñamos todavía política avanzada de expiración o timeout.
 
 ---
 
-# 26. Historial y estadísticas futuras
+# 27. Historial y estadísticas futuras
 
 Al finalizar una tanda de Impostor:
 
@@ -1129,7 +1152,7 @@ La pantalla de estadísticas no forma parte obligatoria del primer MVP.
 
 ---
 
-# 27. Futuro segundo juego
+# 28. Futuro segundo juego
 
 Tutti Frutti es solo un ejemplo arquitectónico futuro.
 
@@ -1155,7 +1178,7 @@ No diseñamos Tutti Frutti ahora.
 
 ---
 
-# 28. Dependencia de Supabase
+# 29. Dependencia de Supabase
 
 Supabase reduce complejidad operativa al proporcionar:
 
@@ -1176,7 +1199,7 @@ Mitigación conceptual:
 
 ---
 
-# 29. Límites del MVP
+# 30. Límites del MVP
 
 Quedan fuera:
 
@@ -1197,7 +1220,7 @@ Quedan fuera:
 
 ---
 
-# 30. Decisiones diferidas
+# 31. Decisiones diferidas
 
 Se difieren:
 
@@ -1218,7 +1241,7 @@ No cerramos decisiones que todavía no fueron tomadas.
 
 ---
 
-# 31. Relación con futura estructura del repositorio
+# 32. Relación con futura estructura del repositorio
 
 Una futura estructura podría separar conceptualmente:
 
@@ -1243,7 +1266,7 @@ Lo importante es la separación de responsabilidades, no la estructura exacta.
 
 ---
 
-# 32. Próximo paso
+# 33. Próximo paso
 
 Con la arquitectura conceptual cerrada, el siguiente paso es crear:
 

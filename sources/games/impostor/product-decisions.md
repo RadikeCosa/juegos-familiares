@@ -323,6 +323,73 @@ Queremos que una ausencia breve, un bloqueo de pantalla o una transición backgr
 
 También queremos evitar que un cliente pueda decidir el host solo porque observó una pérdida de Presence. El host es un rol persistido y cambia mediante una decisión autoritativa derivada desde `auth.uid() -> Player -> Room`, sin aceptar IDs de ownership enviados por cliente.
 
+# Reconexión y estado stale
+
+## Decisión
+
+En Incremento 13, después de refresh, reapertura, retorno desde background, desbloqueo, app switching, pérdida de red o resuscripción Realtime, la aplicación debe aceptar el estado actual del servidor.
+
+La decisión de producto es:
+
+```text
+estado autoritativo actual
+→ reemplaza estado local stale
+```
+
+Nunca:
+
+```text
+estado local viejo
+→ restaura fase, host, Room, voto, palabra o acción anterior
+```
+
+Si un jugador se fue en una fase y vuelve cuando el grupo avanzó, ve la fase vigente. Ejemplos:
+
+```text
+role_reveal → discussion
+discussion → voting_first
+voting_first/voting_second → scoreboard
+scoreboard → role_reveal de nueva ronda
+scoreboard → finished
+```
+
+## Estado local efímero
+
+Puede perderse legítimamente al reconectar:
+
+* reveal abierto/cerrado;
+* modal abierto;
+* selección de voto todavía no enviada;
+* input de intento final no enviado;
+* feedback temporal;
+* estado visual efímero.
+
+El reveal privado vuelve inicialmente oculto después de refresh o reconexión. Esto es deseado porque reduce exposición física. El rol y la palabra autorizada deben seguir correspondiendo a la ronda actual. Si la ronda cambió, ningún secreto anterior debe quedar visible.
+
+## Acciones persistidas
+
+Las acciones ya confirmadas por servidor deben reconstruirse desde el read model:
+
+* voto propio en primera votación;
+* voto propio en segunda votación;
+* elegibilidad o no para el intento final del impostor;
+* marcador;
+* cierre `finished`.
+
+Si el Player ya votó, la UI no debe presentarlo como si aún pudiera votar. Cuando el read model devuelva `my_vote_target_player_id`, puede usarse para mostrar la elección propia sin exponer votos ajenos.
+
+Durante `impostor_guess`, si el intento ya fue enviado y la fase avanzó a resultado, no se vuelve a ofrecer submit. Si todavía es elegible, el impostor ve el formulario. Si la fase avanzó por otro camino, se muestra la fase vigente.
+
+## Room cerrada y resultado final
+
+Si una Room se cerró mientras el Player estaba fuera, la aplicación no debe seguir simulando una sala viva. `get_my_active_room()` deja de devolver Room activa.
+
+Si la tanda terminó, el resultado final debe poder reconstruirse para los `SessionPlayers` desde `get_my_game_state()` aunque la Room ya no esté activa. Si no hay resultado final recuperable, el destino esperado es volver al Group y permitir el flujo normal de crear o unirse a otra Room.
+
+## Motivo
+
+Reconexión robusta no significa volver al punto exacto visual donde quedó cada teléfono. Significa volver a una vista segura, actual y autorizada que preserve lo importante de la partida sin inventar estado local ni exponer secretos viejos.
+
 # GameSession y comienzo de tanda
 
 ## Decisión

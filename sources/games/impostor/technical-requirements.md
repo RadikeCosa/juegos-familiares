@@ -623,9 +623,9 @@ No se agregó Broadcast. Presence no se convierte en fuente de verdad del lobby 
 
 ---
 
-# 17. Reconexión
+# 17. Reconexión autoritativa
 
-## Incremento 4: reconstrucción
+## Incremento 4: reconstrucción de lobby
 
 La PWA debe poder recuperarse razonablemente de:
 
@@ -646,6 +646,262 @@ Debe poder reconstruir:
 * estado de lobby.
 
 La reconexión de Presence, estado online/offline, background móvil y fases de una partida queda fuera de Incremento 4.
+
+## Incremento 13.0: contrato documental
+
+Incremento 13.0 define el contrato autoritativo de reconexión para implementar y validar 13.1 a 13.5. No cambia RPCs, Realtime, Presence, heartbeat, RLS ni modelo de datos.
+
+La regla central es:
+
+```text
+servidor / DB = autoridad
+frontend = cache temporal / presentación
+```
+
+Después de cualquier reconexión relevante, el estado autoritativo vigente reemplaza estado local stale. El estado local anterior nunca debe sobreescribir autoridad actual ni habilitar acciones de una fase pasada.
+
+### Qué cuenta como reconexión
+
+Para Incremento 13, reconexión significa cualquier evento que obligue al cliente a reconciliar su vista con servidor porque pudo haber perdido eventos, timers o contexto local:
+
+* mount inicial de `/impostor/sala/[code]`;
+* refresh;
+* reapertura de pestaña o navegador;
+* reapertura de PWA instalada;
+* `visibility hidden → visible`;
+* retorno desde lock screen o app switching;
+* `offline → online`;
+* recuperación después de resuscripción Realtime;
+* retry manual luego de error recuperable.
+
+Estos triggers pueden tener implementaciones distintas, pero deben converger hacia una misma reconciliación autoritativa. `focus` no queda como trigger obligatorio en 13.0: sólo debe agregarse en 13.1 si aporta cobertura real no resuelta por `visibility`/`online` y no duplica eventos sin control.
+
+Múltiples triggers cercanos deben coalescerse mediante single-flight, dedupe o mecanismo equivalente para evitar tormentas de refetch, resuscripción o evaluación de sucesión.
+
+### Orden de reconstrucción
+
+El orden conceptual después de reconectar es:
+
+```text
+1. recuperar sesión Auth actual
+2. reconstruir Player / Group con bootstrapPlatformContext()
+3. recuperar Room activa con getMyActiveRoom()
+4. reconciliar Room.status, host y participants
+5. si Room.status = playing, recuperar GameSession vigente con getMyGameState()
+6. si no hay Room activa, intentar reconstruir resultado finished permitido con getMyGameState()
+7. recuperar fase vigente de GameSession
+8. recuperar estado privado autorizado del caller
+9. recuperar acción propia persistida
+10. limpiar estado local incompatible o stale
+11. restablecer Realtime / Presence para la Room activa cuando corresponda
+12. refrescar liveness con refreshMyRoomLiveness() cuando haya Room activa
+13. solicitar reassignRoomHostIfStale() cuando haya ausencia candidata o recovery relevante
+14. renderizar UI desde el estado actual del servidor
+```
+
+`Room` va primero porque contiene pertenencia activa, estado `lobby|playing|closed`, host actual, participants, liveness y Presence. `GameSession` va después para fase y vista privada. La excepción documentada es `finished`: una Room cerrada deja de ser activa, pero un `SessionPlayer` histórico debe poder reconstruir el resultado final desde `get_my_game_state()` aunque `get_my_active_room()` ya no devuelva Room activa.
+
+Si la URL `/impostor/sala/[code]` no coincide con la Room activa del Player, la UI no debe fingir que esa sala está viva. Debe aceptar el estado remoto: recuperar la Room activa real si existe, mostrar que no hay Room activa si la Room del enlace ya cerró, o permitir volver al grupo según el comportamiento vigente.
+
+### Estado que debe reconstruirse
+
+La reconciliación debe recuperar, cuando corresponda y si el caller está autorizado:
+
+* `AuthIdentity`;
+* `Player`;
+* `Group`;
+* Room activa;
+* host actual;
+* `Room.status`;
+* participants de Room;
+* número de ronda;
+* fase vigente;
+* rol vigente del caller;
+* palabra vigente del caller si corresponde a su rol y fase;
+* voto propio ya enviado;
+* `my_vote_target_player_id` cuando el read model lo devuelve;
+* elegibilidad para intento final del impostor;
+* score;
+* resultado `finished`.
+
+### Estado local que puede perderse
+
+No se consideran bugs de reconexión si se pierden:
+
+* reveal abierto/cerrado;
+* modal abierto;
+* selección de voto todavía no enviada;
+* input de guess no enviado;
+* feedback temporal;
+* estado visual efímero.
+
+El reveal privado vuelve inicialmente oculto después de refresh/reconnect. Esto es aceptable y deseado. El rol y la palabra vigentes deben seguir siendo correctos para la ronda actual. Si la ronda cambió, ningún secreto anterior debe quedar visible.
+
+### Contrato por fase
+
+| Fase | Estado compartido autoritativo | Estado privado | Acción propia persistida | UI esperada al reconectar |
+| --- | --- | --- | --- | --- |
+| `lobby` | Room `lobby`, host, participants, código/enlace, Presence efímera | ninguno | pertenencia a Room | lobby actual o salida al grupo si Room cerró |
+| `role_reveal` | Room `playing`, GameSession, Round, roster, round number | rol y palabra sólo para no-impostor | ninguna confirmación persistida | reveal oculto; botón para ver rol/palabra vigente |
+| `discussion` | fase, host, roster, round number | misma vista privada autorizada del caller | ninguna | conversación vigente; reveal local oculto salvo estado efímero preservado en mismo montaje |
+| `voting_first` | fase y candidatos desde `SessionPlayers` | rol/word según reglas vigentes, sin parciales | voto propio de `voting_round = 1` | votar si no votó; espera si `has_voted = true`; fase siguiente si avanzó |
+| `tie_discussion` | resultado agregado de primera votación y candidatos empatados derivados | ningún secreto adicional | voto de primera etapa ya cerrado | ver empate vigente; host actual puede iniciar segunda votación si read model lo permite |
+| `voting_second` | candidatos empatados autorizados, sin parciales | ningún secreto adicional | voto propio de `voting_round = 2` | votar si no votó; espera si `has_voted = true`; usar `my_vote_target_player_id` si llega |
+| `impostor_guess` | impostor identificado, fase vigente, palabra aún oculta | `can_submit_impostor_guess` sólo para impostor | guess ya enviado si la fase avanzó a resultado | form sólo si sigue elegible; espera para los demás; no reofrecer submit tras guess persistido |
+| `round_result` | ganador de ronda, palabra revelada, guess si existió, resultado agregado | sin secretos pendientes | votos/guess ya cerrados | resultado vigente; no habilitar acciones de votación/guess |
+| `scoreboard` | scores acumulados, host actual, disponibilidad de nueva ronda/cierre | sin secretos pendientes de ronda cerrada | ninguna acción individual abierta | marcador vigente; CTA host-only según read model |
+| `finished` | historial mínimo, scores finales, ganadores, rondas, `finished_at` | sin secretos pendientes | tanda cerrada | resultado final compartido aun sin Room activa; sin nueva ronda ni terminar tanda |
+
+### Fase que avanza mientras el Player está fuera
+
+Si el Player sale en fase A, otros avanzan a fase B y el Player vuelve, debe ver fase B. No se restaura fase A desde cache local.
+
+Ejemplos:
+
+```text
+discussion → voting_first
+voting_first/voting_second → scoreboard o fase posterior
+role_reveal → discussion
+scoreboard → role_reveal de nueva ronda
+scoreboard → finished
+```
+
+### Room cerrada y finished
+
+Si una Room activa pasa a `closed` mientras el Player está fuera:
+
+```text
+getMyActiveRoom()
+→ no Room activa
+```
+
+La ruta `/impostor/sala/[code]` no debe quedarse mostrando una sala viva. Si existe una `GameSession finished` para ese Player, `get_my_game_state()` debe reconstruir el resultado final histórico permitido. Si no hay resultado final recuperable, la UI debe ofrecer volver al Group y permitir crear o unirse a otra Room según el estado actual.
+
+### Foreground, lock screen y app switching
+
+`hidden → visible`, desbloquear el teléfono y volver desde otra app son variantes de suspensión/background. Los timers pueden no haber corrido; no se debe confiar en heartbeat, polling ni Presence durante la suspensión.
+
+Al volver, el cliente debe reconciliar suficiente estado para corregir:
+
+* fase vieja;
+* host viejo;
+* Room vieja;
+* liveness stale;
+* suscripciones Realtime perdidas.
+
+### Offline corto y largo
+
+Offline corto puede conservar el último estado compartido visible con feedback de conectividad si existe, pero al recuperar `online` debe ejecutar reconciliación autoritativa. No se promete gameplay offline.
+
+Offline largo, suficiente para que liveness quede stale o ocurra sucesión de host, debe aceptar el estado actual del servidor. Si el host original vuelve después de una sucesión, vuelve como participante normal y no recupera host automáticamente.
+
+### Presence, liveness y Realtime
+
+La separación obligatoria es:
+
+```text
+Presence = señal efímera Realtime
+liveness = estado autoritativo basado en last_seen_at
+Room membership = DB
+authorization = auth.uid() + RLS/RPC
+```
+
+Presence no es fuente de autorización ni de host. Realtime invalida o avisa; RPC/read model reconstruye verdad actual. Después de resuscripción Realtime, el estado inicial debe venir de RPC/read model, no de eventos pendientes ni payloads perdidos.
+
+El heartbeat vigente es de 30 segundos. Si el browser fue suspendido, puede faltar. Foreground recovery debe refrescar liveness. El threshold DB de stale sigue siendo 90 segundos y el throttling de escritura sigue siendo aproximadamente 10 segundos. La evaluación cliente de sucesión conserva el recheck lento inicial de 30 segundos.
+
+### Host succession
+
+La DB decide la sucesión. El cliente sólo puede solicitar evaluación.
+
+Contrato vigente:
+
+```text
+host stale = last_seen_at null o now() - last_seen_at > 90s
+candidato = RoomParticipant active
+           excluye host actual
+           y en playing pertenece a SessionPlayers
+orden = joined_at ASC, player_id ASC
+sin candidato = no-op
+host original vuelve = participante normal
+```
+
+No existe reclaim automático del host original.
+
+### Multi-tab y multi-device
+
+Mismo Player con varias pestañas o conexiones puede producir múltiples refs de Presence. La UI debe deduplicar por Player lógico. Mientras una pestaña válida siga refrescando liveness, el Player puede seguir active. Cerrar una sola pestaña no debería conceptualmente desconectar al Player si otra sigue activa.
+
+Multi-device con la misma identidad no es flujo normal fuerte del producto. Si ocurre, se trata como múltiples conexiones del mismo Player y queda como validación best-effort dentro del Incremento 13.
+
+La expectativa multi-tab/multi-device queda como contrato esperado pendiente de validación práctica en 13.3/13.5.
+
+### UI reconnecting/offline y errores
+
+Incremento 13 puede definir estados locales de UI:
+
+```text
+reconnecting
+offline
+error
+retry
+```
+
+No requiere un sistema global. Deben mantenerse locales a Room/gameplay si alcanza.
+
+Durante reconciliación:
+
+* no mostrar información privada stale como si fuera vigente;
+* no habilitar acciones potencialmente incorrectas;
+* se puede conservar estado compartido anterior con indicador visual si queda claro que está reconciliando;
+* no borrar estado autoritativo válido ante fallas parciales si puede ofrecer retry.
+
+Política mínima:
+
+| Falla | Efecto |
+| --- | --- |
+| Auth failure | bloquea gameplay protegido; volver a flujo sin contexto reconocido |
+| Player/Group fetch failure | bloquea Room/gameplay; mostrar error reintentable |
+| Room fetch failure | bloquea acciones de Room; conservar último compartido sólo como stale indicado |
+| Game state failure | bloquea acciones de gameplay y privados; retry |
+| Presence failure | degrada disponibilidad visual; no bloquea estado autoritativo |
+| liveness failure | mostrar o registrar degradación si afecta host recovery; retry, no borrar Room |
+| host succession evaluation failure | no bloquear gameplay del no-host; mantener host autoritativo leído y reintentar evaluación cuando corresponda |
+
+### Matriz mínima de validación 13
+
+| Escenario | Validación esperada |
+| --- | --- |
+| refresh en `role_reveal` | desktop + mobile real; reveal oculto y secreto vigente correcto |
+| refresh en `voting_first` después de votar | DB/integration + browser; `has_voted` y voto propio recuperados |
+| refresh en `voting_second` después de votar | DB/integration + browser; `my_vote_target_player_id` de segunda etapa recuperado |
+| refresh en `scoreboard` | browser; marcador y permisos host-only reconstruidos |
+| refresh en `finished` | DB/integration + browser; resultado final sin Room activa |
+| background corto guest | mobile real; vuelve a fase/Room actual |
+| background corto host | mobile real; liveness refresh sin sucesión indebida |
+| background largo host con succession | mobile real + DB; nuevo host autoritativo, host original vuelve normal |
+| offline corto en votación | manual smoke; al volver recupera voto/fase vigente |
+| fase avanza mientras Player está fuera | manual smoke + browser; vuelve a fase B |
+| Room termina mientras Player está fuera | DB/integration + browser; no sala viva falsa, `finished` si corresponde |
+| host original vuelve después de succession | DB/integration + manual; no reclaim automático |
+| multi-tab mismo Player | browser smoke; Presence dedupe y liveness por Player |
+
+### Alcance de subincrementos
+
+* 13.0: contrato documental.
+* 13.1: triggers de reconstrucción autoritativa para mount, retry, foreground y online.
+* 13.2: UI mínima `reconnecting/offline/error/retry` y bloqueo seguro de acciones.
+* 13.3: recovery foreground de Presence/liveness, resubscribe y multi-tab.
+* 13.4: recovery de host succession ante stale, retorno del host original y concurrencia.
+* 13.5: matriz final de tests, DB validators, smoke físico acotado y documentación final.
+
+No se prevé backend nuevo salvo que la validación revele un caso no representable con los read models actuales.
+
+### Fronteras con 14 y 15
+
+Incremento 13 no convierte Impostor en offline-capable. Quedan fuera: service worker, estrategia de cache, offline shell, asset caching, update behavior, install behavior, background sync, cache de secretos y quirks específicos de plataforma PWA. Eso pertenece al Incremento 14.
+
+Incremento 15 conserva playtest amplio, ergonomía, stress final y polish visual. Incremento 13 sí requiere smoke físico mínimo para suspensión/reconnect por el riesgo del lifecycle móvil.
 
 ---
 
@@ -1837,7 +2093,7 @@ Esta necesidad de sincronización corresponde a Impostor.
 
 ---
 
-# 23. Escala
+# 25. Escala
 
 ## Requisito MVP
 
@@ -1853,7 +2109,7 @@ No se debe optimizar prematuramente para comunidades públicas, matchmaking o gr
 
 ---
 
-# 24. Experiencia de desarrollo y aprendizaje
+# 26. Experiencia de desarrollo y aprendizaje
 
 ## Criterio para comparar arquitecturas
 
@@ -1912,7 +2168,7 @@ Este criterio no eligió por sí mismo framework, proveedor ni infraestructura. 
 * Ranking global.
 * Chat.
 * Partidas remotas fuera del contexto presencial.
-* Reglas avanzadas de reconexión.
+* Políticas avanzadas de abandono, timeout o recuperación más allá del contrato 13.
 * Presencia más sofisticada.
 * Offline más amplio si aparece una necesidad real.
 * Optimización para comunidades grandes.
