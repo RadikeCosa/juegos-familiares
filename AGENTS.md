@@ -34,6 +34,7 @@ el tipo e impacto de la tarea.
 | Cambio localizado de UI, ruta o test | Implementación y tests cercanos |
 | Cambio de reglas o flujo de Impostor | Implementación, tests y documentos relevantes de `sources/games/impostor/` |
 | Cambio de producto de plataforma | `sources/platform/product-brief.md` |
+| Entorno local, setup o scripts operativos | `README.md` y `package.json` |
 | Arquitectura, autorización, datos, Supabase, Realtime, PWA o límites entre dominios | `sources/architecture.md` y superficie afectada |
 | Alcance, decisiones relevantes o planificación | `sources/working-method.md`, `sources/project-principles.md` y, si corresponde, `sources/implementation-plan.md` |
 | Aprendizajes verificables | `sources/portfolio-case-study.md` |
@@ -56,8 +57,8 @@ fuera del alcance autorizado.
 6. Si una decisión relevante no está definida o contradice una fuente de
    verdad, detenerse y reportarla.
 
-Un working tree no limpio es normal. Preservar los cambios ajenos: no
-restaurarlos, descartarlos, reformatearlos ni incorporarlos al alcance.
+El working tree puede contener cambios preexistentes legítimos. Preservarlos:
+no restaurarlos, descartarlos, reformatearlos ni incorporarlos al alcance.
 
 ## Límites según la tarea
 
@@ -172,7 +173,7 @@ explícita para resolver una decisión, contrato, aprendizaje o drift real.
 - Mantener separados hechos, decisiones, hipótesis, implementación, validación
   y aprendizaje.
 - Actualizar la fuente específica que posee el contrato; no duplicarla aquí.
-- Usar `portfolio-case-study.md` para aprendizajes relevantes y verificables,
+- Usar `sources/portfolio-case-study.md` para aprendizajes relevantes y verificables,
   no como tablero de estado actual.
 - No convertir este archivo en roadmap, changelog, inventario de migrations,
   schema, firmas RPC ni especificación completa de Impostor.
