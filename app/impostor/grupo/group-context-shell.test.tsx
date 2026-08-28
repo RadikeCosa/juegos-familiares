@@ -132,7 +132,7 @@ describe("renderImpostorGroupContext", () => {
     expect(markup).toContain("Banco de palabras");
     expect(markup).toContain("Cargando banco");
     expect(markup).toContain("/impostor/grupo/palabras");
-    expect(markup).toContain("Invitar personas");
+    expect(markup).toContain("Invitá a los demás");
   });
 
   it("renders the non-admin group view without the invitation CTA", () => {
@@ -167,10 +167,14 @@ describe("renderImpostorGroupContext", () => {
 
   it("keeps the group visible when players fail to load", () => {
     const text = inspect(
-      renderImpostorGroupContext(adminBootstrapState, {
-        status: "error",
-        message: "No pudimos cargar los integrantes. Intentá de nuevo."
-      })
+      renderImpostorGroupContext(
+        adminBootstrapState,
+        {
+          status: "error",
+          message: "No pudimos cargar los integrantes. Intentá de nuevo."
+        },
+        { onRetryPlayers: () => undefined }
+      )
     ).text;
 
     expect(text).toContain("Familia");

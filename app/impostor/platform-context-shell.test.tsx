@@ -57,7 +57,7 @@ describe("renderImpostorPlatformContext", () => {
   });
 
   it("shows onboarding when the user is unrecognized", () => {
-    const text = inspect(
+    const text = renderToStaticMarkup(
       renderImpostorPlatformContext({
         status: "unrecognized",
         reason: "no-auth"
