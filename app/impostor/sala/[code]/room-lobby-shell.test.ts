@@ -6,6 +6,7 @@ import type { PlatformBootstrapState } from "../../../../lib/supabase/platform-b
 import type { MyGameState, RoomLobby } from "../../../../lib/supabase/impostor-rooms";
 import {
     createGameplayPollLoop,
+    createRoomAuthoritativeRefreshController,
     confirmEndSession,
     copyRoomCode,
     formatPlayerCount,
@@ -2188,19 +2189,36 @@ describe("renderRoomLobbyContent", () => {
         expect(source).not.toContain("isActiveHostMissing,\n    hostSuccessionController");
     });
 
-    it("uses one authoritative refresh path for bootstrap, START success, retry and Realtime", () => {
+    it("uses one authoritative refresh path for bootstrap, START success, retry, foreground, online and Realtime", () => {
         const source = readFileSync(
             join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
             "utf8"
         );
 
         expect(source).toContain("const refreshAuthoritativeRoomState = useCallback(");
+        expect(source).toContain("createRoomAuthoritativeRefreshController()");
         expect(source).toContain("await refreshAuthoritativeRoomState(\"bootstrap\")");
         expect(source).toContain("await refreshAuthoritativeRoomState(\"start\")");
         expect(source).toContain("void refreshAuthoritativeRoomState(\"realtime\", {");
+        expect(source).toContain("void refreshAuthoritativeRoomState(\"foreground\")");
+        expect(source).toContain("void refreshAuthoritativeRoomState(\"online\")");
         expect(source).toContain("onRetryData: () => void refreshAuthoritativeRoomState(\"retry\")");
         expect(source).toContain("getMyActiveRoom(createImpostorRoomsClient())");
         expect(source).toContain("getMyGameState(createImpostorRoomsClient())");
+    });
+
+    it("wires foreground and online listeners to authoritative reconciliation with cleanup", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("function handleVisibilityChange()");
+        expect(source).toContain("document.visibilityState === \"visible\"");
+        expect(source).toContain("void refreshAuthoritativeRoomState(\"foreground\")");
+        expect(source).toContain("function handleOnline()");
+        expect(source).toContain("window.addEventListener(\"online\", handleOnline)");
+        expect(source).toContain("window.removeEventListener(\"online\", handleOnline)");
     });
 
     it("does not accept a playing Room as lobby before private state loading", () => {
@@ -2335,7 +2353,7 @@ describe("renderRoomLobbyContent", () => {
         expect(gameplayRefresh).not.toContain("console.log");
     });
 
-    it("pauses gameplay polling while hidden and refreshes immediately on foreground", () => {
+    it("pauses gameplay polling while hidden and leaves foreground reconciliation to the authoritative lifecycle trigger", () => {
         const source = readFileSync(
             join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
             "utf8"
@@ -2344,7 +2362,8 @@ describe("renderRoomLobbyContent", () => {
         expect(source).toContain("document.visibilityState !== \"hidden\"");
         expect(source).toContain("document.addEventListener(\"visibilitychange\", handleVisibilityChange)");
         expect(source).toContain("document.removeEventListener(\"visibilitychange\", handleVisibilityChange)");
-        expect(source).toContain("void run(\"foreground\")");
+        expect(source).toContain("void refreshAuthoritativeRoomState(\"foreground\")");
+        expect(source).not.toContain("void run(\"foreground\")");
     });
 });
 
@@ -2447,7 +2466,7 @@ describe("createGameplayPollLoop", () => {
         }
     });
 
-    it("pauses hidden tabs and refreshes immediately when foregrounded", async () => {
+    it("pauses hidden tabs and resumes the normal poll cadence when foregrounded", async () => {
         vi.useFakeTimers();
 
         try {
@@ -2474,15 +2493,40 @@ describe("createGameplayPollLoop", () => {
             loop.handleVisibilityChange();
             await Promise.resolve();
 
-            expect(refresh).toHaveBeenCalledTimes(1);
-            expect(refresh).toHaveBeenLastCalledWith("foreground");
+            expect(refresh).not.toHaveBeenCalled();
 
             await vi.advanceTimersByTimeAsync(3_000);
-            expect(refresh).toHaveBeenCalledTimes(2);
+            expect(refresh).toHaveBeenCalledTimes(1);
+            expect(refresh).toHaveBeenLastCalledWith("poll");
 
             loop.stop();
         } finally {
             vi.useRealTimers();
         }
+    });
+});
+
+describe("createRoomAuthoritativeRefreshController", () => {
+    it("coalesces simultaneous authoritative reconstruction triggers", async () => {
+        const controller = createRoomAuthoritativeRefreshController();
+        const first = createDeferred<void>();
+        const refresh = vi.fn(() => first.promise);
+
+        const requestA = controller.run(refresh);
+        const requestB = controller.run(refresh);
+
+        expect(requestB).toBe(requestA);
+        await Promise.resolve();
+
+        expect(refresh).toHaveBeenCalledTimes(1);
+        expect(controller.hasActiveRequest()).toBe(true);
+
+        first.resolve();
+        await requestA;
+
+        expect(controller.hasActiveRequest()).toBe(false);
+
+        await controller.run(refresh);
+        expect(refresh).toHaveBeenCalledTimes(2);
     });
 });

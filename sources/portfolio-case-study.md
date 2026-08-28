@@ -343,7 +343,7 @@ PENDIENTE:
 
 * validación manual multi-dispositivo completa;
 * deploy del cierre técnico de Incremento 12;
-* implementación y validación de reconexión autoritativa 13.1–13.5;
+* smoke manual focal de 13.1 e implementación/validación de reconexión autoritativa 13.2–13.5;
 * robustez PWA/cache de Incremento 14;
 * playtesting;
 * iteración sobre uso real.
@@ -376,8 +376,9 @@ PENDIENTE:
 | Intento final del impostor | COMPLETADA TÉCNICAMENTE |
 | Scoring, marcador y nueva ronda | COMPLETADA TÉCNICAMENTE |
 | Terminar tanda e historial mínimo | COMPLETADA TÉCNICAMENTE |
-| Contrato documental de reconexión | DOCUMENTADO / PRE-COMMIT |
-| Reconexión autoritativa 13.1–13.5 | PENDIENTE |
+| Contrato documental de reconexión | CERRADO DOCUMENTAL |
+| Triggers de reconexión autoritativa | IMPLEMENTADA TÉCNICAMENTE / SMOKE PENDIENTE |
+| Reconexión autoritativa 13.2–13.5 | PENDIENTE |
 | Maduración PWA iOS/Android | PENDIENTE |
 | Auditoría final seguridad/testing/UX | PENDIENTE |
 | Playtesting | PENDIENTE |
@@ -846,7 +847,7 @@ Pendiente:
 * lifecycle PWA en mobile;
 * diferencias iOS/Safari y Android/Chrome;
 * cache sin exponer datos sensibles;
-* implementación de reconexión autoritativa y auditoría final de Incrementos 13.1 a 15;
+* smoke manual focal de 13.1, reconexión autoritativa 13.2–13.5 y auditoría final hasta Incremento 15;
 * deploy del cierre técnico;
 * playtesting real.
 
@@ -903,8 +904,8 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 12.4 | UI de cierre y resultado final | CERRADO TÉCNICAMENTE | Host ve `Terminar tanda` sólo con `can_end_session`, confirmación previa, loading/error reintentable, cierre 0-args, refresco autoritativo con `get_my_game_state()`, recuperación de `finished` sin Room activa y vista final compartida con ganadores, clasificación, puntajes, rondas y `Volver al grupo` |
 | 12.5 | Hardening multironda/cierre | CERRADO TÉCNICAMENTE | `validate-12-5.mjs` valida precondiciones, cierre host-only, historia única de tanda/rondas, ausencia de votos y palabras secretas, idempotencia, empates, read model histórico, denegación a no participantes, nueva Room posterior y retry tardío; detectó y corrigió `can_end_session` para host en `scoreboard` |
 | 12 | Terminar tanda e historial mínimo | CERRADO TÉCNICAMENTE | 12.0-12.5 cerrados; primer MVP jugable alcanzado técnicamente con cierre autoritativo, resultado final compartido, reconstrucción desde historial sin Room activa y validación adversarial local |
-| 13.0 | Contrato documental de reconexión + hardening 5.4 | DOCUMENTADO / PRE-COMMIT | Servidor/DB como autoridad, frontend como cache temporal, orden de reconstrucción Auth→Player/Group→Room→GameSession/read model, contrato por fase, estado efímero vs autoritativo, foreground/offline, Presence/liveness, host succession, multi-tab/device, errores y matriz de validación |
-| 13.1 | Triggers de reconstrucción autoritativa | PENDIENTE | mount, retry, foreground y online deben converger a reconciliación autoritativa con single-flight/dedupe |
+| 13.0 | Contrato documental de reconexión + hardening 5.4 | CERRADO DOCUMENTAL | Servidor/DB como autoridad, frontend como cache temporal, orden de reconstrucción Auth→Player/Group→Room→GameSession/read model, contrato por fase, estado efímero vs autoritativo, foreground/offline, Presence/liveness, host succession, multi-tab/device, errores y matriz de validación |
+| 13.1 | Triggers de reconstrucción autoritativa | CERRADO TÉCNICAMENTE / SMOKE PENDIENTE | mount, retry, foreground, online y recovery Realtime convergen a reconciliación autoritativa con single-flight/dedupe, reutilizando `getMyActiveRoom()` y `getMyGameState()` |
 | 13.2 | UI reconnecting/offline mínima | PENDIENTE | feedback local y acciones seguras durante reconexión |
 | 13.3 | Presence/liveness foreground recovery | PENDIENTE | heartbeat, resubscribe, multi-tab y suspensión móvil |
 | 13.4 | Host succession recovery | PENDIENTE | host stale, sucesor, retorno del host original y concurrencia |

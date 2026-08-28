@@ -567,7 +567,30 @@ export function createGameplayPollLoop(options: GameplayPollLoopOptions) {
         return;
       }
 
-      void run("foreground");
+      scheduleNextPoll();
+    },
+  };
+}
+
+export function createRoomAuthoritativeRefreshController() {
+  let activeRequest: Promise<void> | null = null;
+
+  return {
+    run(refresh: () => Promise<void>): Promise<void> {
+      if (activeRequest) {
+        return activeRequest;
+      }
+
+      activeRequest = Promise.resolve()
+        .then(refresh)
+        .finally(() => {
+          activeRequest = null;
+        });
+
+      return activeRequest;
+    },
+    hasActiveRequest() {
+      return activeRequest !== null;
     },
   };
 }
@@ -2056,6 +2079,9 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
   )[0];
   const leaveRoomController = useState(() => createLeaveRoomController())[0];
   const closeRoomController = useState(() => createCloseRoomController())[0];
+  const authoritativeRefreshController = useState(() =>
+    createRoomAuthoritativeRefreshController(),
+  )[0];
   const hostSuccessionController = useState(() =>
     createHostSuccessionController(),
   )[0];
@@ -2099,13 +2125,15 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     }
   }, []);
 
-  const refreshAuthoritativeRoomState = useCallback(
+  const runAuthoritativeRoomStateRefresh = useCallback(
     async (
       reason:
         | "bootstrap"
         | "start"
         | "realtime"
         | "retry"
+        | "foreground"
+        | "online"
         | "authority"
         | "poll-reconcile",
       options: { startError?: string; absentDestination?: "join" | "group" } = {},
@@ -2237,6 +2265,25 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
       roomCode,
       router,
     ],
+  );
+
+  const refreshAuthoritativeRoomState = useCallback(
+    (
+      reason:
+        | "bootstrap"
+        | "start"
+        | "realtime"
+        | "retry"
+        | "foreground"
+        | "online"
+        | "authority"
+        | "poll-reconcile",
+      options: { startError?: string; absentDestination?: "join" | "group" } = {},
+    ) =>
+      authoritativeRefreshController.run(() =>
+        runAuthoritativeRoomStateRefresh(reason, options),
+      ),
+    [authoritativeRefreshController, runAuthoritativeRoomStateRefresh],
   );
 
   const refreshFinishedGameStateNow = useCallback(async () => {
@@ -2829,6 +2876,40 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
     void Promise.resolve().then(() => runRecognizedFlow());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bootstrapState, roomCode]);
+
+  useEffect(() => {
+    if (bootstrapState.status !== "recognized") {
+      return;
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void refreshAuthoritativeRoomState("foreground");
+      }
+    }
+
+    function handleOnline() {
+      void refreshAuthoritativeRoomState("online");
+    }
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", handleOnline);
+    }
+
+    return () => {
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", handleOnline);
+      }
+    };
+  }, [bootstrapState.status, refreshAuthoritativeRoomState]);
 
   useEffect(() => {
     if (bootstrapState.status !== "recognized" || !activeRoomId) {

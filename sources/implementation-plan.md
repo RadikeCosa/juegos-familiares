@@ -3396,6 +3396,8 @@ No modifica código, tests, listeners, Realtime, Presence, heartbeat, RPCs, DB, 
 
 #### 13.1 — Triggers de reconstrucción autoritativa
 
+Estado: cerrado técnicamente; pendiente de smoke manual focal.
+
 Objetivo:
 
 ```text
@@ -3403,7 +3405,7 @@ mount / retry / foreground / online
 → una reconciliación coherente
 ```
 
-Debe implementar single-flight/dedupe para triggers cercanos y reconstruir desde RPC/read models, no desde cache local ni payloads de Realtime.
+Implementado con la ruta autoritativa existente de Room/GameSession: mount, retry, `visibility → visible`, `online` y recovery de Realtime convergen en reconstrucción desde `getMyActiveRoom()`/`getMyGameState()`. Los triggers cercanos se coalescen con single-flight local y el polling de gameplay conserva su cadencia normal sin competir con foreground.
 
 #### 13.2 — UI reconnecting/offline mínima
 
@@ -3754,7 +3756,7 @@ Incrementos 7 a 12 agregan transición a conversación presencial, votación, sc
 
 ## Incrementos 13 a 15
 
-Siguen pendientes como próximos incrementos formales: implementación y validación de reconexión autoritativa 13.1–13.5, maduración PWA iOS/Android y auditoría final de seguridad, testing y UX.
+Siguen pendientes como próximos incrementos formales: smoke manual focal de 13.1, implementación y validación de reconexión autoritativa 13.2–13.5, maduración PWA iOS/Android y auditoría final de seguridad, testing y UX.
 
 El service worker/cache pertenece al Incremento 14 y no debe presentarse como implementado antes de ejecutarlo.
 
@@ -3927,7 +3929,7 @@ El siguiente paso lógico es cerrar el smoke test manual actual antes de avanzar
 2. clasificar hallazgos como defecto funcional, regresión bloqueante, mejora UX no bloqueante o decisión futura;
 3. resolver defectos funcionales o regresiones bloqueantes antes de continuar;
 4. agrupar mejoras UX no bloqueantes de manera acotada, sin ampliar el MVP;
-5. ejecutar Incremento 13.1–13.5 según contrato documental 13.0, incluyendo lo pendiente de 5.4;
+5. ejecutar smoke manual focal de 13.1 y luego Incremento 13.2–13.5 según contrato documental 13.0, incluyendo lo pendiente de 5.4;
 6. auditar el cierre de Incremento 13 contra matriz de validación;
 7. ejecutar Incremento 14, maduración PWA iOS/Android con service worker/cache acotados;
 8. ejecutar Incremento 15, auditoría final de seguridad, testing y UX;
@@ -3940,7 +3942,7 @@ Estado consolidado vigente:
 * Incremento 5.4 absorbido en Incremento 13;
 * Incrementos 6 a 12 cerrados técnicamente;
 * smoke manual general en curso;
-* Incremento 13.0 documentado y 13.1–13.5 pendientes de implementación/validación;
+* Incremento 13.0 documentado, 13.1 cerrado técnicamente y pendiente de smoke manual focal, 13.2–13.5 pendientes de implementación/validación;
 * Incrementos 14 a 15 pendientes.
 
 Las mejoras y defectos encontrados durante el smoke se tratan antes de continuar cuando afecten el uso real o introduzcan riesgo. Las mejoras no bloqueantes deben mantenerse acotadas para no reabrir decisiones de producto ni ampliar el MVP.
