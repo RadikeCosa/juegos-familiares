@@ -911,7 +911,7 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 13.4 | Host succession recovery | PENDIENTE | host stale, sucesor, retorno del host original y concurrencia |
 | 13.5 | Matriz final de validación | PENDIENTE | tests, DB validators, smoke físico acotado y documentación final 13 |
 | 14 | Maduración PWA iOS/Android del MVP | PENDIENTE | PENDIENTE |
-| 15 | Auditoría final de seguridad, testing y UX del MVP | PENDIENTE | PENDIENTE |
+| 15 | Auditoría final de seguridad, testing y UX del MVP | PENDIENTE | Incluye relato técnico accesible pedagógico y no normativo, con trazabilidad a docs/código/tests; no crea todavía el relato |
 
 El primer MVP jugable quedó alcanzado técnicamente al cerrar el Incremento 12. No implica todavía deploy, validación presencial completa ni cierre de los incrementos 13-15.
 
