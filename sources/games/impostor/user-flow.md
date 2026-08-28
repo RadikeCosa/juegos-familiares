@@ -992,6 +992,7 @@ La aplicación no promete jugar offline. Puede conservar el último estado compa
 Estos flujos existen técnicamente, pero todavía requieren prueba real en teléfonos, sesiones independientes, pérdida de conexión, background/reconnect o concurrencia:
 
 * comportamiento mobile/background de Presence y liveness según contrato 13.0;
+* smoke manual focal de triggers de reconstrucción autoritativa implementados en 13.1;
 * cadencia 30s/90s/30s de heartbeat, stale y evaluación de sucesión en condiciones reales;
 * reasignación de host bajo pérdida de conexión, múltiples conexiones, refresh y carreras de clientes;
 * continuidad de la tanda completa en dispositivos físicos durante el smoke manual general.
@@ -1003,7 +1004,7 @@ La reasignación de host no está pendiente como contrato ni como implementació
 Siguen pendientes dentro del roadmap o como decisiones explícitamente diferidas:
 
 * primera instalación de la PWA;
-* implementación de reconexión autoritativa 13.1–13.5;
+* implementación de reconexión autoritativa 13.2–13.5;
 * salida o incorporación de un jugador durante una tanda;
 * capacidades de instalación y cache de la PWA.
 

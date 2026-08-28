@@ -889,7 +889,7 @@ Política mínima:
 ### Alcance de subincrementos
 
 * 13.0: contrato documental.
-* 13.1: triggers de reconstrucción autoritativa para mount, retry, foreground y online.
+* 13.1: triggers de reconstrucción autoritativa para mount, retry, foreground, online y recovery Realtime implementados técnicamente; smoke manual focal pendiente.
 * 13.2: UI mínima `reconnecting/offline/error/retry` y bloqueo seguro de acciones.
 * 13.3: recovery foreground de Presence/liveness, resubscribe y multi-tab.
 * 13.4: recovery de host succession ante stale, retorno del host original y concurrencia.
