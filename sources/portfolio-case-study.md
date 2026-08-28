@@ -343,8 +343,8 @@ PENDIENTE:
 
 * validación manual multi-dispositivo completa;
 * deploy del cierre técnico de Incremento 12;
-* hardening mobile/concurrencia de 5.4, en suspenso hasta validación física;
-* robustez de reconexión/PWA de Incrementos 13 y 14;
+* implementación y validación de reconexión autoritativa 13.1–13.5;
+* robustez PWA/cache de Incremento 14;
 * playtesting;
 * iteración sobre uso real.
 
@@ -376,7 +376,8 @@ PENDIENTE:
 | Intento final del impostor | COMPLETADA TÉCNICAMENTE |
 | Scoring, marcador y nueva ronda | COMPLETADA TÉCNICAMENTE |
 | Terminar tanda e historial mínimo | COMPLETADA TÉCNICAMENTE |
-| Reconexión básica | PENDIENTE |
+| Contrato documental de reconexión | DOCUMENTADO / PRE-COMMIT |
+| Reconexión autoritativa 13.1–13.5 | PENDIENTE |
 | Maduración PWA iOS/Android | PENDIENTE |
 | Auditoría final seguridad/testing/UX | PENDIENTE |
 | Playtesting | PENDIENTE |
@@ -845,7 +846,7 @@ Pendiente:
 * lifecycle PWA en mobile;
 * diferencias iOS/Safari y Android/Chrome;
 * cache sin exponer datos sensibles;
-* reconexión básica y auditoría final de Incrementos 13 a 15;
+* implementación de reconexión autoritativa y auditoría final de Incrementos 13.1 a 15;
 * deploy del cierre técnico;
 * playtesting real.
 
@@ -868,7 +869,7 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 5.1 | Presence básica del lobby | CERRADO | Presence privada por Room activa, autorización por RoomParticipant, connected/disconnected visible, separación estado efímero/persistente, validación productiva multi-cliente y mobile |
 | 5.2 | Liveness autoritativo mínimo | CERRADO | `room_participants.last_seen_at`, RPC autoritativa de refresh propio, heartbeat 30s, stale 90s, seguridad, smoke productivo y límites mobile/background |
 | 5.3 | Sucesión autoritativa de host | CERRADO | RPC `reassign_room_host_if_stale()`, autoridad desde `auth.uid()`, host stale por liveness, sucesor por `joined_at ASC, player_id ASC`, concurrencia, revival, no-op sin candidatos, feedback breve y smoke productivo PASS |
-| 5.4 | Hardening mobile/concurrencia | EN SUSPENSO / VALIDACIÓN PENDIENTE | La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios; falta validación física mobile/desktop de background, lock, reconnect, multiple connections y timings 30s/90s/30s antes del cierre final del MVP |
+| 5.4 | Hardening mobile/concurrencia | ABSORBIDO EN 13 | La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios; la validación física mobile/desktop de background, lock, reconnect, multiple connections y timings 30s/90s/30s queda dentro del contrato 13.0 y la ejecución 13.1–13.5 |
 | 6 | Iniciar tanda y preparar ronda privada | CERRADO TÉCNICAMENTE | 6.0-6.5 cerrados: GameSession/SessionPlayer/Round, lifecycle `playing`, `start_session()` atómico, snapshot de activos, palabra e impostor server-side, `get_my_game_state()`, privacidad por caller, UI role reveal y hardening de refetch; validación manual multi-dispositivo pendiente |
 | 7 | Transición de role reveal a discussion | CERRADO TÉCNICAMENTE | 7.0-7.4 cerrados: sin acknowledgement persistido, `start_round_discussion()` 0-args, autoridad por host actual, sucesión de host vigente en `playing`, read model privado `role_reveal | discussion`, polling lento sin gameplay Realtime/Broadcast, UI `Empezar ronda` host-only y reveal/hide local en `discussion`; validación manual multi-dispositivo pendiente |
 | 8.0 | Contrato documental de primera votación | CERRADO DOCUMENTAL | `discussion → voting_first`, `start_round_voting()` 0-args por host actual, `RoundVote/round_votes`, voto secreto e inmutable de todos los `SessionPlayers`, sin resultados parciales, completion sin Presence/liveness, resolución automática a `tie_discussion | impostor_guess | round_result`, polling lento y segunda votación fuera |
@@ -902,7 +903,12 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 12.4 | UI de cierre y resultado final | CERRADO TÉCNICAMENTE | Host ve `Terminar tanda` sólo con `can_end_session`, confirmación previa, loading/error reintentable, cierre 0-args, refresco autoritativo con `get_my_game_state()`, recuperación de `finished` sin Room activa y vista final compartida con ganadores, clasificación, puntajes, rondas y `Volver al grupo` |
 | 12.5 | Hardening multironda/cierre | CERRADO TÉCNICAMENTE | `validate-12-5.mjs` valida precondiciones, cierre host-only, historia única de tanda/rondas, ausencia de votos y palabras secretas, idempotencia, empates, read model histórico, denegación a no participantes, nueva Room posterior y retry tardío; detectó y corrigió `can_end_session` para host en `scoreboard` |
 | 12 | Terminar tanda e historial mínimo | CERRADO TÉCNICAMENTE | 12.0-12.5 cerrados; primer MVP jugable alcanzado técnicamente con cierre autoritativo, resultado final compartido, reconstrucción desde historial sin Room activa y validación adversarial local |
-| 13 | Reconexión básica | PENDIENTE | PENDIENTE |
+| 13.0 | Contrato documental de reconexión + hardening 5.4 | DOCUMENTADO / PRE-COMMIT | Servidor/DB como autoridad, frontend como cache temporal, orden de reconstrucción Auth→Player/Group→Room→GameSession/read model, contrato por fase, estado efímero vs autoritativo, foreground/offline, Presence/liveness, host succession, multi-tab/device, errores y matriz de validación |
+| 13.1 | Triggers de reconstrucción autoritativa | PENDIENTE | mount, retry, foreground y online deben converger a reconciliación autoritativa con single-flight/dedupe |
+| 13.2 | UI reconnecting/offline mínima | PENDIENTE | feedback local y acciones seguras durante reconexión |
+| 13.3 | Presence/liveness foreground recovery | PENDIENTE | heartbeat, resubscribe, multi-tab y suspensión móvil |
+| 13.4 | Host succession recovery | PENDIENTE | host stale, sucesor, retorno del host original y concurrencia |
+| 13.5 | Matriz final de validación | PENDIENTE | tests, DB validators, smoke físico acotado y documentación final 13 |
 | 14 | Maduración PWA iOS/Android del MVP | PENDIENTE | PENDIENTE |
 | 15 | Auditoría final de seguridad, testing y UX del MVP | PENDIENTE | PENDIENTE |
 

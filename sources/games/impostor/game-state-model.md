@@ -1239,6 +1239,41 @@ false
 
 Estos estados individuales participan en guards de la máquina global.
 
+## Reconexión
+
+La reconexión no es un estado global de la partida. Es un proceso local del cliente para volver a consultar autoridad.
+
+En Incremento 13, cualquier refresh, reapertura, foreground, retorno desde lock screen/app switching, `offline → online`, resuscripción Realtime o retry manual debe converger a:
+
+```text
+AuthIdentity
+→ Player / Group
+→ Room activa si existe
+→ GameSession/read model si corresponde
+→ fase vigente
+→ vista privada autorizada
+→ acción propia persistida
+```
+
+Si la fase avanzó mientras el Player estaba fuera, el Player vuelve a la fase vigente. El estado local anterior no puede reabrir acciones de una fase pasada.
+
+Contrato resumido por fase:
+
+| Fase | Reconexión esperada |
+| --- | --- |
+| `lobby` | reconstruye Room `lobby`, host y participants; si cerró, vuelve al estado actual sin sala viva falsa |
+| `role_reveal` | reconstruye rol/palabra autorizados de la ronda vigente con reveal inicialmente oculto |
+| `discussion` | muestra conversación vigente y conserva privados sólo mediante acción explícita de reveal |
+| `voting_first` | reconstruye candidatos y voto propio de `voting_round = 1`; no permite votar dos veces |
+| `tie_discussion` | reconstruye resultado agregado de primera votación y candidatos empatados |
+| `voting_second` | reconstruye candidatos de empate y voto propio de `voting_round = 2`; no muestra parciales |
+| `impostor_guess` | muestra form sólo al impostor todavía elegible; si el intento ya resolvió, muestra fase vigente |
+| `round_result` | muestra resultado definitivo y palabra revelada, sin habilitar voting/guess |
+| `scoreboard` | muestra marcador acumulado y permisos host-only desde read model |
+| `finished` | reconstruye resultado final histórico aunque la Room ya no esté activa |
+
+Puede perderse estado visual local como reveal abierto, modal, selección de voto no enviada, input de guess no enviado o feedback temporal. Debe reconstruirse estado autoritativo como Player, Group, Room activa, host, fase, round number, rol/palabra vigentes autorizados, voto propio persistido, elegibilidad de guess, score y `finished`.
+
 ---
 
 # Desconexión de participante

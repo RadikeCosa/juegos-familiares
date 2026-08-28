@@ -365,6 +365,8 @@ Visitar directamente un link de sala no equivale a intención de unirse. Si no h
 
 Si el Player ya pertenece a esa Room y abre `/impostor/sala/[code]`, la aplicación reconstruye el lobby autoritativamente desde el contexto remoto.
 
+Si el Player abre un enlace de sala que ya no coincide con su Room activa, la aplicación no debe presentar una sala viva falsa. Debe mostrar el estado actual: volver a la Room activa real si existe, mostrar que no hay sala activa si esa Room cerró, o permitir volver al grupo.
+
 ---
 
 # Lobby
@@ -958,23 +960,50 @@ Estos flujos ya están respaldados por el diseño y la implementación vigente:
 * salida de participante no-host y cierre de Room por host;
 * sucesión autoritativa de host cuando la autoridad valida que el host está stale y existe un sucesor active.
 
+## Contrato de reconexión para Incremento 13
+
+Cuando una persona refresca, reabre la PWA, vuelve del bloqueo de pantalla, cambia de app y vuelve, pasa de offline a online o recupera una suscripción Realtime, la pantalla debe reconciliarse con el servidor.
+
+El usuario debe ver el estado vigente de la partida, no el estado visual viejo del teléfono.
+
+Ejemplos esperados:
+
+* si estaba en `role_reveal`, al volver el reveal aparece oculto y puede ver nuevamente su rol/palabra vigente;
+* si ya votó en `voting_first`, al volver ve `Voto registrado` y no vuelve a poder votar;
+* si ya votó en `voting_second`, al volver ve su estado de espera y no se ofrecen votos duplicados;
+* si el grupo avanzó de `discussion` a `voting_first`, al volver ve votación;
+* si el grupo avanzó de votación a `scoreboard`, al volver ve marcador;
+* si el host cambió por sucesión, al volver ve el host actual;
+* si la Room terminó, al volver no queda en una sala viva falsa y, si participó en la tanda, ve `finished`;
+* si el host original vuelve después de sucesión, vuelve como participante normal.
+
+Puede perderse sin considerarse error:
+
+* modal abierto;
+* reveal visible;
+* selección de voto no enviada;
+* texto de intento final no enviado;
+* feedback temporal.
+
+La aplicación no promete jugar offline. Puede conservar el último estado compartido con un indicador de reconexión/offline, pero al recuperar conexión debe aceptar el estado autoritativo actual.
+
 ## Implementados pero pendientes de validación smoke específica
 
 Estos flujos existen técnicamente, pero todavía requieren prueba real en teléfonos, sesiones independientes, pérdida de conexión, background/reconnect o concurrencia:
 
-* comportamiento mobile/background de Presence y liveness;
+* comportamiento mobile/background de Presence y liveness según contrato 13.0;
 * cadencia 30s/90s/30s de heartbeat, stale y evaluación de sucesión en condiciones reales;
 * reasignación de host bajo pérdida de conexión, múltiples conexiones, refresh y carreras de clientes;
 * continuidad de la tanda completa en dispositivos físicos durante el smoke manual general.
 
-La reasignación de host no está pendiente como contrato ni como implementación central: 5.3 cerró la sucesión autoritativa. Lo pendiente corresponde al hardening y la validación mobile/concurrencia de 5.4.
+La reasignación de host no está pendiente como contrato ni como implementación central: 5.3 cerró la sucesión autoritativa. Lo pendiente corresponde al hardening y la validación mobile/concurrencia absorbidos por Incremento 13.
 
 ## Flujos todavía abiertos o futuros
 
 Siguen pendientes dentro del roadmap o como decisiones explícitamente diferidas:
 
 * primera instalación de la PWA;
-* reconexión si un dispositivo pierde internet;
+* implementación de reconexión autoritativa 13.1–13.5;
 * salida o incorporación de un jugador durante una tanda;
 * capacidades de instalación y cache de la PWA.
 
