@@ -2289,6 +2289,21 @@ describe("renderRoomLobbyContent", () => {
         expect(source).toContain("window.removeEventListener(\"online\", handleOnline)");
     });
 
+    it("recovers Presence on foreground and online without using it as authority", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
+            "utf8"
+        );
+
+        expect(source).toContain("const roomPresenceSubscriptionRef = useRef<RoomPresenceSubscription | null>");
+        expect(source).toContain("void roomPresenceSubscriptionRef.current?.recoverPresence()");
+        expect(source).toContain("roomPresenceSubscriptionRef.current = subscription");
+        expect(source).toContain("roomPresenceSubscriptionRef.current = null");
+        expect(source).toContain("void refreshAuthoritativeRoomState(\"foreground\")");
+        expect(source).toContain("void refreshAuthoritativeRoomState(\"online\")");
+        expect(source).toContain("hostSuccessionController.submit(createImpostorRoomsClient())");
+    });
+
     it("does not accept a playing Room as lobby before private state loading", () => {
         const source = readFileSync(
             join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
