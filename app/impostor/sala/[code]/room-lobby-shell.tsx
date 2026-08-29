@@ -606,6 +606,21 @@ export function createRoomAuthoritativeRefreshController() {
   };
 }
 
+export async function runHostSuccessionEvaluation<
+  TResult extends { hostChanged: boolean },
+>(options: {
+  evaluate: () => Promise<TResult>;
+  refreshAuthoritative: () => Promise<unknown>;
+}): Promise<TResult> {
+  const result = await options.evaluate();
+
+  if (result.hostChanged) {
+    await options.refreshAuthoritative();
+  }
+
+  return result;
+}
+
 type StartDiscussionCommandOptions = {
   start: () => Promise<unknown>;
   refreshGameplay: () => Promise<MyGameState | null>;
@@ -2435,6 +2450,11 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
       ),
     [authoritativeRefreshController, runAuthoritativeRoomStateRefresh],
   );
+  const refreshAuthoritativeRoomStateRef = useRef(refreshAuthoritativeRoomState);
+
+  useEffect(() => {
+    refreshAuthoritativeRoomStateRef.current = refreshAuthoritativeRoomState;
+  }, [refreshAuthoritativeRoomState]);
 
   const refreshFinishedGameStateNow = useCallback(async () => {
     const finalGameState = await getMyGameState(createImpostorRoomsClient());
@@ -3297,7 +3317,12 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
 
     const recheck = startRoomHostSuccessionRecheck({
       evaluate: () =>
-        hostSuccessionController.submit(createImpostorRoomsClient()),
+        runHostSuccessionEvaluation({
+          evaluate: () =>
+            hostSuccessionController.submit(createImpostorRoomsClient()),
+          refreshAuthoritative: () =>
+            refreshAuthoritativeRoomStateRef.current("authority"),
+        }),
       isHostMissing: () => isActiveHostMissingRef.current,
       onError: logRoomHostSuccessionError,
     });

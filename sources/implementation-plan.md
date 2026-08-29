@@ -3447,6 +3447,8 @@ Debe validar que cerrar una pestaña no desconecte conceptualmente al Player si 
 
 #### 13.4 — Host succession recovery
 
+Estado: cerrado.
+
 Objetivo:
 
 ```text
@@ -3457,6 +3459,12 @@ concurrencia
 ```
 
 La DB decide sucesión; el cliente sólo solicita evaluación. El host original no recupera el rol automáticamente.
+
+El cierre 13.4 mantiene `rooms.host_player_id` como autoridad server-side. Cuando `reassign_room_host_if_stale()` devuelve `hostChanged = true`, el cliente lo trata únicamente como señal de invalidación y fuerza una reconstrucción autoritativa inmediata de Room mediante el camino existente de `get_my_active_room()`.
+
+No hubo cambios de DB, schema ni reglas de producto. La validación cerró con tests focales PASS, suite completa PASS, build PASS, lint PASS con warning preexistente en archivo no tocado, `git diff --check` PASS, auditoría pre-commit PASS y smoke browser real PASS.
+
+Siguiente paso: 13.5 — Matriz final de validación.
 
 #### 13.5 — Matriz final de validación
 
