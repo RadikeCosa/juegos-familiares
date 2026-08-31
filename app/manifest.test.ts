@@ -7,10 +7,14 @@ describe("manifest", () => {
 
     expect(appManifest.name).toBe("Juegos Familiares");
     expect(appManifest.short_name).toBe("Juegos");
+    expect(appManifest.id).toBe("/");
+    expect(appManifest.scope).toBe("/");
     expect(appManifest.start_url).toBe("/");
     expect(appManifest.display).toBe("standalone");
     expect(appManifest.background_color).toBe("#F7FAFF");
     expect(appManifest.theme_color).toBe("#2563EB");
+    expect(appManifest.lang).toBe("es-AR");
+    expect(appManifest.categories).toEqual(["games", "entertainment"]);
     expect(appManifest.icons).toEqual([
       {
         src: "/icons/icon-192.png",
@@ -29,5 +33,9 @@ describe("manifest", () => {
     const purposes = manifest().icons?.map((icon) => icon.purpose);
 
     expect(purposes).not.toContain("maskable");
+  });
+
+  it("does not lock orientation before validating installed gameplay on real devices", () => {
+    expect(manifest().orientation).toBeUndefined();
   });
 });
