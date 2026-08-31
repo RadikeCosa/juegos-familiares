@@ -5,10 +5,14 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Juegos Familiares",
     short_name: "Juegos",
     description: "Juegos sencillos para jugar en familia.",
+    id: "/",
+    scope: "/",
     start_url: "/",
     display: "standalone",
     background_color: "#F7FAFF",
     theme_color: "#2563EB",
+    lang: "es-AR",
+    categories: ["games", "entertainment"],
     icons: [
       {
         src: "/icons/icon-192.png",

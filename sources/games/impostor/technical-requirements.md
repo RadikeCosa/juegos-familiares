@@ -2091,6 +2091,192 @@ La sincronización entre teléfonos requiere conectividad en la primera versión
 
 Esta necesidad de sincronización corresponde a Impostor.
 
+## Incremento 14.0: contrato PWA/cache
+
+Incremento 14.0 define el contrato previo a implementar hardening PWA. No
+implementa service worker, no agrega dependencias, no cambia comportamiento
+runtime, no modifica Supabase/RPCs y no introduce migrations.
+
+Estado real al iniciar 14.0:
+
+* existe `app/manifest.ts` con `name`, `short_name`, `start_url`,
+  `display = standalone`, `background_color`, `theme_color` e iconos PNG de
+  192 y 512;
+* existe metadata base en `app/layout.tsx`, incluyendo `appleWebApp`;
+* existe `app/manifest.test.ts`;
+* existen `public/icons/icon-192.png`, `public/icons/icon-512.png`,
+  `app/apple-icon.png`, `app/favicon.ico` y `app/icon.svg`;
+* no existe service worker, registration, Workbox, `next-pwa`, Serwist,
+  estrategia de cache propia, offline shell ni update lifecycle propio;
+* no existen headers/cache custom en `next.config.ts`.
+
+La invariante central de PWA para Juegos Familiares / Impostor es:
+
+```text
+PWA cache != game-state authority
+```
+
+La autoridad de Room, GameSession, fase, host, palabra, impostor, votos,
+marcador y permisos sigue siendo Supabase/Postgres/RLS/RPCs. La cache de PWA
+puede mejorar carga del shell y assets, pero nunca puede sustituir
+`authoritative refetch` ni presentar datos dinámicos como vigentes.
+
+Después de offline, background, reapertura o update, cualquier estado compartido
+o privado de Impostor debe reconstruirse con el contrato de Incremento 13:
+
+```text
+interruption / reconnect
+-> authoritative refetch
+-> current valid Room/GameState
+```
+
+### Recursos cacheables y no cacheables
+
+| Recurso | Estrategia propuesta | Motivo | Riesgo | Comportamiento offline |
+| --- | --- | --- | --- | --- |
+| JS/CSS estáticos versionados de Next | Cache first o precache versionado, con limpieza de versiones | Son assets de build y no contienen estado de partida por sí mismos | Mezcla de versiones si el update lifecycle es agresivo o incompleto | Pueden permitir renderizar shell, pero no gameplay autoritativo |
+| Fuentes generadas/servidas por Next | Cache first con assets versionados | Mejoran carga visual y no contienen datos sensibles | Bajo; degradación visual si faltan | La UI puede usar fallback o fuente cacheada |
+| Iconos, favicon, apple icon e imágenes estáticas propias | Cache first | Son estáticos y no sensibles | Bajo; icono stale no afecta autoridad | Disponibles para instalación/shell |
+| Manifest | Network first con fallback cacheado o precache versionado | Necesario para instalación y metadata; cambia poco | Stale tolerable si no altera rutas críticas sin update | Instalación o reapertura pueden conservar metadata previa |
+| Shell HTML de `/` e `/impostor` | Network first; fallback offline sólo si queda claro que no hay datos remotos vigentes | Son entradas de plataforma/juego con contenido mayormente estático | Mostrar `Player/Group` viejo si se cachea HTML o hydration state dinámico | Puede mostrar shell mínima y mensaje de conexión; no debe afirmar grupo vigente |
+| Shell HTML de `/grupo`, `/impostor/grupo`, `/impostor/sala/[code]` | Network first o fallback offline controlado; datos dinámicos siempre network only | Son superficies de contexto remoto o gameplay | Room, Group o fase stale presentados como vigentes | Mostrar falta de conexión/retry; bloquear acciones conectadas |
+| Auth/session state | Network only; no cache PWA | Define identidad técnica vigente | Recuperar una sesión vieja como autoridad | Sin red, no habilita gameplay protegido nuevo |
+| Player/Group remoto | Network only; no cache PWA | Depende de Auth, RLS y estado remoto actual | Grupo o permisos stale | Mostrar error/retry o contexto no verificado |
+| `get_my_active_room()` / Room / host / participants | Network only; no cache PWA | Room y host son estado operativo autoritativo | Sala viva falsa, host viejo, permisos incorrectos | Bloquear acciones de Room; refetch al volver online |
+| `get_my_game_state()` / GameSession / Round / role / word / votes / scoreboard live | Network only; no cache PWA | Contiene fase vigente, secretos autorizados y acciones propias persistidas | Privacidad e integridad: palabra, rol, voto o marcador stale | No mostrar privados como vigentes; refetch al volver online |
+| Presence y liveness | No cache | Presence es efímera; liveness es autoridad server-side por `last_seen_at` | Conexión/host stale | Recuperar Presence/liveness al volver foreground/online |
+| RPCs/mutaciones Supabase | Network only; sin Background Sync para gameplay | Las acciones son intenciones autoritativas y dependen de fase/actor actual | Duplicados, acciones fuera de fase, votos o transiciones tardías | Bloquear y permitir retry explícito cuando haya conexión |
+
+Nunca deben servirse desde cache como estado vigente:
+
+* Auth/session state;
+* Player/Group remoto;
+* Room;
+* GameSession;
+* Round;
+* host;
+* Presence/liveness;
+* role;
+* word;
+* votes;
+* scoreboard live;
+* `get_my_active_room()`;
+* `get_my_game_state()`;
+* cualquier RPC o mutación Supabase.
+
+### Offline UX de MVP
+
+Offline en el MVP significa:
+
+* abrir una shell mínima si corresponde;
+* informar falta de conexión;
+* bloquear gameplay conectado;
+* conservar, como máximo, estado compartido previo marcado explícitamente como
+  no confiable/reconectando cuando eso ayude a orientar al usuario;
+* al volver online, ejecutar `authoritative refetch` como en Incremento 13.
+
+Offline no significa:
+
+* jugar una tanda multi-dispositivo sin conexión;
+* simular avance de fase;
+* encolar votos, intentos finales, nuevas rondas o cierre de tanda;
+* reconstruir privados desde cache;
+* usar LocalIdentity, Presence o cache como autorización.
+
+### Update lifecycle
+
+Incremento 14 no debe introducir recarga automática en medio de una tanda activa.
+La política preferida para 14.2/14.3 es:
+
+* instalar una nueva versión de service worker en background;
+* no activar una actualización destructiva sin control del usuario mientras haya
+  Room/GameSession activa;
+* mostrar una acción explícita de actualización cuando corresponda;
+* si la actualización se aplica, reconstruir estado con `authoritative refetch`;
+* limpiar caches viejas para evitar versiones indefinidamente stale.
+
+Pregunta abierta para 14.2/14.3:
+
+* decidir implementación concreta de service worker manual vs herramienta
+  dedicada, sin agregar dependencias antes de aprobación explícita.
+
+### Criterios de aceptación 14.1-14.4
+
+14.1 Manifest/install hardening:
+
+* la aplicación sigue funcionando desde navegador sin instalación obligatoria;
+* manifest, metadata e iconos cubren instalación básica en Android/iOS dentro
+  de sus límites reales;
+* no se declara un asset maskable, screenshot, shortcut o capability PWA sin
+  asset/verificación real;
+* ningún cambio de manifest altera autoridad, routing de gameplay ni Supabase.
+
+14.2 Service worker y cache estática segura:
+
+* service worker no intercepta Supabase como fuente cacheada;
+* Auth/session, `get_my_active_room()`, `get_my_game_state()` y mutaciones RPC
+  son network only;
+* la cache se limita a assets/shell permitidos por la matriz;
+* existe limpieza de caches versionadas;
+* una falla offline no muestra privados, fase, host, votos ni scoreboard live
+  como vigentes desde cache.
+
+14.3 Offline/update UX:
+
+* offline muestra feedback claro y bloquea acciones conectadas;
+* `online`, foreground o reapertura ejecutan reconstrucción autoritativa;
+* una actualización disponible no recarga automáticamente una tanda activa;
+* aplicar actualización fuerza o acompaña un refetch autoritativo;
+* la instalación sigue siendo opcional.
+
+14.4 Validación PWA final:
+
+* smoke en navegador no instalado pasa sin service worker stale;
+* smoke standalone valida reapertura, background/foreground y navegación básica
+  donde exista dispositivo real disponible;
+* smoke offline durante gameplay no permite votar, revelar privados stale ni
+  avanzar fases desde cache;
+* cambio de ronda después de reconexión no muestra la palabra anterior;
+* Android Chrome real queda validado o queda documentado como pendiente externo;
+* iOS Safari/Add to Home Screen queda validado razonablemente o queda
+  documentado como pendiente externo;
+* Incremento 13 conserva la invariante de recovery autoritativo.
+
+### Cierre de Incremento 14
+
+Estado:
+
+`INCREMENT 14 CLOSED WITH EXTERNAL MANUAL SMOKE PENDING`
+
+Al cierre documental:
+
+* 14.0 contrato PWA/cache queda cerrado;
+* 14.1 manifest/install hardening queda cerrado;
+* 14.2 service worker static-safe queda cerrado;
+* 14.3 offline/update UX mínima queda cerrado;
+* 14.4 Chromium desktop smoke queda cerrado.
+
+Validado:
+
+* validaciones automáticas del incremento;
+* Chromium desktop smoke sobre manifest, service worker registrado, Cache
+  Storage acotado a assets seguros, corte de red fuera/dentro de sala,
+  exclusión de Supabase/RPC/gameplay authority y update manual sin recarga
+  automática durante sala.
+
+Pendientes externos antes de beta:
+
+* Android Chrome installed PWA smoke;
+* iOS Safari Add to Home Screen smoke;
+* real multi-actor round transition/offline/reconnect smoke.
+
+Este cierre no declara offline gameplay, no autoriza cache de estado de juego,
+no declara validados Android/iOS reales y no convierte al service worker en
+autoridad. La autoridad de Auth/session, Player/Group remoto, Room,
+GameSession, Round, host, presence/liveness, role, word, votes, scoreboard
+live, `get_my_active_room()`, `get_my_game_state()` y cualquier RPC/mutación
+Supabase permanece en backend/refetch autoritativo.
+
 ---
 
 # 25. Escala

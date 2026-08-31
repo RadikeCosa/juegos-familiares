@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Sora, Source_Sans_3 } from "next/font/google";
+import { ServiceWorkerRegistration } from "./service-worker-registration";
 import "./globals.css";
 
 const sora = Sora({
@@ -41,7 +42,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className={`${sora.variable} ${sourceSans.variable}`}>{children}</body>
+      <body className={`${sora.variable} ${sourceSans.variable}`}>
+        <ServiceWorkerRegistration />
+        {children}
+      </body>
     </html>
   );
 }

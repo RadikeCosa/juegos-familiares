@@ -27,7 +27,7 @@ El case study futuro debe mostrar tanto el resultado como el razonamiento que ll
 
 ```text
 Estado:
-Incremento 13 cerrado: el primer MVP jugable está alcanzado a nivel técnico y su estrategia de recovery quedó validada. Impostor ya permite jugar múltiples rondas, acumular marcador, terminar la tanda desde el host en `scoreboard`, cerrar la Room, conservar historial mínimo y reconstruir el resultado final compartido desde `get_my_game_state()` aunque no haya Room activa. Siguen pendientes maduración PWA iOS/Android, auditoría final, playtesting y validación física multi-dispositivo completa.
+Incremento 14 cerrado con smoke manual externo pendiente: el primer MVP jugable está alcanzado a nivel técnico, su estrategia de recovery quedó validada y el hardening PWA quedó funcionalmente cerrado con validaciones automáticas y Chromium desktop. Impostor ya permite jugar múltiples rondas, acumular marcador, terminar la tanda desde el host en `scoreboard`, cerrar la Room, conservar historial mínimo y reconstruir el resultado final compartido desde `get_my_game_state()` aunque no haya Room activa. Siguen pendientes Android/iOS real, round transition/offline/reconnect multi-actor real, auditoría final, playtesting y validación física multi-dispositivo completa.
 ```
 
 ## Ya existe
@@ -156,7 +156,8 @@ Incremento 13 cerrado: el primer MVP jugable está alcanzado a nivel técnico y 
 
 * validación manual multi-dispositivo completa;
 * playtesting real;
-* maduración PWA iOS/Android;
+* smoke externo Android/iOS real;
+* smoke externo round transition/offline/reconnect multi-actor real;
 * evidencia visual;
 * resultados de uso.
 
@@ -206,7 +207,7 @@ Estado: `MVP JUGABLE ALCANZADO TÉCNICAMENTE`.
 
 La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras, Room + Lobby, Presence básica privada, liveness autoritativo mínimo y sucesión de host validados en producción, más gameplay privado implementado técnicamente hasta cierre de tanda.
 
-Ya existe una tanda completa cerrable: el host puede terminarla desde el marcador, `GameSession` pasa a `finished`, la Room se cierra, existe resultado final compartido y se conserva historial mínimo de tanda y rondas. Estas capacidades fueron validadas técnicamente y el bloque de reconexión autoritativa del Incremento 13 quedó cerrado con smoke final. Siguen pendientes la maduración PWA iOS/Android, auditoría final, playtesting y validación física multi-dispositivo completa.
+Ya existe una tanda completa cerrable: el host puede terminarla desde el marcador, `GameSession` pasa a `finished`, la Room se cierra, existe resultado final compartido y se conserva historial mínimo de tanda y rondas. Estas capacidades fueron validadas técnicamente y el bloque de reconexión autoritativa del Incremento 13 quedó cerrado con smoke final. Incremento 14 cerró el hardening PWA con validaciones automáticas y Chromium desktop. Siguen pendientes Android/iOS real, round transition/offline/reconnect multi-actor real, auditoría final, playtesting y validación física multi-dispositivo completa.
 
 ---
 
@@ -382,7 +383,7 @@ PENDIENTE:
 | Contrato documental de reconexión | CERRADO DOCUMENTAL |
 | Triggers de reconexión autoritativa | COMPLETADA |
 | Reconexión autoritativa 13.2–13.5 | COMPLETADA |
-| Maduración PWA iOS/Android | PENDIENTE |
+| Hardening PWA | CERRADO CON SMOKE EXTERNO PENDIENTE |
 | Auditoría final seguridad/testing/UX | PENDIENTE |
 | Playtesting | PENDIENTE |
 | Iteración | PENDIENTE |
@@ -760,7 +761,7 @@ Estado: REGISTRADA.
 
 La arquitectura está definida conceptualmente. La primera capa de plataforma ya está implementada para identidad, grupo, jugador, invitación y bootstrap. La capa específica de Impostor ya tiene banco de palabras, Room + Lobby, Presence/liveness/host succession, `GameSession`, `SessionPlayers`, `Round`, read model privado, primera votación, segunda votación e intento final del impostor.
 
-La tanda completa quedó cerrada técnicamente en Incremento 12: historial mínimo, fin de tanda, resultado final compartido y reconstrucción histórica están implementados y validados localmente. Incremento 13 cerró la validación de recovery autoritativo sin requerir código adicional en 13.5. Maduración PWA iOS/Android, playtesting y auditoría final permanecen pendientes.
+La tanda completa quedó cerrada técnicamente en Incremento 12: historial mínimo, fin de tanda, resultado final compartido y reconstrucción histórica están implementados y validados localmente. Incremento 13 cerró la validación de recovery autoritativo sin requerir código adicional en 13.5. Incremento 14 cerró el hardening PWA con smoke externo pendiente para Android/iOS real y multi-actor real. Playtesting y auditoría final permanecen pendientes.
 
 Decisión preparada para el Incremento 3: el banco persistente se modelará como `GroupWord`, una entrada propia del grupo y distinta de la futura palabra seleccionada para una ronda. Esto permite alimentar el contenido entre partidas sin adelantar `Room`, `GameSession`, selección aleatoria ni registro de palabras usadas.
 
@@ -854,7 +855,7 @@ Pendiente:
 * auditoría final hasta Incremento 15;
 * playtesting real.
 
-La parte resuelta ya implica una tanda completa jugable a nivel técnico y una estrategia de recovery validada para el bloque 13. No implica todavía maduración PWA iOS/Android, auditoría final ni playtesting real.
+La parte resuelta ya implica una tanda completa jugable a nivel técnico, una estrategia de recovery validada para el bloque 13 y hardening PWA cerrado con validación automática/Chromium desktop. No implica todavía smoke Android/iOS real, smoke multi-actor real, auditoría final ni playtesting real.
 
 ---
 
@@ -914,10 +915,15 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 13.4 | Host succession recovery | CERRADO | `hostChanged = true` funciona como invalidación; el cliente fuerza reconstrucción autoritativa inmediata de Room, preservando `rooms.host_player_id` como fuente de verdad y sin cambios de DB/schema/producto; smoke browser real PASS |
 | 13.5 | Final recovery validation | CERRADO | smoke browser real integrado: avance remoto de fase estando offline, voto persistido, nueva ronda sin secreto stale, `finished`, reconexiones repetidas y multi-tab; sin cambios de código |
 | 13 | Reconexión autoritativa y hardening mobile | CERRADO | estrategia `local interruption → reconnect/recovery trigger → authoritative Room/GameState reconstruction → current valid UI`; no se detectaron bugs ni hardening adicional necesario |
-| 14 | Maduración PWA iOS/Android del MVP | PENDIENTE | PENDIENTE |
+| 14.0 | Contrato PWA/cache | CERRADO DOCUMENTAL | Define `PWA cache != game-state authority`, matriz cacheable/no-cacheable y offline MVP como shell mínima, aviso de conexión y bloqueo de gameplay conectado hasta refetch autoritativo |
+| 14.1 | Manifest/install hardening | CERRADO | Manifest, metadata e iconos endurecidos para installability temprana sin cache, sin service worker nuevo y sin declarar capacidades no verificadas |
+| 14.2 | Service worker mínimo static-safe | CERRADO | Service worker manual cachea sólo assets estáticos seguros, excluye Supabase/RPC/gameplay authority y limpia caches versionadas sin lifecycle agresivo |
+| 14.3 | Offline/update UX mínima | CERRADO | Feedback offline y update disponible sin offline gameplay, sin reload automático en sala/tanda activa y con actualización manual fuera de momentos críticos |
+| 14.4 | Chromium desktop smoke | CERRADO CON SMOKE EXTERNO PENDIENTE | Validación automática y Chromium desktop PASS; Android/iOS real y round transition/offline/reconnect multi-actor real quedan pendientes por falta de dispositivo/escenario Supabase vivo |
+| 14 | Maduración PWA iOS/Android del MVP | INCREMENT 14 CLOSED WITH EXTERNAL MANUAL SMOKE PENDING | Funcionalmente cerrado y validado automáticamente/Chromium desktop; no declara gameplay offline, cache de estado de juego, Android/iOS validados ni service worker como autoridad |
 | 15 | Auditoría final de seguridad, testing y UX del MVP | PENDIENTE | Incluye relato técnico accesible pedagógico y no normativo, con trazabilidad a docs/código/tests; no crea todavía el relato |
 
-El primer MVP jugable quedó alcanzado técnicamente al cerrar el Incremento 12 y su bloque de recovery quedó cerrado en Incremento 13. No implica todavía maduración PWA iOS/Android, auditoría final ni playtesting real.
+El primer MVP jugable quedó alcanzado técnicamente al cerrar el Incremento 12, su bloque de recovery quedó cerrado en Incremento 13 y el hardening PWA quedó cerrado en Incremento 14 con smoke externo pendiente. No implica todavía Android/iOS real, multi-actor real, auditoría final ni playtesting real.
 
 ---
 
@@ -1401,7 +1407,27 @@ PENDIENTE.
 
 ## PWA
 
-PENDIENTE.
+Incremento 14 queda cerrado con la fórmula:
+
+`INCREMENT 14 CLOSED WITH EXTERNAL MANUAL SMOKE PENDING`
+
+Estado validado:
+
+* 14.0 contrato PWA/cache cerrado;
+* 14.1 manifest/install hardening cerrado;
+* 14.2 service worker static-safe cerrado;
+* 14.3 offline/update UX mínima cerrado;
+* 14.4 Chromium desktop smoke cerrado.
+
+El cierre no cambia la autoridad del estado de juego: el service worker no es
+autoridad, no hay cache de Room/GameSession/Round/roles/palabras/votos/marcador
+live ni gameplay offline.
+
+Pendientes externos antes de beta:
+
+* Android Chrome installed PWA smoke;
+* iOS Safari Add to Home Screen smoke;
+* real multi-actor round transition/offline/reconnect smoke.
 
 ## Testing
 
