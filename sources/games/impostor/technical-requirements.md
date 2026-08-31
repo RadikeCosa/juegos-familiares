@@ -2232,14 +2232,50 @@ Pregunta abierta para 14.2/14.3:
 14.4 Validación PWA final:
 
 * smoke en navegador no instalado pasa sin service worker stale;
-* smoke standalone valida reapertura, background/foreground y navegación básica;
+* smoke standalone valida reapertura, background/foreground y navegación básica
+  donde exista dispositivo real disponible;
 * smoke offline durante gameplay no permite votar, revelar privados stale ni
   avanzar fases desde cache;
 * cambio de ronda después de reconexión no muestra la palabra anterior;
-* Android Chrome real queda validado;
-* iOS Safari/Add to Home Screen queda validado razonablemente o documenta sus
-  límites;
+* Android Chrome real queda validado o queda documentado como pendiente externo;
+* iOS Safari/Add to Home Screen queda validado razonablemente o queda
+  documentado como pendiente externo;
 * Incremento 13 conserva la invariante de recovery autoritativo.
+
+### Cierre de Incremento 14
+
+Estado:
+
+`INCREMENT 14 CLOSED WITH EXTERNAL MANUAL SMOKE PENDING`
+
+Al cierre documental:
+
+* 14.0 contrato PWA/cache queda cerrado;
+* 14.1 manifest/install hardening queda cerrado;
+* 14.2 service worker static-safe queda cerrado;
+* 14.3 offline/update UX mínima queda cerrado;
+* 14.4 Chromium desktop smoke queda cerrado.
+
+Validado:
+
+* validaciones automáticas del incremento;
+* Chromium desktop smoke sobre manifest, service worker registrado, Cache
+  Storage acotado a assets seguros, corte de red fuera/dentro de sala,
+  exclusión de Supabase/RPC/gameplay authority y update manual sin recarga
+  automática durante sala.
+
+Pendientes externos antes de beta:
+
+* Android Chrome installed PWA smoke;
+* iOS Safari Add to Home Screen smoke;
+* real multi-actor round transition/offline/reconnect smoke.
+
+Este cierre no declara offline gameplay, no autoriza cache de estado de juego,
+no declara validados Android/iOS reales y no convierte al service worker en
+autoridad. La autoridad de Auth/session, Player/Group remoto, Room,
+GameSession, Round, host, presence/liveness, role, word, votes, scoreboard
+live, `get_my_active_room()`, `get_my_game_state()` y cualquier RPC/mutación
+Supabase permanece en backend/refetch autoritativo.
 
 ---
 

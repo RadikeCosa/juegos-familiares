@@ -47,4 +47,19 @@ describe("Impostor technical requirements PWA/cache contract", () => {
       "jugar una tanda multi-dispositivo sin conexión",
     );
   });
+
+  it("documents Increment 14 closure with external manual smokes still pending", () => {
+    expect(technicalRequirements).toContain(
+      "INCREMENT 14 CLOSED WITH EXTERNAL MANUAL SMOKE PENDING",
+    );
+    expect(technicalRequirements).toContain("14.4 Chromium desktop smoke queda cerrado");
+    expect(technicalRequirements).toContain("Android Chrome installed PWA smoke");
+    expect(technicalRequirements).toContain("iOS Safari Add to Home Screen smoke");
+    expect(technicalRequirements).toContain(
+      "real multi-actor round transition/offline/reconnect smoke",
+    );
+    expect(technicalRequirements).toContain("no declara offline gameplay");
+    expect(technicalRequirements).toContain("no autoriza cache de estado de juego");
+    expect(technicalRequirements).toContain("no convierte al service worker en");
+  });
 });

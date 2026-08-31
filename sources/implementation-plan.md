@@ -252,7 +252,7 @@ Incluye incrementos 6 a 12.
 
 Estado: `ALCANZADO TÉCNICAMENTE`.
 
-El cierre técnico del Incremento 12 completa el primer MVP jugable a nivel técnico. Incremento 13 cerró la robustez de reconexión autoritativa. Siguen pendientes maduración PWA, auditoría final, deploy y validación presencial completa en los incrementos 14 a 15.
+El cierre técnico del Incremento 12 completa el primer MVP jugable a nivel técnico. Incremento 13 cerró la robustez de reconexión autoritativa. Incremento 14 cerró el hardening PWA con smoke externo pendiente para Android/iOS real y multi-actor real. Siguen pendientes auditoría final, deploy y validación presencial completa en el Incremento 15 y antes de beta.
 
 Este hito marca el:
 
@@ -3539,7 +3539,7 @@ La app sigue pudiendo usarse desde navegador e instalarse cuando el dispositivo 
 
 La capa temprana de manifest, iconos y metadatos queda revisada, y se suma una estrategia concreta de service worker, cache del shell y comportamiento de actualización razonable.
 
-Funciona en Safari iOS y Chrome Android dentro del alcance MVP.
+La validación automática y Chromium desktop quedan cerradas. Safari iOS, Chrome Android y el smoke multi-actor real quedan como validaciones externas previas a beta cuando haya dispositivos y escenario Supabase vivo.
 
 ### Dominio involucrado
 
@@ -3576,8 +3576,8 @@ Impostor:
 ### Tests / validación
 
 * Lighthouse o auditoría equivalente de PWA;
-* prueba de instalación en Android;
-* prueba de agregar a inicio en iOS;
+* prueba de instalación en Android, pendiente si no hay dispositivo disponible;
+* prueba de agregar a inicio en iOS, pendiente si no hay dispositivo disponible;
 * prueba de navegador sin instalación;
 * prueba de actualización de versión;
 * prueba de red intermitente: la app informa estado sin prometer juego offline.
@@ -3600,7 +3600,7 @@ Impostor:
 
 ### Criterio de terminado
 
-La PWA cumple el alcance MVP: instalable cuando corresponde, usable sin instalación, mobile-first, con service worker/cache acotados y segura respecto de datos sensibles.
+La PWA cumple el alcance MVP a nivel funcional y de validación automática/Chromium desktop: instalable cuando corresponde, usable sin instalación, mobile-first, con service worker/cache acotados y segura respecto de datos sensibles. Android/iOS reales y multi-actor real pueden quedar documentados como smoke externo pendiente antes de beta.
 
 ### Conceptos a aprender
 
@@ -3866,9 +3866,9 @@ Incrementos 7 a 12 agregan transición a conversación presencial, votación, sc
 
 Incremento 13 queda cerrado. El smoke final de 13.5 validó reconexión autoritativa frente a avance remoto de fase, voto persistido, nueva ronda con protección contra secreto stale, reconstrucción de `finished` y reconexiones repetidas con multi-tab, sin requerir cambios de código.
 
-Siguen pendientes como próximos incrementos formales: maduración PWA iOS/Android del Incremento 14 y auditoría final de seguridad, testing y UX del Incremento 15.
+Incremento 14 queda cerrado con la fórmula `INCREMENT 14 CLOSED WITH EXTERNAL MANUAL SMOKE PENDING`: contrato PWA/cache, manifest/install hardening, service worker static-safe, offline/update UX mínima y Chromium desktop smoke están cerrados. Android/iOS real y round transition/offline/reconnect multi-actor real quedan pendientes externos antes de beta.
 
-El service worker/cache pertenece al Incremento 14 y no debe presentarse como implementado antes de ejecutarlo.
+Sigue pendiente como próximo incremento formal la auditoría final de seguridad, testing y UX del Incremento 15.
 
 ---
 
@@ -4032,10 +4032,10 @@ Ese riesgo pertenece al arranque del proyecto y ya no representa el próximo pas
 
 # 14. Próximo paso recomendado
 
-El siguiente paso lógico del roadmap formal es Incremento 14:
+El siguiente paso lógico del roadmap formal es Incremento 15:
 
-1. ejecutar Incremento 14, maduración PWA iOS/Android con service worker/cache acotados;
-2. ejecutar Incremento 15, auditoría final de seguridad, testing y UX;
+1. ejecutar Incremento 15, auditoría final de seguridad, testing y UX;
+2. ejecutar los smokes externos pendientes antes de beta: Android Chrome installed PWA, iOS Safari Add to Home Screen y real multi-actor round transition/offline/reconnect;
 3. declarar el cierre del MVP solamente cuando se cumplan sus criterios técnicos, de validación manual y de riesgo.
 
 Estado consolidado vigente:
