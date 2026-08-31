@@ -27,7 +27,7 @@ El case study futuro debe mostrar tanto el resultado como el razonamiento que ll
 
 ```text
 Estado:
-Incremento 12 cerrado técnicamente: el primer MVP jugable está alcanzado a nivel técnico. Impostor ya permite jugar múltiples rondas, acumular marcador, terminar la tanda desde el host en `scoreboard`, cerrar la Room, conservar historial mínimo y reconstruir el resultado final compartido desde `get_my_game_state()` aunque no haya Room activa. Siguen pendientes deploy, robustez de reconexión/PWA, auditoría final y validación física multi-dispositivo completa.
+Incremento 13 cerrado: el primer MVP jugable está alcanzado a nivel técnico y su estrategia de recovery quedó validada. Impostor ya permite jugar múltiples rondas, acumular marcador, terminar la tanda desde el host en `scoreboard`, cerrar la Room, conservar historial mínimo y reconstruir el resultado final compartido desde `get_my_game_state()` aunque no haya Room activa. Siguen pendientes maduración PWA iOS/Android, auditoría final, playtesting y validación física multi-dispositivo completa.
 ```
 
 ## Ya existe
@@ -144,14 +144,18 @@ Incremento 12 cerrado técnicamente: el primer MVP jugable está alcanzado a niv
   * read model y UI para `impostor_guess` y `round_result`;
   * hardening de input nulo/vacío, retry y privacidad;
   * validaciones `validate-10-1.mjs`, `validate-10-2.mjs`, `validate-10-3.mjs` y regresión `validate-9-4.mjs` PASS.
+* Incremento 13 cerrado con validación final de recovery:
+  * interrupción local;
+  * trigger de reconnect/recovery;
+  * reconstrucción autoritativa de Room/GameState;
+  * UI vigente y válida;
+  * smoke final sobre avance remoto de fase, voto persistido, nueva ronda con protección de secreto stale, `finished` y reconexiones repetidas con multi-tab;
+  * sin cambios de código necesarios en 13.5.
 
 ## PENDIENTE
 
 * validación manual multi-dispositivo completa;
 * playtesting real;
-* historial;
-* fin de tanda;
-* deploy;
 * maduración PWA iOS/Android;
 * evidencia visual;
 * resultados de uso.
@@ -202,7 +206,7 @@ Estado: `MVP JUGABLE ALCANZADO TÉCNICAMENTE`.
 
 La base de plataforma para identidad liviana, grupo, jugador e invitación ya está implementada y endurecida. Impostor ya cuenta con banco de palabras, Room + Lobby, Presence básica privada, liveness autoritativo mínimo y sucesión de host validados en producción, más gameplay privado implementado técnicamente hasta cierre de tanda.
 
-Ya existe una tanda completa cerrable: el host puede terminarla desde el marcador, `GameSession` pasa a `finished`, la Room se cierra, existe resultado final compartido y se conserva historial mínimo de tanda y rondas. Estas capacidades fueron validadas técnicamente. Siguen pendientes el smoke manual general, deploy, robustez de reconexión/PWA, auditoría final, validación física multi-dispositivo completa y los Incrementos 13 a 15.
+Ya existe una tanda completa cerrable: el host puede terminarla desde el marcador, `GameSession` pasa a `finished`, la Room se cierra, existe resultado final compartido y se conserva historial mínimo de tanda y rondas. Estas capacidades fueron validadas técnicamente y el bloque de reconexión autoritativa del Incremento 13 quedó cerrado con smoke final. Siguen pendientes la maduración PWA iOS/Android, auditoría final, playtesting y validación física multi-dispositivo completa.
 
 ---
 
@@ -343,7 +347,6 @@ PENDIENTE:
 
 * validación manual multi-dispositivo completa;
 * deploy del cierre técnico de Incremento 12;
-* smoke manual focal de 13.1, validación de 13.2 y ejecución de reconexión autoritativa 13.3–13.5;
 * robustez PWA/cache de Incremento 14;
 * playtesting;
 * iteración sobre uso real.
@@ -377,8 +380,8 @@ PENDIENTE:
 | Scoring, marcador y nueva ronda | COMPLETADA TÉCNICAMENTE |
 | Terminar tanda e historial mínimo | COMPLETADA TÉCNICAMENTE |
 | Contrato documental de reconexión | CERRADO DOCUMENTAL |
-| Triggers de reconexión autoritativa | IMPLEMENTADA TÉCNICAMENTE / SMOKE PENDIENTE |
-| Reconexión autoritativa 13.2–13.5 | EN CURSO |
+| Triggers de reconexión autoritativa | COMPLETADA |
+| Reconexión autoritativa 13.2–13.5 | COMPLETADA |
 | Maduración PWA iOS/Android | PENDIENTE |
 | Auditoría final seguridad/testing/UX | PENDIENTE |
 | Playtesting | PENDIENTE |
@@ -757,7 +760,7 @@ Estado: REGISTRADA.
 
 La arquitectura está definida conceptualmente. La primera capa de plataforma ya está implementada para identidad, grupo, jugador, invitación y bootstrap. La capa específica de Impostor ya tiene banco de palabras, Room + Lobby, Presence/liveness/host succession, `GameSession`, `SessionPlayers`, `Round`, read model privado, primera votación, segunda votación e intento final del impostor.
 
-La tanda completa quedó cerrada técnicamente en Incremento 12: historial mínimo, fin de tanda, resultado final compartido y reconstrucción histórica están implementados y validados localmente. Maduración PWA, deploy, reconexión robusta y validación física multi-dispositivo permanecen pendientes.
+La tanda completa quedó cerrada técnicamente en Incremento 12: historial mínimo, fin de tanda, resultado final compartido y reconstrucción histórica están implementados y validados localmente. Incremento 13 cerró la validación de recovery autoritativo sin requerir código adicional en 13.5. Maduración PWA iOS/Android, playtesting y auditoría final permanecen pendientes.
 
 Decisión preparada para el Incremento 3: el banco persistente se modelará como `GroupWord`, una entrada propia del grupo y distinta de la futura palabra seleccionada para una ronda. Esto permite alimentar el contenido entre partidas sin adelantar `Room`, `GameSession`, selección aleatoria ni registro de palabras usadas.
 
@@ -840,6 +843,7 @@ Resuelto técnicamente:
 * scoring, marcador y nueva ronda;
 * cierre de tanda por host;
 * `GameSession.finished`, Room cerrada, resultado final e historial mínimo.
+* recovery autoritativo de Room/GameState frente a interrupciones locales, avance remoto de fase, voto persistido, nueva ronda con protección de secretos stale, `finished` y reconexiones repetidas con multi-tab.
 
 Pendiente:
 
@@ -847,11 +851,10 @@ Pendiente:
 * lifecycle PWA en mobile;
 * diferencias iOS/Safari y Android/Chrome;
 * cache sin exponer datos sensibles;
-* smoke manual focal de 13.1, reconexión autoritativa 13.2–13.5 y auditoría final hasta Incremento 15;
-* deploy del cierre técnico;
+* auditoría final hasta Incremento 15;
 * playtesting real.
 
-La parte resuelta ya implica una tanda completa jugable a nivel técnico: múltiples rondas, marcador, cierre por host, Room cerrada, resultado final e historial mínimo. No implica todavía smoke manual general cerrado, deploy, robustez de reconexión/PWA ni cierre de Incrementos 13 a 15.
+La parte resuelta ya implica una tanda completa jugable a nivel técnico y una estrategia de recovery validada para el bloque 13. No implica todavía maduración PWA iOS/Android, auditoría final ni playtesting real.
 
 ---
 
@@ -870,7 +873,7 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 5.1 | Presence básica del lobby | CERRADO | Presence privada por Room activa, autorización por RoomParticipant, connected/disconnected visible, separación estado efímero/persistente, validación productiva multi-cliente y mobile |
 | 5.2 | Liveness autoritativo mínimo | CERRADO | `room_participants.last_seen_at`, RPC autoritativa de refresh propio, heartbeat 30s, stale 90s, seguridad, smoke productivo y límites mobile/background |
 | 5.3 | Sucesión autoritativa de host | CERRADO | RPC `reassign_room_host_if_stale()`, autoridad desde `auth.uid()`, host stale por liveness, sucesor por `joined_at ASC, player_id ASC`, concurrencia, revival, no-op sin candidatos, feedback breve y smoke productivo PASS |
-| 5.4 | Hardening mobile/concurrencia | ABSORBIDO EN 13 | La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios; la validación física mobile/desktop de background, lock, reconnect, multiple connections y timings 30s/90s/30s queda dentro del contrato 13.0 y la ejecución 13.1–13.5 |
+| 5.4 | Hardening mobile/concurrencia | ABSORBIDO EN 13 | La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios; la validación física mobile/desktop de background, lock, reconnect, multiple connections y timings 30s/90s/30s quedó dentro del contrato 13.0 y la ejecución 13.1-13.5 |
 | 6 | Iniciar tanda y preparar ronda privada | CERRADO TÉCNICAMENTE | 6.0-6.5 cerrados: GameSession/SessionPlayer/Round, lifecycle `playing`, `start_session()` atómico, snapshot de activos, palabra e impostor server-side, `get_my_game_state()`, privacidad por caller, UI role reveal y hardening de refetch; validación manual multi-dispositivo pendiente |
 | 7 | Transición de role reveal a discussion | CERRADO TÉCNICAMENTE | 7.0-7.4 cerrados: sin acknowledgement persistido, `start_round_discussion()` 0-args, autoridad por host actual, sucesión de host vigente en `playing`, read model privado `role_reveal | discussion`, polling lento sin gameplay Realtime/Broadcast, UI `Empezar ronda` host-only y reveal/hide local en `discussion`; validación manual multi-dispositivo pendiente |
 | 8.0 | Contrato documental de primera votación | CERRADO DOCUMENTAL | `discussion → voting_first`, `start_round_voting()` 0-args por host actual, `RoundVote/round_votes`, voto secreto e inmutable de todos los `SessionPlayers`, sin resultados parciales, completion sin Presence/liveness, resolución automática a `tie_discussion | impostor_guess | round_result`, polling lento y segunda votación fuera |
@@ -905,15 +908,16 @@ Esta tabla resume el plan. Debe actualizarse al cerrar cada incremento.
 | 12.5 | Hardening multironda/cierre | CERRADO TÉCNICAMENTE | `validate-12-5.mjs` valida precondiciones, cierre host-only, historia única de tanda/rondas, ausencia de votos y palabras secretas, idempotencia, empates, read model histórico, denegación a no participantes, nueva Room posterior y retry tardío; detectó y corrigió `can_end_session` para host en `scoreboard` |
 | 12 | Terminar tanda e historial mínimo | CERRADO TÉCNICAMENTE | 12.0-12.5 cerrados; primer MVP jugable alcanzado técnicamente con cierre autoritativo, resultado final compartido, reconstrucción desde historial sin Room activa y validación adversarial local |
 | 13.0 | Contrato documental de reconexión + hardening 5.4 | CERRADO DOCUMENTAL | Servidor/DB como autoridad, frontend como cache temporal, orden de reconstrucción Auth→Player/Group→Room→GameSession/read model, contrato por fase, estado efímero vs autoritativo, foreground/offline, Presence/liveness, host succession, multi-tab/device, errores y matriz de validación |
-| 13.1 | Triggers de reconstrucción autoritativa | CERRADO TÉCNICAMENTE / SMOKE PENDIENTE | mount, retry, foreground, online y recovery Realtime convergen a reconciliación autoritativa con single-flight/dedupe, reutilizando `getMyActiveRoom()` y `getMyGameState()` |
-| 13.2 | UI reconnecting/offline mínima | CERRADO TÉCNICAMENTE / SMOKE PENDIENTE | estado local `stable/offline/reconnecting/reconcile-error`, feedback mínimo, listener `offline`, retry autoritativo y bloqueo de acciones/privados stale mientras la Room/GameSession no es confiable |
-| 13.3 | Presence/liveness foreground recovery | PENDIENTE | heartbeat, resubscribe, multi-tab y suspensión móvil |
+| 13.1 | Triggers de reconstrucción autoritativa | CERRADO | mount, retry, foreground, online y recovery Realtime convergen a reconciliación autoritativa con single-flight/dedupe, reutilizando `getMyActiveRoom()` y `getMyGameState()` |
+| 13.2 | UI reconnecting/offline mínima | CERRADO | estado local `stable/offline/reconnecting/reconcile-error`, feedback mínimo, listener `offline`, retry autoritativo y bloqueo de acciones/privados stale mientras la Room/GameSession no es confiable |
+| 13.3 | Presence/liveness foreground recovery | CERRADO | heartbeat, resubscribe, multi-tab y suspensión móvil validados dentro del cierre de recovery |
 | 13.4 | Host succession recovery | CERRADO | `hostChanged = true` funciona como invalidación; el cliente fuerza reconstrucción autoritativa inmediata de Room, preservando `rooms.host_player_id` como fuente de verdad y sin cambios de DB/schema/producto; smoke browser real PASS |
-| 13.5 | Matriz final de validación | PENDIENTE | tests, DB validators, smoke físico acotado y documentación final 13 |
+| 13.5 | Final recovery validation | CERRADO | smoke browser real integrado: avance remoto de fase estando offline, voto persistido, nueva ronda sin secreto stale, `finished`, reconexiones repetidas y multi-tab; sin cambios de código |
+| 13 | Reconexión autoritativa y hardening mobile | CERRADO | estrategia `local interruption → reconnect/recovery trigger → authoritative Room/GameState reconstruction → current valid UI`; no se detectaron bugs ni hardening adicional necesario |
 | 14 | Maduración PWA iOS/Android del MVP | PENDIENTE | PENDIENTE |
 | 15 | Auditoría final de seguridad, testing y UX del MVP | PENDIENTE | Incluye relato técnico accesible pedagógico y no normativo, con trazabilidad a docs/código/tests; no crea todavía el relato |
 
-El primer MVP jugable quedó alcanzado técnicamente al cerrar el Incremento 12. No implica todavía deploy, validación presencial completa ni cierre de los incrementos 13-15.
+El primer MVP jugable quedó alcanzado técnicamente al cerrar el Incremento 12 y su bloque de recovery quedó cerrado en Incremento 13. No implica todavía maduración PWA iOS/Android, auditoría final ni playtesting real.
 
 ---
 
@@ -1372,7 +1376,18 @@ smoke real
 
 ## Arquitectura
 
-PENDIENTE.
+El cierre de Incremento 13 validó una estrategia consistente de recovery:
+
+```text
+local interruption
+→ reconnect/recovery trigger
+→ authoritative Room/GameState reconstruction
+→ current valid UI
+```
+
+El smoke final cubrió avance remoto de fase mientras un cliente estaba offline, reconstrucción de voto persistido, nueva ronda con protección contra secretos stale, recuperación de `finished` y reconexiones repetidas con multi-tab.
+
+No fue necesario agregar más código en 13.5: el valor estuvo en comprobar que los triggers de recuperación, el read model autoritativo y las protecciones de privacidad ya convergían al estado válido actual.
 
 ## Backend / seguridad
 

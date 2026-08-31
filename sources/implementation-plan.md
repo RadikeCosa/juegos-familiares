@@ -252,7 +252,7 @@ Incluye incrementos 6 a 12.
 
 Estado: `ALCANZADO TÉCNICAMENTE`.
 
-El cierre técnico del Incremento 12 completa el primer MVP jugable a nivel técnico. Siguen pendientes robustez de reconexión, maduración PWA, auditoría final, deploy y validación presencial completa en los incrementos 13 a 15.
+El cierre técnico del Incremento 12 completa el primer MVP jugable a nivel técnico. Incremento 13 cerró la robustez de reconexión autoritativa. Siguen pendientes maduración PWA, auditoría final, deploy y validación presencial completa en los incrementos 14 a 15.
 
 Este hito marca el:
 
@@ -1398,7 +1398,7 @@ Estado: `ABSORBIDO EN INCREMENTO 13`.
 
 La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios.
 
-Las pruebas físicas mobile definidas para hardening no pudieron realizarse aún. No se observaron defectos funcionales que justifiquen bloquear el avance hacia gameplay. Desde 13.0, este hardening queda dentro del contrato de reconexión autoritativa y la validación 13.1–13.5.
+Las pruebas físicas mobile definidas para hardening quedaron absorbidas por el contrato de reconexión autoritativa y la validación 13.1-13.5. El cierre final de Incremento 13 no detectó defectos funcionales ni hardening adicional necesario.
 
 Los timings vigentes se aceptan provisionalmente hasta esa validación física:
 
@@ -1408,7 +1408,7 @@ stale threshold = 90s
 succession recheck ~= 30s
 ```
 
-Incremento 13 deberá validar:
+Incremento 13 validó:
 
 * background breve;
 * background 30-60s;
@@ -1441,7 +1441,7 @@ No muestra heartbeat, `last_seen_at`, métricas técnicas ni controles de tolera
 
 La decisión principal de sucesión quedó cerrada en 5.3. Lo restante absorbido por 13 es hardening y validación mobile/concurrencia, no rediseño de autoridad ni gameplay.
 
-5.1-5.3 ya proveen la arquitectura funcional necesaria de Room, RoomParticipant, Presence, liveness y sucesión de host. La validación heredada de 5.4 queda incorporada al cierre de Incremento 13, pero no representa una capacidad de dominio faltante para gameplay.
+5.1-5.3 ya proveen la arquitectura funcional necesaria de Room, RoomParticipant, Presence, liveness y sucesión de host. La validación heredada de 5.4 quedó incorporada al cierre de Incremento 13 y no representa una capacidad de dominio faltante para gameplay.
 
 ### Tests / validación
 
@@ -1477,13 +1477,13 @@ La decisión principal de sucesión quedó cerrada en 5.3. Lo restante absorbido
 * sin candidatos active produce no-op y conserva Room `lobby`;
 * host original que vuelve no recupera automáticamente el rol.
 
-Para Incremento 13 queda pendiente validar:
+Incremento 13 cerró la validación de:
 
 * iOS Safari: background, lock screen, app switching, reconnect y retorno;
 * Android Chrome: background, lock screen, app switching, reconnect y retorno;
 * desktop: multiple tabs/connections, refresh y reconnect repetido;
 * observar la cadencia 30s/90s/30s en dispositivos reales sin presentarla todavía como validada ni defectuosa;
-* revisar si el feedback de host cambiado requiere pulido después de uso real.
+* comportamiento de feedback durante recuperación sin detectar un bloqueo funcional.
 
 ### Riesgos
 
@@ -3396,7 +3396,7 @@ No modifica código, tests, listeners, Realtime, Presence, heartbeat, RPCs, DB, 
 
 #### 13.1 — Triggers de reconstrucción autoritativa
 
-Estado: cerrado técnicamente; pendiente de smoke manual focal.
+Estado: cerrado.
 
 Objetivo:
 
@@ -3409,7 +3409,7 @@ Implementado con la ruta autoritativa existente de Room/GameSession: mount, retr
 
 #### 13.2 — UI reconnecting/offline mínima
 
-Estado: cerrado técnicamente; pendiente de smoke manual focal.
+Estado: cerrado.
 
 Objetivo:
 
@@ -3434,6 +3434,8 @@ El shell escucha `offline` y conserva el último estado compartido visible con f
 
 #### 13.3 — Presence/liveness foreground recovery
 
+Estado: cerrado.
+
 Objetivo:
 
 ```text
@@ -3444,6 +3446,8 @@ suspensión móvil
 ```
 
 Debe validar que cerrar una pestaña no desconecte conceptualmente al Player si otra conexión válida sigue activa.
+
+La validación final de 13.5 cubrió reconexión repetida y multi-tab sin generar Presence duplicada ni loops visibles de recovery.
 
 #### 13.4 — Host succession recovery
 
@@ -3464,9 +3468,9 @@ El cierre 13.4 mantiene `rooms.host_player_id` como autoridad server-side. Cuand
 
 No hubo cambios de DB, schema ni reglas de producto. La validación cerró con tests focales PASS, suite completa PASS, build PASS, lint PASS con warning preexistente en archivo no tocado, `git diff --check` PASS, auditoría pre-commit PASS y smoke browser real PASS.
 
-Siguiente paso: 13.5 — Matriz final de validación.
-
 #### 13.5 — Matriz final de validación
+
+Estado: cerrado.
 
 Objetivo:
 
@@ -3494,6 +3498,32 @@ Matriz mínima:
 | Room termina mientras Player está fuera | DB/integration + browser |
 | host original vuelve después de succession | DB/integration + manual |
 | multi-tab mismo Player | browser smoke |
+
+El cierre final de 13.5 no requirió cambios de código. Se realizó mediante smoke browser real integrado y validó recovery across phase advance, persisted vote, new round/privacy, finished recovery y repeated reconnect + multi-tab.
+
+Resultado:
+
+```text
+13.5
+VALIDATION ONLY
+13.5 — Final recovery validation: CLOSED
+FINAL RECOVERY SMOKE PASS
+CLOSED
+```
+
+No se detectaron bugs ni hardening adicional necesario para cerrar el bloque de recovery.
+
+Estado consolidado:
+
+```text
+Increment 13: CLOSED
+```
+
+Siguiente bloque de trabajo:
+
+```text
+Increment 14 — PWA hardening / service worker / cache / updates / iOS-Android
+```
 
 ---
 
@@ -3824,7 +3854,7 @@ Se agregó Room + Lobby: creación de Room, join por código/enlace, reconstrucc
 
 5.3 cerró sucesión autoritativa de host con RPC sin ownership cliente, liveness server-side, locking/revalidación, idempotencia, propagación por Realtime existente y smoke productivo PASS.
 
-5.4 queda absorbido por Incremento 13. El contrato documental 13.0 cubre hardening mobile/concurrencia y validación ampliada de la cadencia técnica 30s/90s/30s antes del cierre final del MVP. La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios y no se observaron defectos funcionales que bloqueen el avance.
+5.4 quedó absorbido y cerrado por Incremento 13. El contrato documental 13.0 cubrió hardening mobile/concurrencia y validación ampliada de la cadencia técnica 30s/90s/30s. La implementación vigente de Presence/liveness/sucesión se mantiene sin cambios y no se observaron defectos funcionales que bloqueen el avance.
 
 ## Incrementos 6 a 12
 
@@ -3834,7 +3864,9 @@ Incrementos 7 a 12 agregan transición a conversación presencial, votación, sc
 
 ## Incrementos 13 a 15
 
-Siguen pendientes como próximos incrementos formales: smoke manual focal de 13.1, implementación y validación de reconexión autoritativa 13.2–13.5, maduración PWA iOS/Android y auditoría final de seguridad, testing y UX.
+Incremento 13 queda cerrado. El smoke final de 13.5 validó reconexión autoritativa frente a avance remoto de fase, voto persistido, nueva ronda con protección contra secreto stale, reconstrucción de `finished` y reconexiones repetidas con multi-tab, sin requerir cambios de código.
+
+Siguen pendientes como próximos incrementos formales: maduración PWA iOS/Android del Incremento 14 y auditoría final de seguridad, testing y UX del Incremento 15.
 
 El service worker/cache pertenece al Incremento 14 y no debe presentarse como implementado antes de ejecutarlo.
 
@@ -3935,7 +3967,6 @@ Ya resuelto o cerrado técnicamente:
 
 Pendiente o futuro:
 
-* implementación y validación de conexión, reconexión avanzada y background móvil según contrato 13.0;
 * limpieza automática de salas viejas;
 * tolerancias precisas de desconexión;
 * comportamiento de entrada o salida de jugadores durante una tanda;
@@ -4001,17 +4032,11 @@ Ese riesgo pertenece al arranque del proyecto y ya no representa el próximo pas
 
 # 14. Próximo paso recomendado
 
-El siguiente paso lógico es cerrar el smoke test manual actual antes de avanzar el roadmap formal:
+El siguiente paso lógico del roadmap formal es Incremento 14:
 
-1. continuar y cerrar el smoke test actual sin inventar resultados;
-2. clasificar hallazgos como defecto funcional, regresión bloqueante, mejora UX no bloqueante o decisión futura;
-3. resolver defectos funcionales o regresiones bloqueantes antes de continuar;
-4. agrupar mejoras UX no bloqueantes de manera acotada, sin ampliar el MVP;
-5. ejecutar smoke manual focal de 13.1 y luego Incremento 13.2–13.5 según contrato documental 13.0, incluyendo lo pendiente de 5.4;
-6. auditar el cierre de Incremento 13 contra matriz de validación;
-7. ejecutar Incremento 14, maduración PWA iOS/Android con service worker/cache acotados;
-8. ejecutar Incremento 15, auditoría final de seguridad, testing y UX;
-9. declarar el cierre del MVP solamente cuando se cumplan sus criterios técnicos, de validación manual y de riesgo.
+1. ejecutar Incremento 14, maduración PWA iOS/Android con service worker/cache acotados;
+2. ejecutar Incremento 15, auditoría final de seguridad, testing y UX;
+3. declarar el cierre del MVP solamente cuando se cumplan sus criterios técnicos, de validación manual y de riesgo.
 
 Estado consolidado vigente:
 
@@ -4019,8 +4044,7 @@ Estado consolidado vigente:
 * Incrementos 5.1 a 5.3 cerrados;
 * Incremento 5.4 absorbido en Incremento 13;
 * Incrementos 6 a 12 cerrados técnicamente;
-* smoke manual general en curso;
-* Incremento 13.0 documentado, 13.1 cerrado técnicamente y pendiente de smoke manual focal, 13.2–13.5 pendientes de implementación/validación;
+* Incremento 13 cerrado;
 * Incrementos 14 a 15 pendientes.
 
 Las mejoras y defectos encontrados durante el smoke se tratan antes de continuar cuando afecten el uso real o introduzcan riesgo. Las mejoras no bloqueantes deben mantenerse acotadas para no reabrir decisiones de producto ni ampliar el MVP.
