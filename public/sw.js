@@ -90,6 +90,12 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "JUEGOS_FAMILIA_APPLY_UPDATE") {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener("fetch", (event) => {
   if (!isCacheableStaticRequest(event.request)) {
     return;

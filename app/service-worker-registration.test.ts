@@ -19,7 +19,25 @@ describe("service worker registration contract", () => {
     expect(registrationSource).not.toContain("beforeinstallprompt");
     expect(registrationSource).not.toContain("sync");
     expect(registrationSource).not.toContain("controllerchange");
-    expect(registrationSource).not.toContain("location.reload");
-    expect(registrationSource).not.toContain("skipWaiting");
+    expect(registrationSource).not.toContain("clients.claim");
+  });
+
+  it("shows update UX without offering reload inside an active room route", () => {
+    expect(registrationSource).toContain('pathname.startsWith("/impostor/sala/")');
+    expect(registrationSource).toContain("Salí de la sala o terminá la tanda antes de actualizar.");
+    expect(registrationSource).toContain("Actualizá cuando no estés jugando una tanda.");
+  });
+
+  it("applies updates only through an explicit user action", () => {
+    const applyUpdateStart = registrationSource.indexOf("function applyUpdate()");
+    const applyUpdateSource = registrationSource.slice(applyUpdateStart);
+
+    expect(applyUpdateSource).toContain("updateState.isCriticalRoute");
+    expect(applyUpdateSource).toContain("postMessage({");
+    expect(applyUpdateSource).toContain("JUEGOS_FAMILIA_APPLY_UPDATE");
+    expect(applyUpdateSource).toContain("window.location.reload()");
+    expect(registrationSource.indexOf("window.location.reload()")).toBeGreaterThan(
+      applyUpdateStart,
+    );
   });
 });

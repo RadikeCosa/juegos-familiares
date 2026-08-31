@@ -28,9 +28,13 @@ describe("static-safe service worker contract", () => {
   });
 
   it("does not use aggressive update lifecycle features", () => {
-    expect(serviceWorker).not.toContain("skipWaiting");
+    expect(serviceWorker).not.toContain("install',");
     expect(serviceWorker).not.toContain("clients.claim");
     expect(serviceWorker).not.toContain("location.reload");
+    expect(serviceWorker).toContain("JUEGOS_FAMILIA_APPLY_UPDATE");
+    expect(serviceWorker.indexOf("self.skipWaiting()")).toBeGreaterThan(
+      serviceWorker.indexOf('event.data?.type === "JUEGOS_FAMILIA_APPLY_UPDATE"'),
+    );
   });
 
   it("only handles cacheable GET requests and lets everything else hit the network", () => {
