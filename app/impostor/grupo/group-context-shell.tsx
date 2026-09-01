@@ -130,6 +130,7 @@ export function renderImpostorGroupContext(
     onRetryBootstrap?: () => void;
     onRetryPlayers?: () => void;
     onRetryGroupWords?: () => void;
+    onRetryActiveRoom?: () => void;
     onCreateRoom?: () => void;
     onShowJoinRoomForm?: () => void;
     onJoinRoomSubmit?: (event: FormEvent<HTMLFormElement>) => void;
@@ -204,6 +205,9 @@ export function renderImpostorGroupContext(
     activeRoomState.status === "success" &&
     (activeRoomState.room.status === "lobby" ||
       activeRoomState.room.status === "playing");
+  const isPlayingRoom =
+    activeRoomState.status === "success" &&
+    activeRoomState.room.status === "playing";
 
   return (
     <section
@@ -256,28 +260,45 @@ export function renderImpostorGroupContext(
 
         {hasActiveRoom ? (
           <div className="impostor-active-room" aria-live="polite">
-            <p>Sala activa</p>
+            <p>{isPlayingRoom ? "Partida en curso" : "Sala activa"}</p>
             <Link
               className="impostor-action impostor-action--primary"
               href={`/impostor/sala/${encodeURIComponent(activeRoomState.room.code)}`}
             >
-              Volver a la sala
+              {isPlayingRoom ? "Volver a la partida" : "Volver a la sala"}
             </Link>
           </div>
         ) : null}
 
+        {activeRoomState.status === "error" ? (
+          <div className="impostor-group-error" aria-live="polite">
+            <p>No pudimos comprobar si tenés una sala activa.</p>
+            {options.onRetryActiveRoom ? (
+              <button
+                className="impostor-action impostor-action--primary"
+                type="button"
+                onClick={options.onRetryActiveRoom}
+              >
+                Reintentar
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+
         {activeRoomState.status === "absent" ||
-        activeRoomState.status === "error" ||
         (activeRoomState.status === "success" && !hasActiveRoom) ? (
           <>
-            {activeRoomState.status === "error" ? (
-              <div className="impostor-group-error" aria-live="polite">
-                <p>{activeRoomState.message}</p>
-              </div>
-            ) : null}
-
             <button
               className="impostor-action impostor-action--primary"
+              type="button"
+              disabled={roomJoinState.status === "joining"}
+              onClick={options.onShowJoinRoomForm}
+            >
+              Unirme a una sala
+            </button>
+
+            <button
+              className="impostor-action"
               type="button"
               disabled={roomCreationState.status === "creating"}
               onClick={options.onCreateRoom}
@@ -292,15 +313,6 @@ export function renderImpostorGroupContext(
                 <p>{roomCreationState.message}</p>
               </div>
             ) : null}
-
-            <button
-              className="impostor-action"
-              type="button"
-              disabled={roomJoinState.status === "joining"}
-              onClick={options.onShowJoinRoomForm}
-            >
-              Unirme a una sala
-            </button>
 
             {roomJoinState.status === "form" ||
             roomJoinState.status === "joining" ? (
@@ -475,6 +487,25 @@ export function ImpostorGroupContextShell() {
           : "No pudimos cargar el banco de palabras. Intentá de nuevo.";
 
       setGroupWordsState({ status: "error", message });
+    }
+  }
+
+  async function loadActiveRoom() {
+    setActiveRoomState({ status: "loading" });
+
+    try {
+      const lobby = await getMyActiveRoom(createImpostorRoomsClient());
+
+      setActiveRoomState(
+        lobby ? { status: "success", room: lobby.room } : { status: "absent" },
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "No pudimos confirmar si tenés una sala activa.";
+
+      setActiveRoomState({ status: "error", message });
     }
   }
 
@@ -691,6 +722,10 @@ export function ImpostorGroupContextShell() {
     onRetryGroupWords:
       bootstrapState.status === "recognized"
         ? () => void loadGroupWordsSummary()
+        : undefined,
+    onRetryActiveRoom:
+      bootstrapState.status === "recognized"
+        ? () => void loadActiveRoom()
         : undefined,
     onCreateRoom: () => void handleCreateRoom(),
     onShowJoinRoomForm: () => handleShowJoinRoomForm(),

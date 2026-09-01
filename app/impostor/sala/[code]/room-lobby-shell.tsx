@@ -46,6 +46,7 @@ import {
   type PlatformBootstrapClient,
   type PlatformBootstrapState,
 } from "../../../../lib/supabase/platform-bootstrap";
+import { classifyVoteResults } from "./round-result-presentation";
 
 type RoomLobbyDataState =
   | { status: "idle" }
@@ -989,6 +990,53 @@ export function formatPlayerCount(count: number) {
   return count === 1 ? "1 jugador" : `${count} jugadores`;
 }
 
+function formatPlayerNames(players: Array<{ nickname: string }>) {
+  return players.map((player) => player.nickname).join(", ");
+}
+
+function formatVoteCount(count: number) {
+  return count === 1 ? "1 voto" : `${count} votos`;
+}
+
+function getRoundOutcomeSummary(
+  gameState: MyGameState,
+  roundImpostor?: { playerId: string; nickname: string } | null,
+) {
+  const result = gameState.roundResult;
+  const voteClassification = classifyVoteResults(gameState.voteResults);
+
+  if (!result) {
+    return "La ronda ya fue resuelta, pero no tenemos suficiente detalle de la votación para explicarla con precisión.";
+  }
+
+  if (voteClassification.kind === "insufficient") {
+    return "La ronda ya fue resuelta, pero no tenemos suficiente detalle de la votación para explicarla con precisión.";
+  }
+
+  if (voteClassification.kind === "tie") {
+    return "La votación terminó empatada. El impostor no quedó como único señalado.";
+  }
+
+  const accused = voteClassification.player;
+  const wasImpostor =
+    roundImpostor?.playerId === accused.playerId ||
+    typeof result.impostorGuessCorrect === "boolean";
+
+  if (wasImpostor && result.impostorGuessCorrect === true) {
+    return `El grupo señaló a ${accused.nickname}, que era el impostor, pero adivinó la palabra.`;
+  }
+
+  if (wasImpostor && result.impostorGuessCorrect === false) {
+    return `El grupo señaló a ${accused.nickname}, que era el impostor, y el intento final falló.`;
+  }
+
+  if (result.winner === "impostor") {
+    return `El grupo señaló a ${accused.nickname}. El impostor no fue descubierto.`;
+  }
+
+  return "La ronda ya fue resuelta, pero no tenemos suficiente detalle de la votación para explicarla con precisión.";
+}
+
 export function renderRoomParticipantsList(
   participants: RoomLobby["participants"],
   connectedPlayerIds: Set<string> = new Set(),
@@ -1642,6 +1690,14 @@ export function renderRoomLobbyContent(
     }
 
     if (dataState.status === "tie-discussion") {
+      const voteClassification = classifyVoteResults(
+        dataState.gameState.voteResults,
+      );
+      const tieSummary =
+        voteClassification.kind === "tie"
+          ? `Empataron ${formatPlayerNames(voteClassification.players)} con ${formatVoteCount(voteClassification.voteCount)}. Conversen antes de la segunda votación.`
+          : "Hubo empate. Conversen antes de la segunda votación.";
+
       return (
         <section
           className="impostor-group-card impostor-room-role-reveal"
@@ -1651,7 +1707,7 @@ export function renderRoomLobbyContent(
             Ronda {dataState.gameState.roundNumber}
           </p>
           <h1 id="impostor-room-result-title">Hubo empate</h1>
-          <p>Conversen el empate antes de seguir.</p>
+          <p>{tieSummary}</p>
           {(dataState.gameState.candidates?.length ?? 0) > 0 ? (
             <div className="impostor-group-section">
               <h2>Empatados</h2>
@@ -1686,6 +1742,13 @@ export function renderRoomLobbyContent(
       const canSubmitGuess = dataState.gameState.impostorGuess?.canSubmit === true;
       const currentGuessText = options.impostorGuessText ?? "";
       const isGuessEmpty = currentGuessText.trim().length === 0;
+      const voteClassification = classifyVoteResults(
+        dataState.gameState.voteResults,
+      );
+      const guessSummary =
+        voteClassification.kind === "unique-top"
+          ? `${voteClassification.player.nickname} fue la persona más votada. El impostor tiene una última oportunidad.`
+          : "El impostor tiene una última oportunidad.";
 
       return (
         <section
@@ -1698,7 +1761,7 @@ export function renderRoomLobbyContent(
           <h1 id="impostor-room-guess-title">El impostor fue señalado</h1>
           {canSubmitGuess ? (
             <>
-              <p>Tenés una última oportunidad.</p>
+              <p>{guessSummary}</p>
               <label className="impostor-field">
                 <span>¿Cuál era la palabra?</span>
                 <input
@@ -1751,6 +1814,10 @@ export function renderRoomLobbyContent(
       const winnerLabel =
         result?.winner === "group" ? "Ganó el grupo" : "Ganó el impostor";
       const word = dataState.gameState.privateView.word;
+      const roundSummary = getRoundOutcomeSummary(
+        dataState.gameState,
+        scoreboard?.roundImpostor,
+      );
       const canUseNextRoundAction =
         scoreboard?.canStartNextRound === true && selfParticipant?.isHost === true;
       const canUseEndSessionAction =
@@ -1777,6 +1844,7 @@ export function renderRoomLobbyContent(
             Marcador · Ronda {dataState.gameState.roundNumber}
           </p>
           <h1 id="impostor-room-scoreboard-title">{winnerLabel}</h1>
+          <p>{roundSummary}</p>
           {scoreboard?.roundImpostor ? (
             <p>El impostor era {scoreboard.roundImpostor.nickname}.</p>
           ) : null}
@@ -1786,11 +1854,19 @@ export function renderRoomLobbyContent(
               <p className="impostor-room-secret-word">{word}</p>
             </div>
           ) : null}
+          {result?.impostorGuessText ? (
+            <div className="impostor-group-section">
+              <h2>Intento del impostor</h2>
+              <p>{result.impostorGuessText}</p>
+            </div>
+          ) : null}
           <div
             className="impostor-group-section"
             aria-labelledby="impostor-room-scoreboard-players-title"
           >
-            <h2 id="impostor-room-scoreboard-players-title">Puntaje</h2>
+            <h2 id="impostor-room-scoreboard-players-title">
+              Marcador acumulado de la tanda
+            </h2>
             <ol className="impostor-scoreboard-list">
               {(scoreboard?.players ?? []).map((player) => (
                 <li key={player.playerId}>
@@ -1868,9 +1944,8 @@ export function renderRoomLobbyContent(
       const result = dataState.gameState.roundResult;
       const winnerLabel =
         result?.winner === "group" ? "Ganó el grupo" : "Ganó el impostor";
-      const guessWasSubmitted =
-        typeof result?.impostorGuessCorrect === "boolean";
       const word = dataState.gameState.privateView.word;
+      const roundSummary = getRoundOutcomeSummary(dataState.gameState);
 
       return (
         <section
@@ -1881,15 +1956,7 @@ export function renderRoomLobbyContent(
             Ronda {dataState.gameState.roundNumber}
           </p>
           <h1 id="impostor-room-result-title">{winnerLabel}</h1>
-          {guessWasSubmitted ? (
-            <p>
-              {result?.impostorGuessCorrect
-                ? "El impostor adivinó la palabra."
-                : "El impostor no adivinó la palabra."}
-            </p>
-          ) : (
-            <p>El grupo no señaló al impostor.</p>
-          )}
+          <p>{roundSummary}</p>
           {word ? (
             <div className="impostor-group-section">
               <h2>La palabra era</h2>

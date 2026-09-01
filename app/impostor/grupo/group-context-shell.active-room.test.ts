@@ -26,12 +26,15 @@ const recognizedState: PlatformBootstrapState = {
     }
 };
 
-function renderWithActiveRoomState(activeRoomState: ActiveRoomState) {
+function renderWithActiveRoomState(
+    activeRoomState: ActiveRoomState,
+    onRetryActiveRoom = vi.fn()
+) {
     return renderToStaticMarkup(
         renderImpostorGroupContext(
             recognizedState,
             { status: "success", players: [] },
-            { activeRoomState }
+            { activeRoomState, onRetryActiveRoom }
         )
     );
 }
@@ -62,7 +65,7 @@ describe("active Room awareness", () => {
         expect(markup).not.toContain("Unirme a una sala");
     });
 
-    it("shows the same return CTA for an active playing Room", () => {
+    it("shows a playing-specific return CTA for an active playing Room", () => {
         const markup = renderWithActiveRoomState({
             status: "success",
             room: {
@@ -72,14 +75,14 @@ describe("active Room awareness", () => {
             }
         });
 
-        expect(markup).toContain("Sala activa");
-        expect(markup).toContain("Volver a la sala");
+        expect(markup).toContain("Partida en curso");
+        expect(markup).toContain("Volver a la partida");
         expect(markup).toContain("href=\"/impostor/sala/PLAY1234\"");
         expect(markup).not.toContain("Crear sala");
         expect(markup).not.toContain("Unirme a una sala");
     });
 
-    it("keeps Group usable when active Room lookup fails", () => {
+    it("blocks create and join actions when active Room lookup fails", () => {
         const markup = renderWithActiveRoomState({
             status: "error",
             message: "No pudimos recuperar tu sala activa. Intentá de nuevo."
@@ -87,10 +90,12 @@ describe("active Room awareness", () => {
 
         expect(markup).toContain("Familia");
         expect(markup).toContain("Integrantes");
-        expect(markup).toContain("No pudimos recuperar tu sala activa");
-        expect(markup).toContain("Crear sala");
-        expect(markup).toContain("Unirme a una sala");
+        expect(markup).toContain("No pudimos comprobar si tenés una sala activa.");
+        expect(markup).toContain("Reintentar");
+        expect(markup).not.toContain("Crear sala");
+        expect(markup).not.toContain("Unirme a una sala");
         expect(markup).not.toContain("Volver a la sala");
+        expect(markup).not.toContain("Volver a la partida");
     });
 
     it("does not flash create or join actions while checking the active Room", () => {

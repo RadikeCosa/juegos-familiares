@@ -40,11 +40,15 @@ function renderWithJoinState(roomJoinState: RoomJoinState) {
 }
 
 describe("Unirme a una sala action", () => {
-    it("shows the entry point next to Crear sala", () => {
+    it("shows Unirme as the primary entry point next to secondary Crear sala", () => {
         const markup = renderWithJoinState({ status: "idle" });
 
         expect(markup).toContain("Crear sala");
         expect(markup).toContain("Unirme a una sala");
+        expect(markup).toContain(
+            "class=\"impostor-action impostor-action--primary\" type=\"button\">Unirme a una sala"
+        );
+        expect(markup).toContain("class=\"impostor-action\" type=\"button\">Crear sala");
     });
 
     it("reveals a room code form once the entry point is used", () => {

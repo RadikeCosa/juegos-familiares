@@ -21,26 +21,46 @@ vi.mock("../../lib/supabase/browser-client", () => ({
 
 type InspectableProps = {
   children?: ReactNode;
+  href?: string;
 };
 
-function inspect(node: ReactNode): string {
+function inspect(node: ReactNode): { text: string; hrefs: string[] } {
   if (node === null || node === undefined || typeof node === "boolean") {
-    return "";
+    return { text: "", hrefs: [] };
   }
 
   if (typeof node === "string" || typeof node === "number") {
-    return String(node);
+    return { text: String(node), hrefs: [] };
   }
 
   if (Array.isArray(node)) {
-    return node.map(inspect).join("");
+    return node.reduce(
+      (result, child) => {
+        const inspectedChild = inspect(child);
+
+        return {
+          text: result.text + inspectedChild.text,
+          hrefs: [...result.hrefs, ...inspectedChild.hrefs]
+        };
+      },
+      { text: "", hrefs: [] }
+    );
   }
 
   if (isValidElement<InspectableProps>(node)) {
-    return inspect(node.props.children);
+    const inspectedChildren = inspect(node.props.children);
+    const hrefs =
+      typeof node.props.href === "string"
+        ? [node.props.href, ...inspectedChildren.hrefs]
+        : inspectedChildren.hrefs;
+
+    return {
+      text: inspectedChildren.text,
+      hrefs
+    };
   }
 
-  return "";
+  return { text: "", hrefs: [] };
 }
 
 describe("renderImpostorPlatformContext", () => {
@@ -49,7 +69,7 @@ describe("renderImpostorPlatformContext", () => {
       renderImpostorPlatformContext({
         status: "loading"
       })
-    );
+    ).text;
 
     expect(text).toContain("Comprobando tu grupo");
     expect(text).not.toContain("Crear grupo");
@@ -68,7 +88,7 @@ describe("renderImpostorPlatformContext", () => {
     expect(text).not.toContain("Crear grupo");
   });
 
-  it("shows the recognized Player and Group with a clear group link", () => {
+  it("shows the recognized Player and Group while checking the active Room", () => {
     const state: PlatformBootstrapState = {
       status: "recognized",
       player: {
@@ -85,16 +105,196 @@ describe("renderImpostorPlatformContext", () => {
       }
     };
 
-    const text = renderToStaticMarkup(renderImpostorPlatformContext(state));
+    const text = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, { roomState: { status: "loading" } })
+    );
 
     expect(text).toContain("Hola, Ramiro");
     expect(text).toContain("Tu grupo");
     expect(text).toContain("Familia");
-    expect(text).toContain("Ver grupo");
-    expect(text).toContain("Compartir invitación");
+    expect(text).toContain("Comprobando sala activa");
+    expect(text).not.toContain("Ir al juego del grupo");
+    expect(text).not.toContain("Compartir invitación");
     expect(text).not.toContain("Crear sala");
     expect(text).not.toContain("Agregar palabra");
     expect(text).not.toContain("Invitar personas");
+  });
+
+  it("shows a direct group-flow CTA when no active Room exists", () => {
+    const state: PlatformBootstrapState = {
+      status: "recognized",
+      player: {
+        id: "player-1",
+        groupId: "group-1",
+        nickname: "Ramiro",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      },
+      group: {
+        id: "group-1",
+        name: "Familia",
+        adminPlayerId: "player-1",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      }
+    };
+
+    const markup = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, { roomState: { status: "absent" } })
+    );
+
+    expect(markup).toContain("Tu grupo ya está listo para jugar.");
+    expect(markup).toContain("Ir al juego del grupo");
+    expect(markup).toContain("Compartir invitación");
+    expect(markup).toContain("href=\"/impostor/grupo\"");
+    expect(markup).not.toContain("Crear sala");
+  });
+
+  it("shows active lobby and playing Room CTAs with neutral group navigation", () => {
+    const state: PlatformBootstrapState = {
+      status: "recognized",
+      player: {
+        id: "player-2",
+        groupId: "group-1",
+        nickname: "Pedro",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      },
+      group: {
+        id: "group-1",
+        name: "Familia",
+        adminPlayerId: "player-1",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      }
+    };
+
+    const lobby = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, {
+        roomState: {
+          status: "success",
+          room: { id: "room-1", code: "AB7KQ2M4", status: "lobby" }
+        }
+      })
+    );
+    const playing = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, {
+        roomState: {
+          status: "success",
+          room: { id: "room-1", code: "PLAY1234", status: "playing" }
+        }
+      })
+    );
+
+    expect(lobby).toContain("Sala activa");
+    expect(lobby).toContain("Volver a la sala");
+    expect(lobby).toContain("Ver grupo");
+    expect(lobby).toContain("href=\"/impostor/sala/AB7KQ2M4\"");
+    expect(lobby).toContain("href=\"/impostor/grupo\"");
+    expect(playing).toContain("Partida en curso");
+    expect(playing).toContain("Volver a la partida");
+    expect(playing).toContain("href=\"/impostor/sala/PLAY1234\"");
+  });
+
+  it("does not show invitation sharing to an admin while a Room is active", () => {
+    const state: PlatformBootstrapState = {
+      status: "recognized",
+      player: {
+        id: "player-1",
+        groupId: "group-1",
+        nickname: "Ramiro",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      },
+      group: {
+        id: "group-1",
+        name: "Familia",
+        adminPlayerId: "player-1",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      }
+    };
+
+    const lobby = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, {
+        roomState: {
+          status: "success",
+          room: { id: "room-1", code: "AB7KQ2M4", status: "lobby" }
+        }
+      })
+    );
+    const playing = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, {
+        roomState: {
+          status: "success",
+          room: { id: "room-1", code: "PLAY1234", status: "playing" }
+        }
+      })
+    );
+
+    expect(lobby).toContain("Volver a la sala");
+    expect(lobby).not.toContain("Compartir invitación");
+    expect(playing).toContain("Volver a la partida");
+    expect(playing).not.toContain("Compartir invitación");
+  });
+
+  it("shows retry and a neutral group CTA when active Room lookup fails", () => {
+    const state: PlatformBootstrapState = {
+      status: "recognized",
+      player: {
+        id: "player-2",
+        groupId: "group-1",
+        nickname: "Pedro",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      },
+      group: {
+        id: "group-1",
+        name: "Familia",
+        adminPlayerId: "player-1",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      }
+    };
+
+    const markup = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, {
+        roomState: {
+          status: "error",
+          message: "No pudimos comprobar si tenés una sala activa."
+        },
+        onRetryActiveRoom: vi.fn()
+      })
+    );
+
+    expect(markup).toContain("No pudimos comprobar si tenés una sala activa.");
+    expect(markup).toContain("Reintentar");
+    expect(markup).toContain("Ver grupo");
+    expect(markup).not.toContain("Ir al juego del grupo");
+    expect(markup).toContain("href=\"/impostor/grupo\"");
+  });
+
+  it("does not show invitation sharing to an admin when active Room lookup fails", () => {
+    const state: PlatformBootstrapState = {
+      status: "recognized",
+      player: {
+        id: "player-1",
+        groupId: "group-1",
+        nickname: "Ramiro",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      },
+      group: {
+        id: "group-1",
+        name: "Familia",
+        adminPlayerId: "player-1",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      }
+    };
+
+    const markup = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, {
+        roomState: {
+          status: "error",
+          message: "No pudimos comprobar si tenés una sala activa."
+        },
+        onRetryActiveRoom: vi.fn()
+      })
+    );
+
+    expect(markup).toContain("Reintentar");
+    expect(markup).not.toContain("Compartir invitación");
   });
 
   it("does not duplicate the invitation CTA for a non-admin Player", () => {
@@ -114,12 +314,14 @@ describe("renderImpostorPlatformContext", () => {
       }
     };
 
-    const text = renderToStaticMarkup(renderImpostorPlatformContext(state));
+    const text = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, { roomState: { status: "absent" } })
+    );
 
     expect(text).toContain("Hola, Pedro");
     expect(text).toContain("Tu grupo");
     expect(text).toContain("Familia");
-    expect(text).toContain("Ver grupo");
+    expect(text).toContain("Ir al juego del grupo");
     expect(text).not.toContain("Invitá a los demás");
     expect(text).not.toContain("Invitar personas");
     expect(text).not.toContain("Compartir invitación");
@@ -130,7 +332,7 @@ describe("renderImpostorPlatformContext", () => {
       renderImpostorPlatformContext({
         status: "connection-error"
       })
-    );
+    ).text;
 
     expect(text).toContain("No pudimos comprobar tu grupo ahora");
     expect(text).toContain("Revisá tu conexión");

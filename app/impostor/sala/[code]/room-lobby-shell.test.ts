@@ -25,6 +25,7 @@ import {
     shareRoom,
     toGameplayDataState
 } from "./room-lobby-shell";
+import { classifyVoteResults } from "./round-result-presentation";
 
 vi.mock("../../../../lib/supabase/browser-client", () => ({
     createBrowserSupabaseClient: vi.fn()
@@ -255,10 +256,44 @@ const nonHostScoreboardGameState: MyGameState = {
 
 const roundResultWithGuessGameState: MyGameState = {
     ...roundResultGameState,
+    voteResults: [{ playerId: "player-2", nickname: "Pedro", voteCount: 3 }],
     roundResult: {
         winner: "group",
         impostorGuessText: "Mesa",
         impostorGuessCorrect: false
+    }
+};
+
+const scoreboardWithCorrectGuessGameState: MyGameState = {
+    ...scoreboardGameState,
+    voteResults: [{ playerId: "player-2", nickname: "Pedro", voteCount: 3 }],
+    roundResult: {
+        winner: "impostor",
+        impostorGuessText: "Casa",
+        impostorGuessCorrect: true
+    }
+};
+
+const scoreboardWithResolutiveTieGameState: MyGameState = {
+    ...scoreboardGameState,
+    voteResults: [
+        { playerId: "player-2", nickname: "Pedro", voteCount: 2 },
+        { playerId: "player-3", nickname: "Ana", voteCount: 2 }
+    ],
+    roundResult: {
+        winner: "impostor",
+        impostorGuessText: null,
+        impostorGuessCorrect: null
+    }
+};
+
+const scoreboardWithInsufficientVotesGameState: MyGameState = {
+    ...scoreboardGameState,
+    voteResults: [],
+    roundResult: {
+        winner: "impostor",
+        impostorGuessText: null,
+        impostorGuessCorrect: null
     }
 };
 
@@ -338,6 +373,67 @@ describe("formatPlayerCount", () => {
     it("uses plural otherwise", () => {
         expect(formatPlayerCount(0)).toBe("0 jugadores");
         expect(formatPlayerCount(3)).toBe("3 jugadores");
+    });
+});
+
+describe("classifyVoteResults", () => {
+    it("treats empty results as insufficient information", () => {
+        expect(classifyVoteResults(null)).toEqual({ kind: "insufficient" });
+        expect(classifyVoteResults([])).toEqual({ kind: "insufficient" });
+    });
+
+    it("detects a unique top vote result", () => {
+        expect(
+            classifyVoteResults([
+                { playerId: "player-2", nickname: "Pedro", voteCount: 3 },
+                { playerId: "player-3", nickname: "Ana", voteCount: 1 }
+            ])
+        ).toEqual({
+            kind: "unique-top",
+            player: { playerId: "player-2", nickname: "Pedro", voteCount: 3 }
+        });
+    });
+
+    it("detects a tie only among the maximum vote count", () => {
+        expect(
+            classifyVoteResults([
+                { playerId: "player-2", nickname: "Pedro", voteCount: 3 },
+                { playerId: "player-3", nickname: "Ana", voteCount: 3 },
+                { playerId: "player-1", nickname: "Ramiro", voteCount: 1 }
+            ])
+        ).toEqual({
+            kind: "tie",
+            players: [
+                { playerId: "player-2", nickname: "Pedro", voteCount: 3 },
+                { playerId: "player-3", nickname: "Ana", voteCount: 3 }
+            ],
+            voteCount: 3
+        });
+    });
+
+    it("does not depend on incoming sort order", () => {
+        expect(
+            classifyVoteResults([
+                { playerId: "player-3", nickname: "Ana", voteCount: 1 },
+                { playerId: "player-2", nickname: "Pedro", voteCount: 2 }
+            ])
+        ).toEqual({
+            kind: "unique-top",
+            player: { playerId: "player-2", nickname: "Pedro", voteCount: 2 }
+        });
+    });
+
+    it("rejects invalid vote rows instead of inferring a result", () => {
+        expect(
+            classifyVoteResults([
+                { playerId: "player-2", nickname: "Pedro", voteCount: 0 }
+            ])
+        ).toEqual({ kind: "insufficient" });
+        expect(
+            classifyVoteResults([
+                { playerId: "", nickname: "Pedro", voteCount: 1 }
+            ])
+        ).toEqual({ kind: "insufficient" });
     });
 });
 
@@ -1755,6 +1851,9 @@ describe("renderRoomLobbyContent", () => {
         );
 
         expect(markup).toContain("Hubo empate");
+        expect(markup).toContain(
+            "Empataron Pedro, Ana con 2 votos. Conversen antes de la segunda votación."
+        );
         expect(markup).toContain("Empatados");
         expect(markup).toContain("Pedro");
         expect(markup).toContain("2 votos");
@@ -1823,7 +1922,9 @@ describe("renderRoomLobbyContent", () => {
         );
 
         expect(markup).toContain("El impostor fue señalado");
-        expect(markup).toContain("Tenés una última oportunidad.");
+        expect(markup).toContain(
+            "Pedro fue la persona más votada. El impostor tiene una última oportunidad."
+        );
         expect(markup).toContain("¿Cuál era la palabra?");
         expect(markup).toContain("Enviar intento");
         expect(markup).toContain("disabled=\"\"");
@@ -1863,10 +1964,10 @@ describe("renderRoomLobbyContent", () => {
         );
 
         expect(markup).toContain("Ganó el impostor");
-        expect(markup).toContain("El grupo no señaló al impostor.");
+        expect(markup).toContain("El grupo señaló a Ana. El impostor no fue descubierto.");
         expect(markup).toContain("La palabra era");
         expect(markup).toContain("Casa");
-        expect(markup).not.toMatch(/Nueva ronda|Puntaje|score/i);
+        expect(markup).not.toMatch(/Nueva ronda|Marcador acumulado|score/i);
     });
 
     it("renders round result with guess outcome", () => {
@@ -1883,11 +1984,13 @@ describe("renderRoomLobbyContent", () => {
         );
 
         expect(markup).toContain("Ganó el grupo");
-        expect(markup).toContain("El impostor no adivinó la palabra.");
+        expect(markup).toContain(
+            "El grupo señaló a Pedro, que era el impostor, y el intento final falló."
+        );
         expect(markup).toContain("Intento del impostor");
         expect(markup).toContain("Mesa");
         expect(markup).toContain("Casa");
-        expect(markup).not.toMatch(/Nueva ronda|Puntaje|score|normalized/i);
+        expect(markup).not.toMatch(/Nueva ronda|Marcador acumulado|score|normalized/i);
     });
 
     it("renders scoreboard with accumulated scores and host next-round action", () => {
@@ -1905,10 +2008,11 @@ describe("renderRoomLobbyContent", () => {
 
         expect(markup).toContain("Marcador");
         expect(markup).toContain("Ganó el impostor");
+        expect(markup).toContain("El grupo señaló a Ana. El impostor no fue descubierto.");
         expect(markup).toContain("El impostor era Pedro.");
         expect(markup).toContain("La palabra era");
         expect(markup).toContain("Casa");
-        expect(markup).toContain("Puntaje");
+        expect(markup).toContain("Marcador acumulado de la tanda");
         expect(markup).toContain("Pedro");
         expect(markup).toContain("4 puntos");
         expect(markup).toContain("Ramiro");
@@ -1931,10 +2035,69 @@ describe("renderRoomLobbyContent", () => {
             )
         );
 
-        expect(markup).toContain("Puntaje");
+        expect(markup).toContain("Marcador acumulado de la tanda");
         expect(markup).toContain("Esperando a que el host continúe...");
         expect(markup).not.toContain("Nueva ronda");
         expect(markup).not.toContain("Terminar tanda");
+    });
+
+    it("renders scoreboard when the impostor was accused but guessed correctly", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "scoreboard",
+                    lobby: playingHostLobby,
+                    gameState: scoreboardWithCorrectGuessGameState
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Ganó el impostor");
+        expect(markup).toContain(
+            "El grupo señaló a Pedro, que era el impostor, pero adivinó la palabra."
+        );
+        expect(markup).toContain("Intento del impostor");
+        expect(markup).toContain("Casa");
+    });
+
+    it("renders scoreboard with a resolutive tie summary", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "scoreboard",
+                    lobby: playingHostLobby,
+                    gameState: scoreboardWithResolutiveTieGameState
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Ganó el impostor");
+        expect(markup).toContain(
+            "La votación terminó empatada. El impostor no quedó como único señalado."
+        );
+    });
+
+    it("renders conservative scoreboard copy when vote details are insufficient", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "scoreboard",
+                    lobby: playingHostLobby,
+                    gameState: scoreboardWithInsufficientVotesGameState
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Ganó el impostor");
+        expect(markup).toContain(
+            "La ronda ya fue resuelta, pero no tenemos suficiente detalle de la votación para explicarla con precisión."
+        );
     });
 
     it("shows a manageable no-word block for the host without creating a round", () => {
@@ -2026,7 +2189,7 @@ describe("renderRoomLobbyContent", () => {
         );
 
         expect(markup).toContain("No pudimos terminar la tanda. Intentá de nuevo.");
-        expect(markup).toContain("Puntaje");
+        expect(markup).toContain("Marcador acumulado de la tanda");
         expect(markup).toContain("Terminar tanda");
     });
 

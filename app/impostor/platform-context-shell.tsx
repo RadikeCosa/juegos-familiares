@@ -2,6 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import {
+  useActiveRoomContext,
+  type ActiveRoomContextState,
+} from "./use-active-room-context";
 import { createBrowserSupabaseClient } from "../../lib/supabase/browser-client";
 import {
   bootstrapPlatformContext,
@@ -30,8 +34,13 @@ export function isShareCancellation(error: unknown) {
 
 function ImpostorRecognizedContext({
   group,
-  player
-}: RecognizedPlatformContext) {
+  player,
+  roomState,
+  onRetryActiveRoom,
+}: RecognizedPlatformContext & {
+  roomState: ActiveRoomContextState;
+  onRetryActiveRoom?: () => void;
+}) {
   const isAdmin = group.adminPlayerId === player.id;
   const [shareState, setShareState] = useState<ShareGroupInvitationState>({
     status: "idle"
@@ -83,16 +92,60 @@ function ImpostorRecognizedContext({
         <p>Tu grupo</p>
         <strong>{group.name}</strong>
       </div>
-      <p className="impostor-platform-context__meta">
-        Tu grupo ya está listo para seguir con Impostor.
-      </p>
-      <Link
-        className="impostor-action impostor-action--primary"
-        href="/impostor/grupo"
-      >
-        Ver grupo
-      </Link>
-      {isAdmin ? (
+      {roomState.status === "loading" || roomState.status === "idle" ? (
+        <p aria-live="polite">Comprobando sala activa...</p>
+      ) : null}
+      {roomState.status === "absent" ? (
+        <>
+          <p className="impostor-platform-context__meta">
+            Tu grupo ya está listo para jugar.
+          </p>
+          <Link
+            className="impostor-action impostor-action--primary"
+            href="/impostor/grupo"
+          >
+            Ir al juego del grupo
+          </Link>
+        </>
+      ) : null}
+      {roomState.status === "success" ? (
+        <>
+          <p className="impostor-platform-context__meta">
+            {roomState.room.status === "playing"
+              ? "Partida en curso"
+              : "Sala activa"}
+          </p>
+          <Link
+            className="impostor-action impostor-action--primary"
+            href={`/impostor/sala/${encodeURIComponent(roomState.room.code)}`}
+          >
+            {roomState.room.status === "playing"
+              ? "Volver a la partida"
+              : "Volver a la sala"}
+          </Link>
+          <Link className="impostor-action" href="/impostor/grupo">
+            Ver grupo
+          </Link>
+        </>
+      ) : null}
+      {roomState.status === "error" ? (
+        <>
+          <p>No pudimos comprobar si tenés una sala activa.</p>
+          {onRetryActiveRoom ? (
+            <button
+              className="impostor-action impostor-action--primary"
+              type="button"
+              onClick={onRetryActiveRoom}
+            >
+              Reintentar
+            </button>
+          ) : null}
+          <Link className="impostor-action" href="/impostor/grupo">
+            Ver grupo
+          </Link>
+        </>
+      ) : null}
+      {isAdmin && roomState.status === "absent" ? (
         <button
           className="impostor-action"
           type="button"
@@ -123,6 +176,8 @@ export function renderImpostorPlatformContext(
   options: {
     onRecognizedContext?: (context: RecognizedPlatformContext) => void;
     onRetry?: () => void;
+    roomState?: ActiveRoomContextState;
+    onRetryActiveRoom?: () => void;
   } = {}
 ) {
   if (state.status === "loading") {
@@ -134,7 +189,14 @@ export function renderImpostorPlatformContext(
   }
 
   if (state.status === "recognized") {
-    return <ImpostorRecognizedContext group={state.group} player={state.player} />;
+    return (
+      <ImpostorRecognizedContext
+        group={state.group}
+        player={state.player}
+        roomState={options.roomState ?? { status: "idle" }}
+        onRetryActiveRoom={options.onRetryActiveRoom}
+      />
+    );
   }
 
   if (state.status === "inconsistent") {
@@ -175,6 +237,7 @@ export function ImpostorPlatformContextShell() {
   const [state, setState] = useState<PlatformBootstrapState>({
     status: "loading"
   });
+  const { roomState, retry: retryActiveRoom } = useActiveRoomContext(state);
 
   async function runBootstrap(showLoading: boolean) {
     if (showLoading) {
@@ -207,6 +270,8 @@ export function ImpostorPlatformContextShell() {
 
   return renderImpostorPlatformContext(state, {
     onRecognizedContext: handleRecognizedContext,
-    onRetry: () => void runBootstrap(true)
+    onRetry: () => void runBootstrap(true),
+    roomState,
+    onRetryActiveRoom: retryActiveRoom
   });
 }

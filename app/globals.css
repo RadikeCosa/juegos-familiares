@@ -195,9 +195,17 @@ body {
   border-radius: var(--radius-md);
   color: var(--foreground);
   padding: 0 var(--space-6);
+  font: inherit;
   font-weight: 600;
   line-height: 1;
   text-decoration: none;
+  cursor: pointer;
+}
+
+.home-secondary-cta--primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 
 .home-secondary-cta:hover {
@@ -205,8 +213,20 @@ body {
   color: var(--primary);
 }
 
+.home-secondary-cta--primary:hover {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--primary-foreground);
+}
+
 .home-secondary-cta:active {
   transform: translateY(1px);
+}
+
+.home-context-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .game-entry {
@@ -555,7 +575,7 @@ body {
 
 .pwa-update-notice__action {
   justify-self: start;
-  min-height: 2.25rem;
+  min-height: 2.75rem;
   padding: 0.45rem 0.75rem;
   border: 0;
   border-radius: 0.45rem;

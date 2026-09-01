@@ -6,6 +6,7 @@ const registrationSource = readFileSync(
   join(process.cwd(), "app/service-worker-registration.tsx"),
   "utf8",
 );
+const cssSource = readFileSync(join(process.cwd(), "app/globals.css"), "utf8");
 
 describe("service worker registration contract", () => {
   it("registers the static-safe service worker only as a production enhancement", () => {
@@ -39,5 +40,14 @@ describe("service worker registration contract", () => {
     expect(registrationSource.indexOf("window.location.reload()")).toBeGreaterThan(
       applyUpdateStart,
     );
+  });
+
+  it("keeps the manual update action at a comfortable touch target", () => {
+    const actionRule = cssSource.slice(
+      cssSource.indexOf(".pwa-update-notice__action"),
+      cssSource.indexOf(".pwa-update-notice__action:hover"),
+    );
+
+    expect(actionRule).toContain("min-height: 2.75rem");
   });
 });

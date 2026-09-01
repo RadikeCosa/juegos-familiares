@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 import { PlatformHomeContextShell } from "./platform-home-context-shell";
 
 export default function Home() {
@@ -44,9 +43,6 @@ export default function Home() {
             <p>
               Encontrá al impostor sin revelar demasiado.
             </p>
-            <Link className="game-entry__cta" href="/impostor">
-              Jugar
-            </Link>
           </div>
         </section>
       </div>

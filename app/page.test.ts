@@ -60,6 +60,10 @@ function inspect(node: ReactNode): { text: string; hrefs: string[] } {
   return { text: "", hrefs: [] };
 }
 
+function countMatches(text: string, pattern: string) {
+  return text.split(pattern).length - 1;
+}
+
 describe("Home", () => {
   it("presents Juegos Familiares with the available Impostor entry point", () => {
     const page = inspect(Home());
@@ -67,8 +71,10 @@ describe("Home", () => {
     expect(page.text).toContain("Juegos Familiares");
     expect(page.text).toContain("Juegos");
     expect(page.text).toContain("Impostor");
-    expect(page.text).toContain("Jugar");
-    expect(page.hrefs).toContain("/impostor");
+    expect(page.text).toContain("Encontrá al impostor sin revelar demasiado");
+    expect(countMatches(page.text, "Impostor")).toBe(1);
+    expect(countMatches(page.text, "Encontrá al impostor sin revelar demasiado")).toBe(1);
+    expect(page.text).not.toContain("Jugar");
   });
 
   it("does not create AuthIdentity when / renders", () => {
@@ -80,7 +86,7 @@ describe("Home", () => {
 });
 
 describe("renderPlatformHomeContext", () => {
-  it("shows the recognized Player and Group with navigation to the current group route", () => {
+  it("shows the recognized Player and Group while checking the active Room", () => {
     const state: PlatformBootstrapState = {
       status: "recognized",
       player: {
@@ -97,12 +103,108 @@ describe("renderPlatformHomeContext", () => {
       }
     };
 
-    const page = inspect(renderPlatformHomeContext(state));
+    const page = inspect(renderPlatformHomeContext(state, { status: "loading" }));
 
     expect(page.text).toContain("Hola, Ramiro");
     expect(page.text).toContain("Tu grupo");
     expect(page.text).toContain("Familia");
-    expect(page.text).toContain("Ver grupo");
+    expect(page.text).toContain("Comprobando sala activa");
+    expect(page.text).not.toContain("Ir al juego del grupo");
+    expect(page.text).not.toContain("Volver a la sala");
+    expect(page.text).not.toContain("Volver a la partida");
+  });
+
+  it("uses a single contextual Impostor CTA when no active Room exists", () => {
+    const state: PlatformBootstrapState = {
+      status: "recognized",
+      player: {
+        id: "player-1",
+        groupId: "group-1",
+        nickname: "Ramiro",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      },
+      group: {
+        id: "group-1",
+        name: "Familia",
+        adminPlayerId: "player-1",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      }
+    };
+
+    const page = inspect(renderPlatformHomeContext(state, { status: "absent" }));
+
+    expect(page.text).toContain("Tu grupo ya está listo para jugar.");
+    expect(page.text).toContain("Ir al juego del grupo");
+    expect(page.hrefs).toEqual(["/impostor/grupo"]);
+  });
+
+  it("links directly to active lobby and playing Rooms", () => {
+    const state: PlatformBootstrapState = {
+      status: "recognized",
+      player: {
+        id: "player-1",
+        groupId: "group-1",
+        nickname: "Ramiro",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      },
+      group: {
+        id: "group-1",
+        name: "Familia",
+        adminPlayerId: "player-1",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      }
+    };
+
+    const lobby = inspect(
+      renderPlatformHomeContext(state, {
+        status: "success",
+        room: { id: "room-1", code: "AB7KQ2M4", status: "lobby" }
+      })
+    );
+    const playing = inspect(
+      renderPlatformHomeContext(state, {
+        status: "success",
+        room: { id: "room-1", code: "PLAY1234", status: "playing" }
+      })
+    );
+
+    expect(lobby.text).toContain("Sala activa");
+    expect(lobby.text).toContain("Volver a la sala");
+    expect(lobby.hrefs).toContain("/impostor/sala/AB7KQ2M4");
+    expect(playing.text).toContain("Partida en curso");
+    expect(playing.text).toContain("Volver a la partida");
+    expect(playing.hrefs).toContain("/impostor/sala/PLAY1234");
+  });
+
+  it("shows retry and neutral navigation when active Room lookup fails", () => {
+    const state: PlatformBootstrapState = {
+      status: "recognized",
+      player: {
+        id: "player-1",
+        groupId: "group-1",
+        nickname: "Ramiro",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      },
+      group: {
+        id: "group-1",
+        name: "Familia",
+        adminPlayerId: "player-1",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      }
+    };
+
+    const page = inspect(
+      renderPlatformHomeContext(
+        state,
+        { status: "error", message: "No pudimos comprobar si tenés una sala activa." },
+        { onRetryActiveRoom: vi.fn() }
+      )
+    );
+
+    expect(page.text).toContain("No pudimos comprobar si tenés una sala activa.");
+    expect(page.text).toContain("Reintentar");
+    expect(page.text).toContain("Ir al grupo");
+    expect(page.text).not.toContain("Ir al juego del grupo");
     expect(page.hrefs).toContain("/impostor/grupo");
   });
 
@@ -117,25 +219,43 @@ describe("renderPlatformHomeContext", () => {
   });
 
   it("keeps unrecognized users on a lightweight home without onboarding", () => {
-    expect(
+    const page = inspect(
       renderPlatformHomeContext({ status: "unrecognized", reason: "no-auth" })
-    ).toBeNull();
+    );
+
+    expect(page.text).toContain(
+      "Entrá a Impostor para unirte a tu grupo o seguir jugando."
+    );
+    expect(page.text).toContain("Jugar");
+    expect(page.text).not.toContain("Encontrá al impostor sin revelar demasiado.");
+    expect(page.hrefs).toContain("/impostor");
   });
 
-  it("handles inconsistent and connection-error states without exposing a group", () => {
-    const inconsistentText = inspect(
+  it("links inconsistent and connection-error states to the neutral Impostor entry", () => {
+    const inconsistent = inspect(
       renderPlatformHomeContext({
         status: "inconsistent",
         reason: "player-without-group"
       })
-    ).text;
-    const connectionErrorText = inspect(
+    );
+    const connectionError = inspect(
       renderPlatformHomeContext({ status: "connection-error" })
-    ).text;
+    );
 
-    expect(inconsistentText).toContain("No pudimos recuperar correctamente");
-    expect(connectionErrorText).toContain("No pudimos comprobar tu grupo ahora");
-    expect(inconsistentText).not.toContain("Ver grupo");
-    expect(connectionErrorText).not.toContain("Ver grupo");
+    expect(inconsistent.text).toContain("No pudimos recuperar correctamente");
+    expect(inconsistent.text).toContain(
+      "Podés entrar a Impostor para revisar tu contexto."
+    );
+    expect(inconsistent.text).toContain("Ir a Impostor");
+    expect(inconsistent.text).not.toContain("Ver grupo");
+    expect(inconsistent.hrefs).toContain("/impostor");
+
+    expect(connectionError.text).toContain("No pudimos comprobar tu grupo ahora");
+    expect(connectionError.text).toContain(
+      "Podés entrar a Impostor y volver a intentar desde ahí."
+    );
+    expect(connectionError.text).toContain("Ir a Impostor");
+    expect(connectionError.text).not.toContain("Ver grupo");
+    expect(connectionError.hrefs).toContain("/impostor");
   });
 });

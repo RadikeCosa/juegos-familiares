@@ -40,11 +40,13 @@ function renderWithRoomState(roomCreationState: RoomCreationState, onCreateRoom 
 }
 
 describe("Jugar section", () => {
-    it("shows a Crear sala action for any recognized Player, not only the admin", () => {
+    it("keeps Crear sala available as the secondary action for any recognized Player", () => {
         const markup = renderWithRoomState({ status: "idle" });
 
         expect(markup).toContain("Jugar");
         expect(markup).toContain("Crear sala");
+        expect(markup).toContain("Unirme a una sala");
+        expect(markup).toContain("class=\"impostor-action\" type=\"button\">Crear sala");
         expect(markup).not.toContain("disabled");
     });
 
