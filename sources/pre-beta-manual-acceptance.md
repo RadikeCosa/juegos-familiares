@@ -249,7 +249,7 @@ Ese comando no inicia Supabase local y no resetea la DB automaticamente.
 
 ## Precondiciones del preflight
 
-Antes de ejecutar `npm run test:pre-playtest` en una fase futura:
+Antes de cada ejecucion de `npm run test:pre-playtest`:
 
 * instalar dependencias si corresponde;
 * iniciar Supabase local con `npm run supabase:start`;
@@ -263,6 +263,20 @@ Antes de ejecutar `npm run test:pre-playtest` en una fase futura:
 * `npm run test:pre-playtest` termina en PASS.
 * Si falla, no iniciar aceptacion manual general hasta clasificar la causa.
 * Si no se ejecuta por decision de alcance, registrar `NOT RUN` con motivo.
+
+## Ejecucion P0 inicial
+
+El 2026-09-02 se ejecuto el preflight completo sobre el codigo de producto de
+`973dc0d` y el contrato de tests corregido en `53e9799`, con Supabase local
+iniciado y reseteado de forma controlada.
+
+Resultado: `PASS` con codigo de salida `0` para unit tests, lint, build,
+validadores DB y smokes Realtime. Las fallas previas quedaron clasificadas como
+aserciones historicas de tests contradichas por migraciones posteriores; no se
+detectaron fallas de producto, seguridad o privacidad en esta ejecucion.
+
+Este `PASS` habilita continuar con la aceptacion manual, pero no reemplaza ni
+aprueba los escenarios S1-S8, N1, C1-C10, R1-R4 o U1.
 
 ---
 
@@ -358,7 +372,7 @@ repetir o detener.
 
 | ID | Escenario | Tipo | Actores | Dispositivos | Evidencia minima |
 | --- | --- | --- | --- | --- | --- |
-| P0 | Preflight tecnico automatizado | Preflight | responsable tecnico | local | comando previsto, entorno, resultado |
+| P0 | Preflight tecnico automatizado | Preflight | responsable tecnico | local | comando ejecutado, commit, entorno, resultado |
 | S1 | Navegador movil sin instalacion | Smoke tecnico | A/B | Android o iOS browser | pantalla inicial, URL, modo browser |
 | S2 | Android Chrome installed PWA | Smoke tecnico | A/B | Android Chrome | instalacion, apertura, navegacion basica |
 | S3 | iOS Safari Add to Home Screen | Smoke tecnico | A/B | iOS Safari | A2HS, apertura, navegacion basica |
