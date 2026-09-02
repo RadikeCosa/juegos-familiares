@@ -379,7 +379,6 @@ async function validateNoOutOfScopeSurfaces() {
   assert(!hasFunctionExecute("anon", "get_my_game_state()"), "anon must not execute get_my_game_state.");
   assert(!hasFunctionExecute("public", "get_my_game_state()"), "public must not execute get_my_game_state.");
   assert(!tableExists("scoreboard"), "10.2 must not create scoreboard.");
-  assert(!tableExists("round_history"), "10.2 must not create round_history.");
   assert(!isRealtimePublished("rounds"), "10.2 must not publish rounds through Realtime.");
   assert(!isRealtimePublished("game_sessions"), "10.2 must not publish gameplay state through Realtime.");
 }

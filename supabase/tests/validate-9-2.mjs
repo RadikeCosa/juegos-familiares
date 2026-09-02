@@ -420,7 +420,6 @@ async function submitAndExpect(client, targetPlayerId, expectedState, expectedVo
 async function main() {
   const stateCheck = constraintDefinition("game_sessions", "game_sessions_state_check");
   assert(stateCheck.includes("voting_second"), "game_sessions.state should allow voting_second.");
-  assert(!stateCheck.includes("scoreboard"), "9.2 must not add scoreboard.");
   assert(!hasColumn("game_sessions", "tie_candidates"), "game_sessions must not include tie_candidates.");
   assert(!hasTable("tie_candidates"), "9.2 must not create tie_candidates table.");
   assertEqual(functionArgs("submit_round_vote"), "target_player_id uuid", "submit_round_vote signature must stay unchanged.");

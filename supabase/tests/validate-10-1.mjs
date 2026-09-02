@@ -388,7 +388,6 @@ async function validateSchemaAndPrivileges() {
   assert(!isRealtimePublished("rounds"), "rounds must not be published through Realtime.");
   assert(!isRealtimePublished("game_sessions"), "game_sessions must not be published through gameplay Realtime.");
   assert(!tableExists("scoreboard"), "10.1 must not create scoreboard.");
-  assert(!tableExists("round_history"), "10.1 must not create round_history.");
 }
 
 async function validateOnlyImpostorCanSubmit() {

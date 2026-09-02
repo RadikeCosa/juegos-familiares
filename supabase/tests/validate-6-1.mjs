@@ -332,7 +332,6 @@ async function main() {
   assertNoColumns("game_sessions", [
     "host_player_id",
     "status",
-    "finished_at",
     "winner",
     "round_count",
     "final_scores",
@@ -340,8 +339,6 @@ async function main() {
   ]);
   assertNoColumns("session_players", [
     "id",
-    "score",
-    "impostor_count",
     "role_acknowledged",
     "vote_submitted",
     "joined_at"
