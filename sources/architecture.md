@@ -1220,9 +1220,12 @@ Quedan fuera:
 
 ---
 
-# 31. Decisiones diferidas
+# 31. Decisiones diferidas en la etapa conceptual
 
-Se difieren:
+Este apartado conserva un registro histórico del momento previo a la
+implementación. No describe el estado vigente del repositorio.
+
+En ese momento se diferían:
 
 * framework frontend exacto si todavía no está formalmente decidido;
 * estructura física definitiva de carpetas;
@@ -1237,11 +1240,14 @@ Se difieren:
 * recuperación avanzada;
 * UI/design system.
 
-No cerramos decisiones que todavía no fueron tomadas.
+Desde entonces quedaron definidos Next.js, la estructura actual del repositorio,
+el schema y las RPCs/RLS de Impostor, Realtime por invalidación, recovery y la
+estrategia PWA static-safe. Limpieza/expiración avanzada de salas y un design
+system formal siguen diferidos.
 
 ---
 
-# 32. Relación con futura estructura del repositorio
+# 32. Relación histórica con la futura estructura del repositorio
 
 Una futura estructura podría separar conceptualmente:
 
@@ -1266,7 +1272,10 @@ Lo importante es la separación de responsabilidades, no la estructura exacta.
 
 ---
 
-# 33. Próximo paso
+# 33. Próximo paso de la etapa conceptual
+
+El siguiente paso que se registró entonces fue crear el plan de implementación;
+ese paso ya se completó. El texto siguiente se conserva como historia:
 
 Con la arquitectura conceptual cerrada, el siguiente paso es crear:
 

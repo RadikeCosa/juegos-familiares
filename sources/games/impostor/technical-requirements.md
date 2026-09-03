@@ -888,12 +888,16 @@ Política mínima:
 
 ### Alcance de subincrementos
 
-* 13.0: contrato documental.
-* 13.1: triggers de reconstrucción autoritativa para mount, retry, foreground, online y recovery Realtime implementados técnicamente; smoke manual focal pendiente.
-* 13.2: UI mínima `reconnecting/offline/error/retry` y bloqueo seguro de acciones implementados técnicamente; smoke manual focal pendiente.
-* 13.3: recovery foreground de Presence/liveness, resubscribe y multi-tab.
-* 13.4: recovery de host succession ante stale, retorno del host original y concurrencia.
-* 13.5: matriz final de tests, DB validators, smoke físico acotado y documentación final.
+* 13.0: contrato documental cerrado.
+* 13.1: triggers de reconstrucción autoritativa para mount, retry, foreground, online y recovery Realtime cerrados.
+* 13.2: UI mínima `reconnecting/offline/error/retry` y bloqueo seguro de acciones cerrados.
+* 13.3: recovery foreground de Presence/liveness, resubscribe y multi-tab cerrado.
+* 13.4: recovery de host succession ante stale, retorno del host original y concurrencia cerrado.
+* 13.5: matriz final de tests, DB validators y smoke de navegador cerrada sin cambios adicionales de código.
+
+Incremento 13 está técnicamente cerrado. La validación física general R1-R4 en
+teléfonos y con múltiples actores permanece pendiente dentro de la aceptación
+pre-beta; no reabre la implementación central de recovery.
 
 No se prevé backend nuevo salvo que la validación revele un caso no representable con los read models actuales.
 
@@ -901,7 +905,9 @@ No se prevé backend nuevo salvo que la validación revele un caso no representa
 
 Incremento 13 no convierte Impostor en offline-capable. Quedan fuera: service worker, estrategia de cache, offline shell, asset caching, update behavior, install behavior, background sync, cache de secretos y quirks específicos de plataforma PWA. Eso pertenece al Incremento 14.
 
-Incremento 15 conserva playtest amplio, ergonomía, stress final y polish visual. Incremento 13 sí requiere smoke físico mínimo para suspensión/reconnect por el riesgo del lifecycle móvil.
+Incremento 15 conserva playtest amplio, ergonomía y stress final. La aceptación
+pre-beta mantiene el smoke físico R1-R4 de suspensión/reconnect requerido por el
+riesgo del lifecycle móvil de Incremento 13.
 
 ---
 

@@ -55,7 +55,9 @@ El proyecto se utilizará también para aprender progresivamente los conceptos t
 
 Debemos considerar diferencias reales entre plataformas respecto de instalación, manifest, service workers, cache, almacenamiento, ciclo de vida, actualización y comportamiento al pasar a segundo plano o volver a primer plano.
 
-No definimos todavía soluciones técnicas concretas para esas diferencias.
+En esta etapa conceptual inicial todavía no se habían definido soluciones
+técnicas concretas para esas diferencias. Incremento 14 implementó el hardening
+PWA static-safe; la validación física Android/iOS continúa pendiente.
 
 ---
 
@@ -91,7 +93,9 @@ La identidad almacenada localmente permite recordar qué jugador utiliza el disp
 
 Las acciones protegidas deben validarse contra el estado compartido del sistema.
 
-No diseñaremos todavía RBAC, tokens, autenticación, RLS ni mecanismos técnicos concretos.
+En esta etapa conceptual inicial todavía no se diseñaban RBAC, tokens,
+autenticación, RLS ni mecanismos técnicos concretos. La implementación posterior
+adoptó Supabase Auth anónima, RLS y RPCs autoritativas sin introducir RBAC general.
 
 ---
 
@@ -1577,12 +1581,14 @@ No agregaremos datos históricos adicionales si no son necesarios para el conjun
 
 # Decisiones pendientes
 
-Room + Lobby queda cerrado para Incremento 4. Permanecen abiertas únicamente cuestiones posteriores o generales:
+Room + Lobby quedó cerrado en Incremento 4. La creación inicial de Group, la
+invitación a otros dispositivos y el comportamiento técnico de
+reconexión/recovery también quedaron definidos e implementados posteriormente.
 
-* experiencia de primera instalación;
-* cómo se crea inicialmente un grupo;
-* cómo se invita a otro dispositivo al grupo;
-* comportamiento cuando un jugador pierde conexión;
-* entrada o salida de jugadores durante una tanda;
+Permanecen abiertas o pendientes de validación:
 
-Estas decisiones no modifican el contrato de Room + Lobby ni las reglas centrales de la primera variante jugable.
+* experiencia de primera instalación en Android/iOS reales;
+* validación física general de pérdida y recuperación de conexión;
+* política de entrada o salida de jugadores durante una tanda.
+
+Estas cuestiones no modifican el contrato de Room + Lobby ni las reglas centrales de la primera variante jugable.
