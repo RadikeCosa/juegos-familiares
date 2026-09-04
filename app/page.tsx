@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 import { PlatformHomeContextShell } from "./platform-home-context-shell";
 
 export default function Home() {
@@ -29,24 +28,6 @@ export default function Home() {
 
         <div className="home-game-stack">
           <PlatformHomeContextShell />
-          <section className="game-entry" aria-labelledby="games-title">
-            <div className="game-entry__art" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-              <span />
-            </div>
-            <div className="game-entry__content">
-              <p className="game-entry__label" id="games-title">
-                Juegos
-              </p>
-              <h2>Impostor</h2>
-              <p>Encontrá al impostor sin revelar demasiado.</p>
-              <Link className="game-entry__cta" href="/impostor">
-                Jugar a Impostor
-              </Link>
-            </div>
-          </section>
         </div>
       </div>
     </main>

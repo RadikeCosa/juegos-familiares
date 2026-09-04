@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   useActiveRoomContext,
   type ActiveRoomContextState,
@@ -15,6 +15,26 @@ import {
 
 function createPlatformBootstrapClient(): PlatformBootstrapClient {
   return createBrowserSupabaseClient() as unknown as PlatformBootstrapClient;
+}
+
+function renderImpostorGameEntry(content: ReactNode) {
+  return (
+    <section className="game-entry" aria-labelledby="games-title">
+      <div className="game-entry__art" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+        <span />
+      </div>
+      <div className="game-entry__content">
+        <p className="game-entry__label" id="games-title">
+          Juegos
+        </p>
+        <h2>Impostor</h2>
+        {content}
+      </div>
+    </section>
+  );
 }
 
 export function renderPlatformHomeContext(
@@ -31,36 +51,7 @@ export function renderPlatformHomeContext(
   }
 
   if (state.status === "recognized") {
-    const activeRoomHref =
-      roomState.status === "success"
-        ? `/impostor/sala/${encodeURIComponent(roomState.room.code)}`
-        : undefined;
-    const isPlayingRoom =
-      roomState.status === "success" && roomState.room.status === "playing";
-    const isLobbyRoom =
-      roomState.status === "success" && roomState.room.status === "lobby";
-
-    if (roomState.status === "success" && activeRoomHref) {
-      return (
-        <section className="home-platform-context home-platform-context--active">
-          <p className="home-platform-context__meta">
-            {isPlayingRoom ? "Partida en curso" : "Sala activa"}
-          </p>
-          <Link
-            className="home-secondary-cta home-secondary-cta--primary"
-            href={activeRoomHref}
-          >
-            {isPlayingRoom
-              ? "Volver a la partida"
-              : isLobbyRoom
-                ? "Volver a la sala"
-                : "Ir al juego del grupo"}
-          </Link>
-        </section>
-      );
-    }
-
-    return (
+    const identity = (
       <section className="home-platform-context home-platform-context--recognized">
         <Link
           className="home-group-context-link"
@@ -75,26 +66,79 @@ export function renderPlatformHomeContext(
             <span>({state.group.name})</span>
           </span>
         </Link>
-        {roomState.status === "loading" || roomState.status === "idle" ? (
-          <p className="home-platform-context__checking" aria-live="polite">
-            Comprobando sala activa...
+      </section>
+    );
+
+    const activeRoomHref =
+      roomState.status === "success"
+        ? `/impostor/sala/${encodeURIComponent(roomState.room.code)}`
+        : undefined;
+    const isPlayingRoom =
+      roomState.status === "success" && roomState.room.status === "playing";
+
+    let cardContent: ReactNode;
+
+    if (roomState.status === "success" && activeRoomHref) {
+      cardContent = (
+        <>
+          <p className="game-entry__status">
+            {isPlayingRoom ? "Partida en curso" : "Sala activa"}
           </p>
-        ) : null}
-        {roomState.status === "error" ? (
-          <>
-            <p>No pudimos comprobar si tenés una sala activa.</p>
+          <div className="game-entry__actions">
+            <Link className="game-entry__cta" href={activeRoomHref}>
+              {isPlayingRoom ? "Volver a la partida" : "Volver a la sala"}
+            </Link>
+            <Link className="home-secondary-cta" href="/impostor">
+              Ver Impostor
+            </Link>
+          </div>
+        </>
+      );
+    } else if (roomState.status === "error") {
+      cardContent = (
+        <>
+          <p className="game-entry__status" aria-live="polite">
+            No pudimos comprobar si tenés una sala activa.
+          </p>
+          <div className="game-entry__actions">
             {options.onRetryActiveRoom ? (
               <button
-                className="home-secondary-cta home-secondary-cta--primary"
+                className="game-entry__cta game-entry__cta--button"
                 type="button"
                 onClick={options.onRetryActiveRoom}
               >
                 Reintentar
               </button>
             ) : null}
-          </>
-        ) : null}
-      </section>
+            <Link className="home-secondary-cta" href="/impostor">
+              Ver Impostor
+            </Link>
+          </div>
+        </>
+      );
+    } else if (roomState.status === "loading" || roomState.status === "idle") {
+      cardContent = (
+        <>
+          <p>Encontrá al impostor sin revelar demasiado.</p>
+          <p aria-live="polite">Comprobando tu sala activa...</p>
+        </>
+      );
+    } else {
+      cardContent = (
+        <>
+          <p>Encontrá al impostor sin revelar demasiado.</p>
+          <Link className="game-entry__cta" href="/impostor">
+            Jugar a Impostor
+          </Link>
+        </>
+      );
+    }
+
+    return (
+      <>
+        {identity}
+        {renderImpostorGameEntry(cardContent)}
+      </>
     );
   }
 

@@ -245,26 +245,6 @@ body {
   line-height: 1.2;
 }
 
-.home-platform-context__checking {
-  min-height: 1.5rem;
-  text-align: right;
-}
-
-.home-platform-context--active {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: calc(-1 * var(--space-4));
-  border-bottom-right-radius: 0;
-  border-bottom-left-radius: 0;
-  box-shadow: none;
-}
-
-.home-platform-context--active + .game-entry {
-  border-top-right-radius: 0;
-  border-top-left-radius: 0;
-}
-
 .home-secondary-cta {
   display: inline-flex;
   min-height: 3rem;
@@ -388,6 +368,23 @@ body {
 
 .game-entry__cta:active {
   transform: translateY(1px);
+}
+
+.game-entry__cta--button {
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.game-entry__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+}
+
+.game-entry__actions .game-entry__cta {
+  margin-top: 0;
 }
 
 .impostor {
@@ -1316,10 +1313,6 @@ body {
 
   .home-platform-context--recognized {
     padding: 0;
-  }
-
-  .home-platform-context--active {
-    margin-bottom: calc(-1 * var(--space-4));
   }
 
   .game-entry__art {
