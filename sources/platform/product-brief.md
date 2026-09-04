@@ -23,25 +23,27 @@ La aplicación tendrá una portada raíz:
 → Juegos Familiares
 ```
 
-La portada mostrará los juegos disponibles.
+La portada muestra los juegos disponibles. Impostor es el juego protagonista y
+su acción explícita `Jugar a Impostor` es el acceso principal al juego.
 
-Desde A.1, si el dispositivo conserva una `AuthIdentity` válida y el
-bootstrap remoto resuelve `Player -> Group`, la portada también puede expresar
-ese contexto persistente de Platform antes de entrar a un juego:
+Si el dispositivo conserva una `AuthIdentity` válida y el bootstrap remoto
+resuelve `Player -> Group`, la portada expresa ese contexto persistente de
+Platform mediante un control compacto, secundario respecto de Impostor:
 
 ```text
 Juegos Familiares
 
-Hola, Ramiro
-
-Tu grupo
-Familia
-
-[ Ver grupo ]
+[ Ramiro (Familia) > ]
+-> /grupo
 
 Juegos
 [ Impostor ]
+[ Jugar a Impostor ]
 ```
+
+El control no se presenta como una tarjeta grande separada para el grupo. Si
+existe una Room activa, ese estado se presenta junto al juego y ofrece el
+acceso directo correspondiente para volver a la sala o a la partida.
 
 Si no hay contexto reconocido, la portada sigue siendo liviana: no crea
 `AuthIdentity`, `Player` ni `Group` por renderizar, no fuerza onboarding y
@@ -236,22 +238,15 @@ La recuperación avanzada queda fuera del MVP de este incremento.
 
 ## Grupo reconocido
 
-Cuando una persona ya pertenece a un grupo, `/` puede expresar el contexto
-persistente de Platform. Durante A.1, `/impostor` conserva temporalmente la
-misma señal reconocida para evitar mezclar el cambio con la simplificación
-definitiva de la entrada del juego:
+Cuando una persona ya pertenece a un grupo, `/` expresa el contexto
+persistente de Platform con nickname como dato principal y el grupo como
+contexto secundario. El control completo navega a `/grupo`; no reemplaza la
+acción principal para entrar a Impostor ni se muestra como una tarjeta de grupo
+independiente.
 
-```text
-Hola, Ramiro
-
-Tu grupo
-Familia
-
-[ Ver grupo ]
-```
-
-En A.1, la acción `Ver grupo` sigue navegando a `/impostor/grupo`. La ruta
-definitiva de administración de Group queda para un incremento posterior.
+Cuando hay una Room activa, la portada conserva el retorno directo a esa Room
+como parte de la entrada de Impostor. El contexto de grupo no duplica esa
+acción ni ese estado.
 
 Desde A.2.1, `/grupo` es la superficie canónica de Platform para consultar el
 grupo reconocido:
