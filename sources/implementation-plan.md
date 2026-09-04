@@ -252,7 +252,7 @@ Incluye incrementos 6 a 12.
 
 Estado: `ALCANZADO TÉCNICAMENTE`.
 
-El cierre técnico del Incremento 12 completa el primer MVP jugable a nivel técnico. Incremento 13 cerró la robustez de reconexión autoritativa. Incremento 14 cerró el hardening PWA con smoke externo pendiente para Android/iOS real y multi-actor real. Siguen pendientes auditoría final, deploy y validación presencial completa en el Incremento 15 y antes de beta.
+El cierre técnico del Incremento 12 completa el primer MVP jugable a nivel técnico. Incremento 13 cerró la robustez de reconexión autoritativa. Incremento 14 cerró el hardening PWA con smoke externo pendiente para Android/iOS real y multi-actor real. El candidato `a064ce2` quedó preparado en Vercel Preview. Siguen pendientes la aceptación manual pre-beta y la validación presencial completa del Incremento 15.
 
 Este hito marca el:
 
@@ -3620,13 +3620,13 @@ La PWA cumple el alcance MVP a nivel funcional y de validación automática/Chro
 
 #### Propósito, audiencia y límites
 
-Durante Incremento 15 se construirá `sources/technical-narrative.md`: un relato técnico extenso y accesible que explique Juegos Familiares / Impostor mediante problemas reales, conceptos de ingeniería, decisiones, implementación, trade-offs, resultados observables y aprendizaje.
+Incremento 15 contempla construir `sources/technical-narrative.md`: un relato técnico extenso y accesible que explique Juegos Familiares / Impostor mediante problemas reales, conceptos de ingeniería, decisiones, implementación, trade-offs, resultados observables y aprendizaje.
 
 Prioriza aprendizaje, comprensión profunda, transferencia de conocimiento y capacidad de explicar decisiones. Sus audiencias primarias son el autor/desarrollador y una persona desarrolladora junior/intermedia. Como audiencias secundarias, debe ayudar a un entrevistador técnico o hiring manager y a una persona de producto técnicamente curiosa. El cuerpo principal debe entenderse sin leer el repositorio, empezando accesible y profundizando después.
 
 No será API reference, manual de código, README grande, duplicado de requisitos, changelog, documentación operativa para agentes ni tutorial genérico de tecnologías. Es pedagógico y explicativo, no normativo: ante discrepancias prevalecen los documentos autoritativos vigentes y el código, SQL/migrations y tests.
 
-El archivo futuro vivirá en `sources/`, no en `source/`. No forma parte del contexto operativo mínimo por defecto para agentes; sólo se consulta para tareas de aprendizaje, onboarding humano, portfolio, explicación o documentación pedagógica. No crear el archivo, capítulos, glosario ni diagramas antes de ejecutar esta tarea.
+El archivo vive en `sources/`, no en `source/`. No forma parte del contexto operativo mínimo por defecto para agentes; sólo se consulta para tareas de aprendizaje, onboarding humano, portfolio, explicación o documentación pedagógica. Su estado y eventual incorporación se controlan como trabajo documental separado.
 
 #### Fuentes y trazabilidad
 
@@ -3671,7 +3671,9 @@ El documento debe ser autosuficiente; enlaces oficiales de Supabase, PostgreSQL,
 
 El relato estará terminado cuando sea comprensible sin repo, técnicamente fiel, trazable, distinga comportamiento actual de evolución histórica, defina jargon, use problemas y ejemplos reales, explique trade-offs, no contradiga docs/código, no duplique requisitos ni case study, no se vuelva normativo y permita explicar el proyecto en una entrevista y aprender conceptos transferibles.
 
-Pasos internos de esta tarea, sin reservar numeración `15.x` inexistente: contrato e índice tentativo; inventario de fuentes/evidencia; primer relato; revisión técnica; revisión histórica; revisión pedagógica; diagramas/glosario/recursos; versión final. Una versión breve de portfolio, guion de entrevista, presentación, posts, mapa conceptual o preguntas de estudio son derivados opcionales, no requisitos de Incremento 15.
+El plan original no reservó una secuencia completa `15.x`. La ejecución posterior usó de hecho `15.4` para el polish de claridad UX y `15.5` para el protocolo pre-beta. No se infieren ni se crean retrospectivamente Incrementos 15.1-15.3.
+
+Los pasos internos del relato técnico siguen siendo: contrato e índice tentativo; inventario de fuentes/evidencia; primer relato; revisión técnica; revisión histórica; revisión pedagógica; diagramas/glosario/recursos; versión final. Una versión breve de portfolio, guion de entrevista, presentación, posts, mapa conceptual o preguntas de estudio son derivados opcionales, no requisitos de Incremento 15.
 
 ### Objetivo
 
@@ -3868,7 +3870,29 @@ Incremento 13 queda cerrado. El smoke final de 13.5 validó reconexión autorita
 
 Incremento 14 queda cerrado con la fórmula `INCREMENT 14 CLOSED WITH EXTERNAL MANUAL SMOKE PENDING`: contrato PWA/cache, manifest/install hardening, service worker static-safe, offline/update UX mínima y Chromium desktop smoke están cerrados. Android/iOS real y round transition/offline/reconnect multi-actor real quedan pendientes externos antes de beta.
 
-Sigue pendiente como próximo incremento formal la auditoría final de seguridad, testing y UX del Incremento 15.
+Incremento 15 está en curso. `15.4` implementó claridad UX y quedó cubierto por el P0 del candidato `a064ce2`, con smoke UX/UI en mobile real pendiente. `15.5` creó el protocolo de aceptación y registró P0 `PASS`; S1-S8, N1, C1-C10, R1-R4, U1, E1 y D1 siguen pendientes.
+
+Antes de la aceptación física pre-beta se ejecutará, como paso preparatorio, un
+smoke UX/UI exploratorio en un solo dispositivo. Esta actividad no forma parte
+de S1-S8, N1, C1-C10, R1-R4, U1, E1 o D1 y no usa resultados `PASS`/`FAIL` de
+aceptación. Busca detectar problemas de jerarquía visual, copy, ergonomía
+táctil, densidad/scroll, responsive, claridad de CTA, estados de espera y
+fricción perceptual mobile. No valida Presence, sucesión de host,
+sincronización o recovery multi-actor, privacidad entre dispositivos, votación
+real, scoring ni update PWA.
+
+La baseline actual se preserva como
+`a064ce2c38abe4502b8c11ceeb9be5b7187aea62`. Si el smoke no produce cambios de
+código, `a064ce2` puede seguir siendo candidata para aceptación. Si produce
+cambios, incluso solo visuales o de copy, el polish debe realizarse después en
+una rama y commit separados, generar un nuevo SHA candidato y usar un Preview
+separado. Para esa nueva candidata se debe repetir P0 y ejecutar un smoke focal
+sobre las superficies tocadas antes de la aceptación formal; `a064ce2` queda
+como baseline de comparación y deja de ser candidata final automática.
+
+N1 se reserva para la candidata final y para la sesión natural con cuatro
+dispositivos. El smoke exploratorio de un dispositivo no sustituye N1 ni
+completa ningún escenario formal.
 
 ---
 
@@ -4032,11 +4056,13 @@ Ese riesgo pertenece al arranque del proyecto y ya no representa el próximo pas
 
 # 14. Próximo paso recomendado
 
-El siguiente paso lógico del roadmap formal es Incremento 15:
+El siguiente paso lógico del roadmap formal es continuar Incremento 15:
 
-1. ejecutar Incremento 15, auditoría final de seguridad, testing y UX;
-2. ejecutar los smokes externos pendientes antes de beta: Android Chrome installed PWA, iOS Safari Add to Home Screen y real multi-actor round transition/offline/reconnect;
-3. declarar el cierre del MVP solamente cuando se cumplan sus criterios técnicos, de validación manual y de riesgo.
+1. preservar `a064ce2` como baseline estable y ejecutar el smoke UX/UI exploratorio de un dispositivo pendiente de 15.4;
+2. clasificar sus hallazgos y, si corresponde, realizar polish acotado en una rama/commit separados y generar un nuevo SHA candidato con Preview separado;
+3. si cambió código, repetir P0 y ejecutar un smoke focal sobre las superficies tocadas;
+4. ejecutar la aceptación formal 15.5 con cuatro dispositivos contra la candidata final, incluidos N1, Android Chrome installed PWA, iOS Safari Add to Home Screen, U1 y recovery multi-actor real;
+5. registrar E1 y D1 y declarar el cierre del MVP solamente cuando se cumplan sus criterios técnicos, de validación manual y de riesgo.
 
 Estado consolidado vigente:
 
@@ -4044,7 +4070,10 @@ Estado consolidado vigente:
 * Incrementos 5.1 a 5.3 cerrados;
 * Incremento 5.4 absorbido en Incremento 13;
 * Incrementos 6 a 12 cerrados técnicamente;
-* Incremento 13 cerrado;
-* Incrementos 14 a 15 pendientes.
+* Incremento 13 técnicamente cerrado; R1-R4 físicos pendientes en aceptación pre-beta;
+* Incremento 14 técnicamente cerrado; Android/iOS, U1 y multi-actor real pendientes;
+* 15.4 implementado y cubierto por P0; smoke UX/UI mobile real pendiente;
+* 15.5 documental y P0 `PASS`; aceptación manual y decisión pre-beta pendientes;
+* no existieron Incrementos 15.1-15.3 en la evolución real del roadmap.
 
 Las mejoras y defectos encontrados durante el smoke se tratan antes de continuar cuando afecten el uso real o introduzcan riesgo. Las mejoras no bloqueantes deben mantenerse acotadas para no reabrir decisiones de producto ni ampliar el MVP.

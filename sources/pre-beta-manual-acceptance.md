@@ -43,9 +43,9 @@ forzar empates o revelar informacion para pruebas especificas.
 * decision explicita sobre el gap de E2E;
 * puerta objetiva para evaluar observabilidad adicional.
 
-## Restricciones de esta tarea documental
+## Restricciones de la tarea documental inicial
 
-Durante la creacion o correccion de este documento de Incremento 15.5 no esta
+Durante la creacion inicial de este documento de Incremento 15.5 no estaba
 autorizado:
 
 * implementar codigo;
@@ -53,10 +53,16 @@ autorizado:
 * crear migrations;
 * ejecutar tests, builds, resets, servicios, deploys o aceptacion manual real;
 * hacer stage, commit, reset, restore, merge o push;
-* modificar otros documentos.
+* modificar otros documentos fuera de aquel alcance.
 
-Estas restricciones aplican al trabajo documental de 15.5, no a la futura
-ejecucion del protocolo.
+Estas restricciones registran el alcance de aquella tarea documental; no
+limitan un cleanup documental autorizado por separado ni la futura ejecucion
+del protocolo.
+
+La numeracion refleja la evolucion real del trabajo: `15.4` identifica el
+polish de claridad UX ya implementado y `15.5` este protocolo. El plan original
+no habia reservado una secuencia completa `15.x`; no se infieren Incrementos
+15.1-15.3.
 
 ## Fuera de alcance del protocolo
 
@@ -76,6 +82,23 @@ Siguen fuera de alcance del protocolo:
 * gameplay offline;
 * nuevos contratos backend;
 * reconciliar la numeracion operativa `15.x`.
+
+## Exploracion UX/UI previa
+
+Antes de esta aceptacion formal puede realizarse un smoke UX/UI exploratorio en
+un solo dispositivo. Se registra por separado: no produce evidencia de
+aceptacion, no completa S1-S8, N1, C1-C10, R1-R4, U1, E1 o D1 y no genera un
+`PASS` de aceptacion. En particular, no sustituye la sesion natural N1, que debe
+ejecutarse sobre la candidata final.
+
+La baseline actual es `a064ce2c38abe4502b8c11ceeb9be5b7187aea62`. Si la
+exploracion no deriva en cambios de codigo, puede seguir siendo candidata. Si
+deriva en cualquier cambio de codigo, incluso visual o de copy, el P0 ya
+registrado no se aplica automaticamente a la nueva candidata: antes de la
+aceptacion formal se debe identificar explicitamente el nuevo commit y su
+Preview, repetir P0 y ejecutar un smoke focal sobre las superficies tocadas.
+En ese caso, `a064ce2` se conserva como baseline de comparacion, no como
+candidata final automatica.
 
 ---
 
@@ -367,6 +390,12 @@ forzar ramas sin contaminar la observacion natural.
 Cada corrida debe registrar su propio estado inicial, Room o tanda usada,
 actores, datos preparados, escenarios ejecutados y decision de continuar,
 repetir o detener.
+
+Limitacion conocida de la version actual: si un `SessionPlayer` del roster
+congelado queda ausente durante una votacion antes de emitir su voto, la ronda
+puede permanecer esperando. Esto no se clasifica por anticipado como bug de
+Presence o liveness; cualquier resultado observado debe registrarse contra esta
+politica vigente.
 
 ## Matriz resumida
 
@@ -688,9 +717,10 @@ Precondiciones:
 
 Pasos:
 
-1. A inicia tanda.
-2. Cada actor abre su reveal privado.
-3. Cada actor confirma verbalmente que ve una pantalla coherente.
+1. Un no-host comprueba que no puede iniciar la tanda.
+2. A inicia tanda.
+3. Cada actor abre su reveal privado.
+4. Cada actor confirma verbalmente que ve una pantalla coherente.
 
 Esperado:
 
@@ -698,6 +728,7 @@ Esperado:
 * los otros actores ven la misma palabra;
 * el impostor no recibe la palabra;
 * un actor no ve rol/palabra de otro.
+* el no-host no puede iniciar la tanda.
 
 Evidencia:
 
@@ -714,14 +745,16 @@ Precondiciones:
 
 Pasos:
 
-1. Host inicia discusion.
-2. Cada actor verifica que esta en ronda en juego.
-3. Un actor oculta y vuelve a mostrar localmente su rol si necesita recordarlo.
+1. Un no-host comprueba que no puede iniciar la ronda.
+2. Host inicia discusion.
+3. Cada actor verifica que esta en ronda en juego.
+4. Un actor oculta y vuelve a mostrar localmente su rol si necesita recordarlo.
 
 Esperado:
 
 * todos pasan a `discussion`;
 * el reveal local sigue siendo accion privada y efimera;
+* el no-host no puede iniciar la ronda;
 * host actual puede avanzar a votacion.
 
 Evidencia:
@@ -739,13 +772,15 @@ Precondiciones:
 
 Pasos:
 
-1. Host inicia votacion.
-2. Cada actor vota.
-3. Observar espera despues de votar.
+1. Un no-host comprueba que no puede iniciar la votacion.
+2. Host inicia votacion.
+3. Cada actor vota.
+4. Observar espera despues de votar.
 
 Esperado:
 
 * cada actor puede votar una vez;
+* el no-host no puede iniciar la votacion;
 * no hay resultados parciales;
 * despues de votar, el actor ve estado de espera;
 * la resolucion ocurre al ultimo voto.
@@ -767,18 +802,20 @@ Precondiciones:
 
 Pasos:
 
-1. Host inicia `voting_first`.
-2. El facilitador indica un patron por alias, por ejemplo `A/B votan a C` y
+1. Un no-host comprueba que no puede iniciar `voting_first`.
+2. Host inicia `voting_first`.
+3. El facilitador indica un patron por alias, por ejemplo `A/B votan a C` y
    `C/D votan a B`.
-3. Los primeros votos permiten comprobar voto unico, espera y ausencia de
+4. Los primeros votos permiten comprobar voto unico, espera y ausencia de
    resultados parciales.
-4. Todos los actores siguen el patron publico de empate.
-5. El ultimo voto completa C3 y dispara el empate de C4.
-6. Observar resultado agregado.
+5. Todos los actores siguen el patron publico de empate.
+6. El ultimo voto completa C3 y dispara el empate de C4.
+7. Observar resultado agregado.
 
 Esperado:
 
 * C3 queda validado dentro de C4, sin una votacion separada previa;
+* el no-host no puede iniciar la primera votacion;
 * cada actor vota una vez;
 * antes del ultimo voto no hay resultados parciales;
 * aparece empate;
@@ -801,13 +838,15 @@ Precondiciones:
 
 Pasos:
 
-1. Host inicia segunda votacion.
-2. Todos votan entre candidatos empatados.
-3. Observar resolucion.
+1. Un no-host comprueba que no puede iniciar la segunda votacion.
+2. Host inicia segunda votacion.
+3. Todos votan entre candidatos empatados.
+4. Observar resolucion.
 
 Esperado:
 
 * solo aparecen candidatos empatados;
+* el no-host no puede iniciar la segunda votacion;
 * cada actor vota una vez;
 * la resolucion es definitiva;
 * no aparece tercera votacion.
@@ -904,11 +943,13 @@ Pasos:
 
 1. Esperar o avanzar hasta marcador.
 2. Comparar marcador visible entre actores.
+3. Un no-host comprueba que no puede iniciar nueva ronda ni terminar tanda.
 
 Esperado:
 
 * todos ven marcador acumulado coherente;
 * acciones de nueva ronda y terminar tanda son host-only;
+* un no-host no puede ejecutar esas acciones;
 * no se exponen votos individuales.
 
 Evidencia:
@@ -925,9 +966,10 @@ Precondiciones:
 
 Pasos:
 
-1. Host inicia nueva ronda.
-2. Cada actor llega a reveal de nueva ronda.
-3. Un actor que vio palabra anterior confirma que no queda visible como stale.
+1. Un no-host comprueba que no puede iniciar nueva ronda.
+2. Host inicia nueva ronda.
+3. Cada actor llega a reveal de nueva ronda.
+4. Un actor que vio palabra anterior confirma que no queda visible como stale.
 
 Esperado:
 
@@ -950,10 +992,14 @@ Precondiciones:
 
 Pasos:
 
-1. Host elige terminar tanda.
-2. Confirmar la accion.
-3. Cada actor verifica resultado final.
-4. Volver al Group.
+1. Un no-host comprueba que no puede terminar tanda.
+2. Host elige terminar tanda.
+3. Confirmar la accion.
+4. Cada actor verifica resultado final.
+5. Al menos un participante refresca o reabre la app desde `finished`.
+6. Ese participante confirma que recupera el resultado historico sin una Room
+   activa falsa.
+7. Volver al Group.
 
 Esperado:
 
@@ -961,6 +1007,8 @@ Esperado:
 * todos los participantes ven `finished`;
 * resultado final es compartido;
 * no hay acciones de nueva ronda ni terminar tanda despues de `finished`;
+* refresh/reapertura reconstruye `finished` autoritativamente;
+* no reaparece una Room activa falsa;
 * volver al Group permite iniciar otra Room futura.
 
 Evidencia:
@@ -979,7 +1027,7 @@ Precondiciones:
 Pasos:
 
 1. Enviar un actor a background o lock screen.
-2. Avanzar o mantener fase segun subcaso.
+2. Mantener la fase y la conectividad del resto sin provocar avance remoto.
 3. Volver a foreground.
 
 Esperado:
@@ -987,6 +1035,9 @@ Esperado:
 * el actor vuelve a estado autoritativo actual;
 * no se confia en timers locales suspendidos;
 * host y fase quedan correctos.
+
+El avance remoto mientras un actor queda sin conexion se valida exclusivamente
+en R3.
 
 Evidencia:
 

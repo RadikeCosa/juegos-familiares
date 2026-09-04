@@ -916,7 +916,7 @@ Puede acceder a:
 
 En el Incremento 3 no existe una sección administrativa para explorar el banco completo.
 
-La pantalla futura de palabras permite a cualquier integrante:
+La pantalla vigente de palabras permite a cualquier integrante:
 
 * agregar una palabra o frase por vez;
 * ver la cantidad total disponible;
@@ -989,26 +989,26 @@ La aplicación no promete jugar offline. Puede conservar el último estado compa
 
 Incremento 13.2 implementa la UX mínima para ese intervalo: muestra "Sin conexión", "Reconectando..." o error reintentable en Room/gameplay, pausa acciones sensibles y no renderiza secretos privados stale mientras la reconciliación no haya terminado.
 
-## Implementados pero pendientes de validación smoke específica
+## Implementados y técnicamente cerrados; aceptación física pendiente
 
-Estos flujos existen técnicamente, pero todavía requieren prueba real en teléfonos, sesiones independientes, pérdida de conexión, background/reconnect o concurrencia:
+Incremento 13 cerró técnicamente los triggers de reconstrucción autoritativa,
+la UX offline/reconnecting y retry, el recovery foreground de
+Presence/liveness, multi-tab y host succession recovery. La matriz 13.5 quedó
+cerrada sin requerir cambios adicionales de código.
 
-* comportamiento mobile/background de Presence y liveness según contrato 13.0;
-* smoke manual focal de triggers de reconstrucción autoritativa implementados en 13.1;
-* smoke manual focal de UX offline/reconnecting y retry implementada en 13.2;
-* cadencia 30s/90s/30s de heartbeat, stale y evaluación de sucesión en condiciones reales;
-* reasignación de host bajo pérdida de conexión, múltiples conexiones, refresh y carreras de clientes;
-* continuidad de la tanda completa en dispositivos físicos durante el smoke manual general.
-
-La reasignación de host no está pendiente como contrato ni como implementación central: 5.3 cerró la sucesión autoritativa. Lo pendiente corresponde al hardening y la validación mobile/concurrencia absorbidos por Incremento 13.
+La validación física general R1-R4 en teléfonos y con múltiples actores sigue
+pendiente dentro de la aceptación pre-beta. La reasignación de host no está
+pendiente como contrato ni como implementación central: la DB conserva la
+autoridad y Presence no decide el host.
 
 ## Flujos todavía abiertos o futuros
 
 Siguen pendientes dentro del roadmap o como decisiones explícitamente diferidas:
 
-* primera instalación de la PWA;
-* implementación de reconexión autoritativa 13.3–13.5;
+* validación de primera instalación de la PWA en Android/iOS reales;
 * salida o incorporación de un jugador durante una tanda;
-* capacidades de instalación y cache de la PWA.
+* validación física de update PWA y recovery multi-actor.
 
-Estas cuestiones pertenecen principalmente a Incrementos 13 a 15 y al diseño de experiencia/arquitectura pendiente, no a las reglas centrales ya implementadas del juego.
+Estas cuestiones pertenecen al trabajo posterior al cierre técnico de 13/14 y
+a la aceptación pre-beta de Incremento 15, no a las reglas centrales ya
+implementadas del juego.
