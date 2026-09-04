@@ -7,6 +7,24 @@ sigue siendo la fuente normativa ante cualquier diferencia.
 No completar resultados por anticipado. Usar `PASS`, `FAIL`, `BLOCKED` o
 `NOT RUN` solamente despues de ejecutar cada escenario.
 
+Este runbook corresponde exclusivamente a la aceptacion formal. Un smoke UX/UI
+exploratorio previo de un solo dispositivo se registra por separado y no
+completa ningun escenario de esta matriz ni produce resultados de aceptacion.
+La baseline actual es `a064ce2c38abe4502b8c11ceeb9be5b7187aea62`: si el smoke
+no cambia codigo, puede seguir siendo candidata; si deriva en cambios de codigo,
+queda como baseline de comparacion y deja de ser candidata final automatica.
+
+Antes de usar este runbook con codigo modificado por ese smoke:
+
+1. registrar el nuevo SHA candidato;
+2. confirmar el Preview correspondiente;
+3. repetir P0;
+4. ejecutar un smoke focal de regresion sobre las superficies tocadas;
+5. actualizar los datos generales de ejecucion.
+
+N1 permanece reservado para la candidata final y no puede sustituirse con la
+exploracion de un dispositivo.
+
 ---
 
 # 1. Datos generales de la ejecucion

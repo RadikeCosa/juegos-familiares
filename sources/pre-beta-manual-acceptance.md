@@ -83,6 +83,23 @@ Siguen fuera de alcance del protocolo:
 * nuevos contratos backend;
 * reconciliar la numeracion operativa `15.x`.
 
+## Exploracion UX/UI previa
+
+Antes de esta aceptacion formal puede realizarse un smoke UX/UI exploratorio en
+un solo dispositivo. Se registra por separado: no produce evidencia de
+aceptacion, no completa S1-S8, N1, C1-C10, R1-R4, U1, E1 o D1 y no genera un
+`PASS` de aceptacion. En particular, no sustituye la sesion natural N1, que debe
+ejecutarse sobre la candidata final.
+
+La baseline actual es `a064ce2c38abe4502b8c11ceeb9be5b7187aea62`. Si la
+exploracion no deriva en cambios de codigo, puede seguir siendo candidata. Si
+deriva en cualquier cambio de codigo, incluso visual o de copy, el P0 ya
+registrado no se aplica automaticamente a la nueva candidata: antes de la
+aceptacion formal se debe identificar explicitamente el nuevo commit y su
+Preview, repetir P0 y ejecutar un smoke focal sobre las superficies tocadas.
+En ese caso, `a064ce2` se conserva como baseline de comparacion, no como
+candidata final automatica.
+
 ---
 
 # 3. Fuentes y contratos

@@ -3872,6 +3872,28 @@ Incremento 14 queda cerrado con la fórmula `INCREMENT 14 CLOSED WITH EXTERNAL M
 
 Incremento 15 está en curso. `15.4` implementó claridad UX y quedó cubierto por el P0 del candidato `a064ce2`, con smoke UX/UI en mobile real pendiente. `15.5` creó el protocolo de aceptación y registró P0 `PASS`; S1-S8, N1, C1-C10, R1-R4, U1, E1 y D1 siguen pendientes.
 
+Antes de la aceptación física pre-beta se ejecutará, como paso preparatorio, un
+smoke UX/UI exploratorio en un solo dispositivo. Esta actividad no forma parte
+de S1-S8, N1, C1-C10, R1-R4, U1, E1 o D1 y no usa resultados `PASS`/`FAIL` de
+aceptación. Busca detectar problemas de jerarquía visual, copy, ergonomía
+táctil, densidad/scroll, responsive, claridad de CTA, estados de espera y
+fricción perceptual mobile. No valida Presence, sucesión de host,
+sincronización o recovery multi-actor, privacidad entre dispositivos, votación
+real, scoring ni update PWA.
+
+La baseline actual se preserva como
+`a064ce2c38abe4502b8c11ceeb9be5b7187aea62`. Si el smoke no produce cambios de
+código, `a064ce2` puede seguir siendo candidata para aceptación. Si produce
+cambios, incluso solo visuales o de copy, el polish debe realizarse después en
+una rama y commit separados, generar un nuevo SHA candidato y usar un Preview
+separado. Para esa nueva candidata se debe repetir P0 y ejecutar un smoke focal
+sobre las superficies tocadas antes de la aceptación formal; `a064ce2` queda
+como baseline de comparación y deja de ser candidata final automática.
+
+N1 se reserva para la candidata final y para la sesión natural con cuatro
+dispositivos. El smoke exploratorio de un dispositivo no sustituye N1 ni
+completa ningún escenario formal.
+
 ---
 
 # 9. Seguridad y privacidad por etapa
@@ -4036,9 +4058,11 @@ Ese riesgo pertenece al arranque del proyecto y ya no representa el próximo pas
 
 El siguiente paso lógico del roadmap formal es continuar Incremento 15:
 
-1. preservar `a064ce2` como baseline preparada y ejecutar el smoke UX/UI mobile real pendiente de 15.4;
-2. ejecutar la aceptación 15.5, incluidos Android Chrome installed PWA, iOS Safari Add to Home Screen, U1 y recovery multi-actor real;
-3. registrar E1 y D1 y declarar el cierre del MVP solamente cuando se cumplan sus criterios técnicos, de validación manual y de riesgo.
+1. preservar `a064ce2` como baseline estable y ejecutar el smoke UX/UI exploratorio de un dispositivo pendiente de 15.4;
+2. clasificar sus hallazgos y, si corresponde, realizar polish acotado en una rama/commit separados y generar un nuevo SHA candidato con Preview separado;
+3. si cambió código, repetir P0 y ejecutar un smoke focal sobre las superficies tocadas;
+4. ejecutar la aceptación formal 15.5 con cuatro dispositivos contra la candidata final, incluidos N1, Android Chrome installed PWA, iOS Safari Add to Home Screen, U1 y recovery multi-actor real;
+5. registrar E1 y D1 y declarar el cierre del MVP solamente cuando se cumplan sus criterios técnicos, de validación manual y de riesgo.
 
 Estado consolidado vigente:
 
