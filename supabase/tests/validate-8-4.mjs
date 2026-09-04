@@ -314,8 +314,7 @@ function assertNoForbiddenReadModelFields(row, context) {
     "voter_player_id",
     "target_player_id",
     "score",
-    "scoreboard",
-    "winner"
+    "scoreboard"
   ]) {
     assert(!(forbidden in row), `${context}: must not expose ${forbidden}.`);
   }

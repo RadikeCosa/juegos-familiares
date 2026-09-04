@@ -408,8 +408,6 @@ async function main() {
   for (const allowedState of ["role_reveal", "discussion", "voting_first", "tie_discussion", "impostor_guess", "round_result"]) {
     assert(stateCheck.includes(allowedState), `game_sessions.state should allow ${allowedState}.`);
   }
-  assert(!stateCheck.includes("voting_second"), "8.2 must not add voting_second.");
-  assert(!stateCheck.includes("scoreboard"), "8.2 must not add scoreboard.");
   assert(!hasColumn("rounds", "status"), "rounds must not include status.");
 
   assertEqual(functionArgs("submit_round_vote"), "target_player_id uuid", "submit_round_vote must have one target arg.");

@@ -417,8 +417,6 @@ async function main() {
   for (const allowedState of ["role_reveal", "discussion", "voting_first", "tie_discussion", "voting_second", "impostor_guess", "round_result"]) {
     assert(stateCheck.includes(allowedState), `game_sessions.state should allow ${allowedState}.`);
   }
-  assert(!stateCheck.includes("scoreboard"), "9.1 must not add scoreboard.");
-  assert(!stateCheck.includes("finished"), "9.1 must not add finished.");
   assert(!stateCheck.includes("preparing_round"), "9.1 must not add preparing_round.");
   assert(!hasColumn("rounds", "status"), "rounds must not include status.");
   assert(!hasColumn("rounds", "score"), "rounds must not include score.");

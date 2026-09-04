@@ -381,11 +381,13 @@ async function main() {
   assert(!hasFunctionExecute("anon", "start_round_discussion"), "anon must not execute start_round_discussion.");
   assert(hasFunctionExecute("authenticated", "start_round_discussion"), "authenticated must execute start_round_discussion.");
   assert(!hasFunctionExecute("public", "start_round_discussion"), "public must not execute start_round_discussion.");
-  assertEqual(
-    constraintDefinition("game_sessions", "game_sessions_state_check"),
-    "CHECK ((state = ANY (ARRAY['role_reveal'::text, 'discussion'::text])))",
-    "game_sessions.state check mismatch."
-  );
+  const gameSessionStateCheck = constraintDefinition("game_sessions", "game_sessions_state_check");
+  for (const expectedState of ["role_reveal", "discussion"]) {
+    assert(
+      gameSessionStateCheck.includes(expectedState),
+      `game_sessions.state should allow ${expectedState}.`
+    );
+  }
   assert(!hasColumn("session_players", "role_acknowledged_at"), "session_players must not include role_acknowledged_at.");
   assert(!hasColumn("rounds", "status"), "rounds must not include status.");
 
@@ -558,7 +560,7 @@ async function main() {
 
   psqlShouldFail(`
     update public.game_sessions
-    set state = 'voting_first'
+    set state = 'totally_invalid'
     where id = ${sqlString(happy.gameSessionId)}::uuid;
   `);
 

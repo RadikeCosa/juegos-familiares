@@ -50,6 +50,10 @@ function psql(sql) {
   }).trim();
 }
 
+function sqlString(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
+}
+
 function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
