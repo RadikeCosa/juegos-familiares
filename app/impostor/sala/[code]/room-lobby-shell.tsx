@@ -1368,6 +1368,12 @@ export function renderRoomLobbyContent(
     const { lobby } = dataState;
     const hostParticipant = getHostParticipant(lobby);
     const selfParticipant = getSelfParticipant(lobby);
+    const roleRevealGuidance = selfParticipant?.isHost
+      ? "Cuando todos estén listos, empezá la ronda."
+      : "Esperá a que el host empiece la ronda.";
+    const discussionGuidance = selfParticipant?.isHost
+      ? "La ronda está en juego. Cuando termine la conversación, abrí la votación."
+      : "La ronda está en juego. Conversen; el host abrirá la votación.";
     const canStartDiscussion =
       isRoomStateTrusted &&
       dataState.status === "role-reveal" &&
@@ -1503,6 +1509,7 @@ export function renderRoomLobbyContent(
           >
             <p className="impostor-kicker">Ronda {dataState.gameState.roundNumber}</p>
             <h1 id="impostor-room-discussion-title">Ronda en juego</h1>
+            <p>{discussionGuidance}</p>
             {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
             <button
               className="impostor-action impostor-action--primary"
@@ -1533,6 +1540,7 @@ export function renderRoomLobbyContent(
           ) : (
             <h1 id="impostor-room-discussion-title">Sos el impostor</h1>
           )}
+          <p>{discussionGuidance}</p>
           {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
           <button
             className="impostor-action impostor-action--primary"
@@ -1985,54 +1993,63 @@ export function renderRoomLobbyContent(
       );
     }
 
-    if (!dataState.isPrivateViewRevealed) {
-      return (
-        <section
-          className="impostor-group-card impostor-room-role-reveal"
-          aria-labelledby="impostor-role-hidden-title"
-        >
-          <p className="impostor-kicker">Tanda</p>
-          <h1 id="impostor-role-hidden-title">Tu rol está listo</h1>
-          {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
-          <button
-            className="impostor-action impostor-action--primary"
-            type="button"
-            onClick={options.onRevealPrivateView}
-          >
-            Ver mi rol
-          </button>
-          {startDiscussionAction}
-          {!canStartDiscussion ? startDiscussionErrorFeedback : null}
-        </section>
-      );
-    }
-
-    if (dataState.gameState.privateView.role === "impostor") {
-      return (
-        <section
-          className="impostor-group-card impostor-room-role-reveal"
-          aria-labelledby="impostor-role-impostor-title"
-        >
-          <p className="impostor-kicker">Ronda {dataState.gameState.roundNumber}</p>
-          <h1 id="impostor-role-impostor-title">Sos el impostor</h1>
-          {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
-          {startDiscussionAction}
-          {!canStartDiscussion ? startDiscussionErrorFeedback : null}
-        </section>
-      );
-    }
-
     return (
       <section
         className="impostor-group-card impostor-room-role-reveal"
-        aria-labelledby="impostor-role-player-title"
+        aria-labelledby="impostor-role-reveal-context"
       >
-        <p className="impostor-kicker">Ronda {dataState.gameState.roundNumber}</p>
-        <h1 id="impostor-role-player-title">Tu palabra es</h1>
-        <p className="impostor-room-secret-word">
-          {dataState.gameState.privateView.word}
+        <p className="impostor-kicker" id="impostor-role-reveal-context">
+          Ronda {dataState.gameState.roundNumber}
         </p>
-        {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
+        <button
+          aria-describedby="impostor-role-reveal-guidance"
+          aria-label={
+            dataState.isPrivateViewRevealed
+              ? "Ocultar información privada"
+              : "Revelar palabra secreta"
+          }
+          aria-pressed={dataState.isPrivateViewRevealed}
+          className="impostor-action"
+          type="button"
+          onClick={
+            dataState.isPrivateViewRevealed
+              ? options.onHidePrivateView
+              : options.onRevealPrivateView
+          }
+          style={{
+            width: "100%",
+            maxWidth: "28rem",
+            minHeight: "10rem",
+            padding: "var(--space-6)",
+            borderRadius: "var(--radius-lg)",
+            flexDirection: "column",
+            gap: "var(--space-3)",
+            textAlign: "center",
+          }}
+        >
+          {dataState.isPrivateViewRevealed ? (
+            <>
+              <span className="impostor-room-secret-word">
+                {dataState.gameState.privateView.role === "impostor"
+                  ? "IMPOSTOR"
+                  : dataState.gameState.privateView.word}
+              </span>
+              <span
+                style={{
+                  color: "var(--foreground)",
+                  fontSize: "0.875rem",
+                  fontWeight: 600,
+                  lineHeight: 1.25,
+                }}
+              >
+                Tocá de nuevo para ocultar
+              </span>
+            </>
+          ) : (
+            "Revelar palabra secreta"
+          )}
+        </button>
+        <p id="impostor-role-reveal-guidance">{roleRevealGuidance}</p>
         {startDiscussionAction}
         {!canStartDiscussion ? startDiscussionErrorFeedback : null}
       </section>
