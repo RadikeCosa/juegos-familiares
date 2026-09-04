@@ -742,8 +742,8 @@ El reveal privado vuelve inicialmente oculto después de refresh/reconnect. Esto
 | Fase | Estado compartido autoritativo | Estado privado | Acción propia persistida | UI esperada al reconectar |
 | --- | --- | --- | --- | --- |
 | `lobby` | Room `lobby`, host, participants, código/enlace, Presence efímera | ninguno | pertenencia a Room | lobby actual o salida al grupo si Room cerró |
-| `role_reveal` | Room `playing`, GameSession, Round, roster, round number | rol y palabra sólo para no-impostor | ninguna confirmación persistida | reveal oculto; botón para ver rol/palabra vigente |
-| `discussion` | fase, host, roster, round number | misma vista privada autorizada del caller | ninguna | conversación vigente; reveal local oculto salvo estado efímero preservado en mismo montaje |
+| `role_reveal` | Room `playing`, GameSession, Round, roster, round number, jugador que empieza (`Round.starting_player_id`) | rol y palabra sólo para no-impostor | ninguna confirmación persistida | reveal oculto; botón para ver rol/palabra vigente |
+| `discussion` | fase, host, roster, round number, jugador que empieza (`Round.starting_player_id`) | misma vista privada autorizada del caller | ninguna | conversación vigente; indicación de quién empieza; reveal local oculto salvo estado efímero preservado en mismo montaje |
 | `voting_first` | fase y candidatos desde `SessionPlayers` | rol/word según reglas vigentes, sin parciales | voto propio de `voting_round = 1` | votar si no votó; espera si `has_voted = true`; fase siguiente si avanzó |
 | `tie_discussion` | resultado agregado de primera votación y candidatos empatados derivados | ningún secreto adicional | voto de primera etapa ya cerrado | ver empate vigente; host actual puede iniciar segunda votación si read model lo permite |
 | `voting_second` | candidatos empatados autorizados, sin parciales | ningún secreto adicional | voto propio de `voting_round = 2` | votar si no votó; espera si `has_voted = true`; usar `my_vote_target_player_id` si llega |
@@ -950,6 +950,16 @@ Para impostor:
 El objetivo es combinar azar, variedad y distribución razonablemente equilibrada.
 
 No hace falta persistir conceptualmente `impostorCount` si puede derivarse de rondas anteriores.
+
+## Para quién empieza a hablar
+
+La aplicación selecciona autoritativamente, dentro de la misma operación que crea la ronda (`start_session()` o `start_next_round()`), qué `SessionPlayer` da la primera pista:
+
+* contar cuántas veces empezó cada `SessionPlayer` dentro de la `GameSession` actual, usando `Round.starting_player_id`;
+* determinar el menor conteo;
+* elegir aleatoriamente entre los `SessionPlayers` con ese conteo mínimo.
+
+La selección es independiente del rol asignado en esa ronda y del host. El resultado se persiste en `Round.starting_player_id`, referenciando el roster congelado de esa `GameSession`, y se expone mediante `get_my_game_state()` a todos los participantes autorizados. El cliente no puede enviar `starting_player_id`. Rondas creadas antes de esta regla pueden no tener el dato; se tratan como conteo cero, sin bloquear la selección de rondas nuevas.
 
 ---
 

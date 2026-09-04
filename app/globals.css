@@ -1149,6 +1149,28 @@ body {
   overflow-wrap: anywhere;
 }
 
+.impostor-room-starting-player {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.impostor-room-starting-player h2 {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.impostor-room-starting-player p {
+  color: var(--foreground);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  opacity: 0.8;
+}
+
 .impostor-vote-list,
 .impostor-vote-results {
   display: grid;

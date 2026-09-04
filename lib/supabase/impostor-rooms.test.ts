@@ -76,6 +76,16 @@ const gameStateDiscussionPlayerRow = {
     state: "discussion"
 };
 
+const gameStateDiscussionWithStartingPlayerRow = {
+    ...gameStateDiscussionPlayerRow,
+    starting_player: { player_id: "player-1", nickname: "Ramiro", is_self: true }
+};
+
+const gameStateDiscussionWithOtherStartingPlayerRow = {
+    ...gameStateDiscussionPlayerRow,
+    starting_player: { player_id: "player-2", nickname: "Pedro", is_self: false }
+};
+
 const gameStateImpostorRow = {
     state: "role_reveal",
     round_number: 1,
@@ -1156,6 +1166,7 @@ describe("getMyGameState", () => {
             state: "role_reveal",
             roundNumber: 1,
             privateView: { role: "player", word: "Tesoro Azul" },
+            startingPlayer: null,
             candidates: null,
             voting: null,
             voteResults: null
@@ -1182,6 +1193,7 @@ describe("getMyGameState", () => {
             state: "role_reveal",
             roundNumber: 1,
             privateView: { role: "impostor", word: null },
+            startingPlayer: null,
             candidates: null,
             voting: null,
             voteResults: null
@@ -1200,10 +1212,62 @@ describe("getMyGameState", () => {
             state: "discussion",
             roundNumber: 1,
             privateView: { role: "player", word: "Tesoro Azul" },
+            startingPlayer: null,
             candidates: null,
             voting: null,
             voteResults: null
         });
+    });
+
+    it("maps the persisted starting player and flags the authenticated participant with isSelf", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [gameStateDiscussionWithStartingPlayerRow],
+                error: null
+            }))
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toMatchObject({
+            startingPlayer: { playerId: "player-1", nickname: "Ramiro", isSelf: true }
+        });
+    });
+
+    it("maps the same persisted starting player for a non-chosen participant without isSelf", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [gameStateDiscussionWithOtherStartingPlayerRow],
+                error: null
+            }))
+        };
+
+        await expect(getMyGameState(supabase)).resolves.toMatchObject({
+            startingPlayer: { playerId: "player-2", nickname: "Pedro", isSelf: false }
+        });
+    });
+
+    it("rejects a malformed starting player and a starting player leaked on finished results", async () => {
+        const malformedStartingPlayer = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...gameStateDiscussionPlayerRow, starting_player: { player_id: "player-1" } }],
+                error: null
+            }))
+        };
+        const finishedWithStartingPlayer = {
+            rpc: vi.fn(async () => ({
+                data: [{
+                    ...gameStateFinishedRow,
+                    starting_player: { player_id: "player-1", nickname: "Ramiro", is_self: true }
+                }],
+                error: null
+            }))
+        };
+
+        await expect(getMyGameState(malformedStartingPlayer)).rejects.toThrow(
+            "No pudimos confirmar el estado de la tanda."
+        );
+        await expect(getMyGameState(finishedWithStartingPlayer)).rejects.toThrow(
+            "No pudimos confirmar el estado de la tanda."
+        );
     });
 
     it("maps voting_first candidates and only the caller vote status", async () => {
@@ -1215,6 +1279,7 @@ describe("getMyGameState", () => {
             state: "voting_first",
             roundNumber: 1,
             privateView: { role: "player", word: "Tesoro Azul" },
+            startingPlayer: null,
             candidates: [
                 { playerId: "player-2", nickname: "Pedro" },
                 { playerId: "player-3", nickname: "Ana" }
@@ -1281,6 +1346,7 @@ describe("getMyGameState", () => {
             state: "voting_second",
             roundNumber: 1,
             privateView: { role: "player", word: "Tesoro Azul" },
+            startingPlayer: null,
             candidates: [{ playerId: "player-3", nickname: "Ana" }],
             voting: {
                 candidates: [{ playerId: "player-3", nickname: "Ana" }],
@@ -1427,6 +1493,7 @@ describe("getMyGameState", () => {
             state: "finished",
             roundNumber: 2,
             privateView: { role: "player", word: null },
+            startingPlayer: null,
             candidates: null,
             voting: null,
             voteResults: null,

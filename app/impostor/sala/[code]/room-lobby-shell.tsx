@@ -1067,6 +1067,28 @@ export function renderRoomParticipantsList(
   );
 }
 
+function renderStartingPlayerNotice(startingPlayer: MyGameState["startingPlayer"]) {
+  if (!startingPlayer) {
+    return null;
+  }
+
+  return (
+    <div
+      className="impostor-room-starting-player"
+      aria-labelledby="impostor-room-starting-player-title"
+    >
+      <h2 id="impostor-room-starting-player-title">
+        {startingPlayer.isSelf ? "Empezás vos" : `Empieza ${startingPlayer.nickname}`}
+      </h2>
+      <p>
+        {startingPlayer.isSelf
+          ? "Da una pista breve. Después sigue la persona que está a tu derecha."
+          : "Después continúen hacia la derecha."}
+      </p>
+    </div>
+  );
+}
+
 function renderRoomConnectionNotice(
   connectionState: RoomConnectionState,
   onRetry?: () => void,
@@ -1511,6 +1533,7 @@ export function renderRoomLobbyContent(
             <p className="impostor-kicker">Ronda {dataState.gameState.roundNumber}</p>
             <h1 id="impostor-room-discussion-title">Ronda en juego</h1>
             <p>{discussionGuidance}</p>
+            {renderStartingPlayerNotice(dataState.gameState.startingPlayer)}
             {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
             <button
               className="impostor-action impostor-action--primary"
@@ -1542,6 +1565,7 @@ export function renderRoomLobbyContent(
             <h1 id="impostor-room-discussion-title">Sos el impostor</h1>
           )}
           <p>{discussionGuidance}</p>
+          {renderStartingPlayerNotice(dataState.gameState.startingPlayer)}
           {hostParticipant ? <p>Host actual: {hostParticipant.nickname}</p> : null}
           <button
             className="impostor-action impostor-action--primary"

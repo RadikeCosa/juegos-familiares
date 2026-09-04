@@ -54,6 +54,10 @@ export default function ImpostorPage() {
             Cada participante usa su teléfono. La app reparte los roles y se
             ocupa de la votación cuando llegue el momento.
           </p>
+          <p>
+            En cada ronda, la app elige quién da la primera pista. Después
+            continúan hacia la derecha.
+          </p>
         </section>
       </div>
     </main>

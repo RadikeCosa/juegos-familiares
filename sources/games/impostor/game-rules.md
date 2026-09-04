@@ -175,9 +175,9 @@ La privacidad no debe depender solamente de ocultar visualmente información que
 
 Cuando todos disponen de su información, la aplicación indica que puede comenzar el juego.
 
-No selecciona obligatoriamente quién habla primero.
+La aplicación selecciona autoritativamente quién da la primera pista, mediante azar equilibrado dentro de la tanda actual: entre quienes hayan comenzado menos veces tiene prioridad, y la selección es independiente del rol asignado en esa ronda.
 
-El grupo puede decidir quién comienza y continuar, por ejemplo, en sentido horario.
+Después de esa primera intervención, el grupo continúa físicamente, por ejemplo hacia la derecha. La aplicación no controla ni registra los turnos posteriores.
 
 ---
 
