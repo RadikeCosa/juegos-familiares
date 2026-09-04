@@ -820,6 +820,25 @@ Severity: LOW
 Confidence: MEDIUM
 ```
 
+### UX-13 — Resolución posterior aprobada
+
+Implementación: el commit `ea73954` habilita la creación y unión directa a una
+Room desde `/impostor`. Un jugador reconocido sin Room activa ve `Crear sala`
+(acción directa) y `Unirme a una sala` (formulario inline con foco automático,
+enviable por teclado), sin pasar por `/impostor/grupo#jugar`. `Ver grupo` se
+mantiene como navegación secundaria explícita. La lógica de creación/unión se
+extrajo a una pieza compartida (`useRoomEntryActions`) reutilizada también por
+`/impostor/grupo`, que conserva sus acciones equivalentes.
+
+Validación registrada: tests focalizados de `/impostor` y `/impostor/grupo`,
+suite completa (`npm test`), lint y `git diff --check` se ejecutaron durante la
+implementación.
+
+Pendiente: revisión manual (crear Room, abrir/cerrar formulario, código válido
+e inválido, doble tap, tres sesiones reales, lobby, playing, viewport móvil y
+navegación por teclado). No hay evidencia de esa revisión manual en esta
+actualización.
+
 ### UX-02 — Impostor entry mixes game and Group context
 
 ```text

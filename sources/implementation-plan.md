@@ -3881,11 +3881,12 @@ mismo Group, sin Room activa, aprobó ese resultado.
 
 Siguen pendientes la observación manual del estado de portada con Room activa,
 la revalidación que corresponda a una nueva candidata y las validaciones
-formales ya abiertas del Incremento 15. También queda sin resolver la
-observación `POLISH` de la entrada a Room: desde `/impostor`, elegir `Unirme a
-una sala` lleva a `/impostor/grupo#jugar` y exige elegir la misma acción una
-segunda vez antes de introducir el código. No hay solución aprobada para ese
-paso intermedio.
+formales ya abiertas del Incremento 15. La observación `POLISH` de la entrada
+a Room quedó implementada en el commit `ea73954`: desde `/impostor`, un
+jugador reconocido sin Room activa puede crear sala directamente o unirse
+mediante un formulario inline, sin pasar por `/impostor/grupo#jugar`. Falta la
+revisión manual de ese cambio (crear, unirse, código inválido, doble tap,
+lobby, playing, viewport móvil, teclado).
 
 Antes de la aceptación física pre-beta se ejecutará, como paso preparatorio, un
 smoke UX/UI exploratorio en un solo dispositivo. Esta actividad no forma parte
