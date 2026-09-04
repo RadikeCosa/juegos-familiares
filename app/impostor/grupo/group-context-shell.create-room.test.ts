@@ -86,13 +86,13 @@ describe("Jugar section", () => {
 
     it("records room creation intent before navigating, so /impostor/sala/[code] does not auto-create on a bare visit", () => {
         const source = readFileSync(
-            join(process.cwd(), "app/impostor/grupo/group-context-shell.tsx"),
+            join(process.cwd(), "app/impostor/use-room-entry-actions.ts"),
             "utf8"
         );
 
-        expect(source).toContain("recordRoomCreationIntent(lobby.room.code)");
-        expect(source.indexOf("recordRoomCreationIntent(lobby.room.code)")).toBeLessThan(
-            source.indexOf("router.push(`/impostor/sala/")
+        expect(source).toContain("recordCreationIntent(lobby.room.code)");
+        expect(source.indexOf("recordCreationIntent(lobby.room.code)")).toBeLessThan(
+            source.indexOf("navigate(`/impostor/sala/")
         );
     });
 });

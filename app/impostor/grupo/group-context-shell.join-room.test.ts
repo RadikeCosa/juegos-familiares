@@ -77,23 +77,32 @@ describe("Unirme a una sala action", () => {
 
     it("records room join intent before navigating, so /impostor/sala/[code] reuses the join result", () => {
         const source = readFileSync(
-            join(process.cwd(), "app/impostor/grupo/group-context-shell.tsx"),
+            join(process.cwd(), "app/impostor/use-room-entry-actions.ts"),
             "utf8"
         );
 
-        expect(source).toContain("recordRoomJoinIntent(lobby.room.code)");
-        expect(source.indexOf("recordRoomJoinIntent(lobby.room.code)")).toBeLessThan(
-            source.lastIndexOf("router.push(`/impostor/sala/")
+        expect(source).toContain("recordJoinIntent(lobby.room.code)");
+        expect(source.indexOf("recordJoinIntent(lobby.room.code)")).toBeLessThan(
+            source.lastIndexOf("navigate(`/impostor/sala/")
         );
     });
 
-    it("normalizes the room code sent from the join form", () => {
+    it("extracts the raw room code from the join form before delegating to the shared entry actions", () => {
         const source = readFileSync(
             join(process.cwd(), "app/impostor/grupo/group-context-shell.tsx"),
             "utf8"
         );
 
-        expect(source).toContain("normalizeRoomJoinCode(");
         expect(source).toContain("formData.get(\"roomCode\")");
+        expect(source).toContain("joinRoomByCode(");
+    });
+
+    it("normalizes the room code in the shared entry actions controller", () => {
+        const source = readFileSync(
+            join(process.cwd(), "app/impostor/use-room-entry-actions.ts"),
+            "utf8"
+        );
+
+        expect(source).toContain("normalizeRoomJoinCode(");
     });
 });

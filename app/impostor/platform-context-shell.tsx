@@ -1,11 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   useActiveRoomContext,
   type ActiveRoomContextState,
 } from "./use-active-room-context";
+import {
+  useRoomEntryActions,
+  type RoomCreationState,
+  type RoomJoinState,
+} from "./use-room-entry-actions";
 import { createBrowserSupabaseClient } from "../../lib/supabase/browser-client";
 import {
   bootstrapPlatformContext,
@@ -37,9 +42,19 @@ function ImpostorRecognizedContext({
   player,
   roomState,
   onRetryActiveRoom,
+  roomCreationState,
+  roomJoinState,
+  onCreateRoom,
+  onShowJoinRoomForm,
+  onJoinRoomSubmit,
 }: RecognizedPlatformContext & {
   roomState: ActiveRoomContextState;
   onRetryActiveRoom?: () => void;
+  roomCreationState: RoomCreationState;
+  roomJoinState: RoomJoinState;
+  onCreateRoom?: () => void;
+  onShowJoinRoomForm?: () => void;
+  onJoinRoomSubmit?: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const isAdmin = group.adminPlayerId === player.id;
   const [shareState, setShareState] = useState<ShareGroupInvitationState>({
@@ -48,6 +63,13 @@ function ImpostorRecognizedContext({
   const invitationController = useRef(
     createGetMyActiveGroupInvitationController()
   );
+  const joinInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (roomJoinState.status === "form") {
+      joinInputRef.current?.focus();
+    }
+  }, [roomJoinState.status]);
 
   async function handleShareInvitation() {
     if (shareState.status === "loading") {
@@ -97,14 +119,65 @@ function ImpostorRecognizedContext({
           <p className="impostor-platform-context__meta">
             No hay una sala activa.
           </p>
-          <Link
+          <button
             className="impostor-action impostor-action--primary"
-            href="/impostor/grupo#jugar"
+            type="button"
+            disabled={roomJoinState.status === "joining"}
+            onClick={onShowJoinRoomForm}
           >
-            Crear sala
-          </Link>
-          <Link className="impostor-action" href="/impostor/grupo#jugar">
             Unirme a una sala
+          </button>
+          <button
+            className="impostor-action"
+            type="button"
+            disabled={roomCreationState.status === "creating"}
+            onClick={onCreateRoom}
+          >
+            {roomCreationState.status === "creating"
+              ? "Creando sala..."
+              : "Crear sala"}
+          </button>
+          {roomCreationState.status === "error" ? (
+            <p aria-live="polite">{roomCreationState.message}</p>
+          ) : null}
+          {roomJoinState.status === "form" ||
+          roomJoinState.status === "joining" ? (
+            <form
+              className="impostor-create-group"
+              aria-labelledby="impostor-join-room-title"
+              onSubmit={onJoinRoomSubmit}
+            >
+              <h3 id="impostor-join-room-title">Unirme a una sala</h3>
+              <label className="impostor-field">
+                <span>Código de sala</span>
+                <input
+                  ref={joinInputRef}
+                  name="roomCode"
+                  type="text"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  maxLength={8}
+                  required
+                  disabled={roomJoinState.status === "joining"}
+                />
+              </label>
+              <button
+                className="impostor-action impostor-action--primary"
+                type="submit"
+                disabled={roomJoinState.status === "joining"}
+              >
+                {roomJoinState.status === "joining"
+                  ? "Uniéndote..."
+                  : "Unirme"}
+              </button>
+            </form>
+          ) : null}
+          {roomJoinState.status === "error" ? (
+            <p aria-live="polite">{roomJoinState.message}</p>
+          ) : null}
+          <Link className="impostor-action" href="/impostor/grupo">
+            Ver grupo
           </Link>
         </>
       ) : null}
@@ -178,6 +251,7 @@ function ImpostorRecognizedContext({
   );
 }
 
+
 export function renderImpostorPlatformContext(
   state: PlatformBootstrapState,
   options: {
@@ -185,6 +259,11 @@ export function renderImpostorPlatformContext(
     onRetry?: () => void;
     roomState?: ActiveRoomContextState;
     onRetryActiveRoom?: () => void;
+    roomCreationState?: RoomCreationState;
+    roomJoinState?: RoomJoinState;
+    onCreateRoom?: () => void;
+    onShowJoinRoomForm?: () => void;
+    onJoinRoomSubmit?: (event: FormEvent<HTMLFormElement>) => void;
   } = {}
 ) {
   if (state.status === "loading") {
@@ -202,6 +281,11 @@ export function renderImpostorPlatformContext(
         player={state.player}
         roomState={options.roomState ?? { status: "idle" }}
         onRetryActiveRoom={options.onRetryActiveRoom}
+        roomCreationState={options.roomCreationState ?? { status: "idle" }}
+        roomJoinState={options.roomJoinState ?? { status: "idle" }}
+        onCreateRoom={options.onCreateRoom}
+        onShowJoinRoomForm={options.onShowJoinRoomForm}
+        onJoinRoomSubmit={options.onJoinRoomSubmit}
       />
     );
   }
@@ -245,6 +329,13 @@ export function ImpostorPlatformContextShell() {
     status: "loading"
   });
   const { roomState, retry: retryActiveRoom } = useActiveRoomContext(state);
+  const {
+    roomCreationState,
+    roomJoinState,
+    createRoom,
+    showJoinRoomForm,
+    joinRoomByCode
+  } = useRoomEntryActions();
 
   async function runBootstrap(showLoading: boolean) {
     if (showLoading) {
@@ -257,6 +348,14 @@ export function ImpostorPlatformContextShell() {
   function handleRecognizedContext(context: RecognizedPlatformContext) {
     writeLocalIdentityFromContext(context);
     setState({ status: "recognized", ...context });
+  }
+
+  function handleJoinRoomSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
+
+    joinRoomByCode(String(formData.get("roomCode") ?? ""));
   }
 
   useEffect(() => {
@@ -279,6 +378,11 @@ export function ImpostorPlatformContextShell() {
     onRecognizedContext: handleRecognizedContext,
     onRetry: () => void runBootstrap(true),
     roomState,
-    onRetryActiveRoom: retryActiveRoom
+    onRetryActiveRoom: retryActiveRoom,
+    roomCreationState,
+    roomJoinState,
+    onCreateRoom: createRoom,
+    onShowJoinRoomForm: showJoinRoomForm,
+    onJoinRoomSubmit: handleJoinRoomSubmit
   });
 }

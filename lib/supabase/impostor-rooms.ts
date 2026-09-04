@@ -2316,9 +2316,14 @@ export function createCreateRoomController() {
 
             activeRequest = createRoom(supabase);
 
-            void activeRequest.finally(() => {
-                activeRequest = null;
-            });
+            activeRequest.then(
+                () => {
+                    activeRequest = null;
+                },
+                () => {
+                    activeRequest = null;
+                }
+            );
 
             return activeRequest;
         }
@@ -2379,9 +2384,14 @@ export function createJoinRoomByCodeController() {
 
             activeRequest = joinRoomByCode(supabase, roomCode);
 
-            void activeRequest.finally(() => {
-                activeRequest = null;
-            });
+            activeRequest.then(
+                () => {
+                    activeRequest = null;
+                },
+                () => {
+                    activeRequest = null;
+                }
+            );
 
             return activeRequest;
         }
