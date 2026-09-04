@@ -1334,6 +1334,7 @@ export function renderRoomLobbyContent(
             ? "1 ronda jugada"
             : `${roundCount} rondas jugadas`}
         </p>
+        <p>La tanda terminó. Desde tu grupo podés crear otra sala.</p>
         <div
           className="impostor-group-section"
           aria-labelledby="impostor-room-final-score-title"

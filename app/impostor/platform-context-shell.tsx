@@ -87,24 +87,24 @@ function ImpostorRecognizedContext({
       className="impostor-platform-context"
       aria-labelledby="impostor-platform-context-title"
     >
-      <h2 id="impostor-platform-context-title">Hola, {player.nickname}</h2>
-      <div className="impostor-group-summary">
-        <p>Tu grupo</p>
-        <strong>{group.name}</strong>
-      </div>
+      <h2 id="impostor-platform-context-title">Empezar a jugar</h2>
+      <p>Hola, {player.nickname}.</p>
       {roomState.status === "loading" || roomState.status === "idle" ? (
         <p aria-live="polite">Comprobando sala activa...</p>
       ) : null}
       {roomState.status === "absent" ? (
         <>
           <p className="impostor-platform-context__meta">
-            Tu grupo ya está listo para jugar.
+            No hay una sala activa.
           </p>
           <Link
             className="impostor-action impostor-action--primary"
-            href="/impostor/grupo"
+            href="/impostor/grupo#jugar"
           >
-            Ir al juego del grupo
+            Crear sala
+          </Link>
+          <Link className="impostor-action" href="/impostor/grupo#jugar">
+            Unirme a una sala
           </Link>
         </>
       ) : null}
@@ -145,6 +145,13 @@ function ImpostorRecognizedContext({
           </Link>
         </>
       ) : null}
+      <div className="impostor-group-summary">
+        <p>Tu grupo</p>
+        <strong>{group.name}</strong>
+        <Link className="impostor-action" href="/grupo">
+          Ver grupo de Platform
+        </Link>
+      </div>
       {isAdmin && roomState.status === "absent" ? (
         <button
           className="impostor-action"

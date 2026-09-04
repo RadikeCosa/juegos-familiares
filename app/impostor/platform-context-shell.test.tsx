@@ -1,5 +1,7 @@
 import { isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   copyInvitation,
@@ -120,7 +122,7 @@ describe("renderImpostorPlatformContext", () => {
     expect(text).not.toContain("Invitar personas");
   });
 
-  it("shows a direct group-flow CTA when no active Room exists", () => {
+  it("shows differentiated room actions delegated to the group play section", () => {
     const state: PlatformBootstrapState = {
       status: "recognized",
       player: {
@@ -141,11 +143,12 @@ describe("renderImpostorPlatformContext", () => {
       renderImpostorPlatformContext(state, { roomState: { status: "absent" } })
     );
 
-    expect(markup).toContain("Tu grupo ya está listo para jugar.");
-    expect(markup).toContain("Ir al juego del grupo");
+    expect(markup).toContain("Empezar a jugar");
+    expect(markup).toContain("Crear sala");
+    expect(markup).toContain("Unirme a una sala");
+    expect(markup).toContain("href=\"/impostor/grupo#jugar\"");
     expect(markup).toContain("Compartir invitación");
-    expect(markup).toContain("href=\"/impostor/grupo\"");
-    expect(markup).not.toContain("Crear sala");
+    expect(markup).toContain("href=\"/grupo\"");
   });
 
   it("shows active lobby and playing Room CTAs with neutral group navigation", () => {
@@ -321,7 +324,7 @@ describe("renderImpostorPlatformContext", () => {
     expect(text).toContain("Hola, Pedro");
     expect(text).toContain("Tu grupo");
     expect(text).toContain("Familia");
-    expect(text).toContain("Ir al juego del grupo");
+    expect(text).toContain("Crear sala");
     expect(text).not.toContain("Invitá a los demás");
     expect(text).not.toContain("Invitar personas");
     expect(text).not.toContain("Compartir invitación");
@@ -376,6 +379,22 @@ describe("ImpostorAnonymousOnboardingActions", () => {
 
     expect(text).toContain("Unirme a un grupo");
     expect(text).not.toContain("Crear grupo");
+  });
+
+  it("offers a semantic confirmation and group continuation after invitation join", () => {
+    const source = readFileSync(
+      join(process.cwd(), "app/impostor/anonymous-onboarding-actions.tsx"),
+      "utf8"
+    );
+    const successBlock = source.slice(
+      source.indexOf('{state.status === "success" ? (', source.indexOf("ImpostorJoinByLinkActions")),
+      source.indexOf("</section>", source.indexOf("ImpostorJoinByLinkActions"))
+    );
+
+    expect(successBlock).toContain('className="impostor-onboarding__success"');
+    expect(successBlock).toContain('role="status"');
+    expect(successBlock).toContain('href="/impostor/grupo"');
+    expect(successBlock).toContain("Ir al grupo");
   });
 });
 

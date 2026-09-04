@@ -407,16 +407,22 @@ export function ImpostorAnonymousOnboardingActions({
         </dl>
       ) : null}
       {state.status === "join-success" ? (
-        <dl className="impostor-created-group">
-          <div>
-            <dt>Grupo</dt>
-            <dd>{state.result.group.name}</dd>
-          </div>
-          <div>
-            <dt>Tu nombre</dt>
-            <dd>{state.result.player.nickname}</dd>
-          </div>
-        </dl>
+        <div className="impostor-onboarding__success" role="status">
+          <strong>Ya estás dentro de {state.result.group.name}.</strong>
+          <dl className="impostor-created-group">
+            <div>
+              <dt>Grupo</dt>
+              <dd>{state.result.group.name}</dd>
+            </div>
+            <div>
+              <dt>Tu nombre</dt>
+              <dd>{state.result.player.nickname}</dd>
+            </div>
+          </dl>
+          <a className="impostor-action impostor-action--primary" href="/impostor/grupo">
+            Ir al grupo
+          </a>
+        </div>
       ) : null}
     </section>
   );
@@ -551,16 +557,22 @@ export function ImpostorJoinByLinkActions({
       </p>
 
       {state.status === "success" ? (
-        <dl className="impostor-created-group">
-          <div>
-            <dt>Grupo</dt>
-            <dd>{state.result.group.name}</dd>
-          </div>
-          <div>
-            <dt>Tu nombre</dt>
-            <dd>{state.result.player.nickname}</dd>
-          </div>
-        </dl>
+        <div className="impostor-onboarding__success" role="status">
+          <strong>Ya estás dentro de {state.result.group.name}.</strong>
+          <dl className="impostor-created-group">
+            <div>
+              <dt>Grupo</dt>
+              <dd>{state.result.group.name}</dd>
+            </div>
+            <div>
+              <dt>Tu nombre</dt>
+              <dd>{state.result.player.nickname}</dd>
+            </div>
+          </dl>
+          <a className="impostor-action impostor-action--primary" href="/impostor/grupo">
+            Ir al grupo
+          </a>
+        </div>
       ) : null}
     </section>
   );

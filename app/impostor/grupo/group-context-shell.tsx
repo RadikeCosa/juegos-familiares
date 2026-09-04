@@ -249,6 +249,7 @@ export function renderImpostorGroupContext(
 
       <div
         className="impostor-group-section impostor-play-section"
+        id="jugar"
         aria-labelledby="impostor-play-title"
       >
         <h2 id="impostor-play-title">Jugar</h2>

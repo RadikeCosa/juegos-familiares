@@ -2363,6 +2363,9 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("Ramiro");
         expect(markup).toContain("3 puntos");
         expect(markup).toContain("2 rondas jugadas");
+        expect(markup).toContain(
+            "La tanda terminó. Desde tu grupo podés crear otra sala."
+        );
         expect(markup).toContain("Volver al grupo");
         expect(markup).toContain("href=\"/impostor/grupo\"");
         expect(markup).not.toMatch(/Nueva ronda|Terminar tanda|voto|Casa|Mesa|impostor_guess|roundsSummary/i);
