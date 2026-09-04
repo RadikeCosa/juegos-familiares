@@ -180,7 +180,7 @@ describe("renderImpostorPlatformContext", () => {
     expect(markup).not.toContain("Código de sala");
   });
 
-  it("reveals an inline, keyboard-submittable join Room form with an accessible input", () => {
+  it("transitions to a contextual, keyboard-submittable join step", () => {
     const state: PlatformBootstrapState = {
       status: "recognized",
       player: {
@@ -205,6 +205,8 @@ describe("renderImpostorPlatformContext", () => {
     );
 
     expect(markup).toContain("<form");
+    expect(markup).toContain("Ingresá el código de la sala");
+    expect(markup).toContain("Pedíselo a la persona que creó la sala.");
     expect(markup).toContain("Código de sala");
     expect(markup).toContain("autoCapitalize=\"characters\"");
     expect(markup).toContain("autoCorrect=\"off\"");
@@ -212,6 +214,10 @@ describe("renderImpostorPlatformContext", () => {
     expect(markup).toContain(
       "class=\"impostor-action impostor-action--primary\" type=\"submit\""
     );
+    expect(markup).toContain("Entrar a la sala");
+    expect(markup).toContain("Volver");
+    expect(markup).not.toContain(">Crear sala<");
+    expect(markup).not.toContain(">Unirme a una sala</button>");
     expect(markup).not.toContain("Jugar a Impostor");
   });
 
@@ -247,7 +253,7 @@ describe("renderImpostorPlatformContext", () => {
 
     expect(creating).toContain("Creando sala...");
     expect(creating).toContain("disabled=\"\"");
-    expect(joining).toContain("Uniéndote...");
+    expect(joining).toContain("Entrando...");
     expect(joining).toContain("disabled=\"\"");
   });
 
@@ -292,6 +298,9 @@ describe("renderImpostorPlatformContext", () => {
     expect(joinError).toContain(
       "No encontramos esa sala. Revisá el código e intentá de nuevo."
     );
+    expect(joinError).toContain("Código de sala");
+    expect(joinError).toContain("Entrar a la sala");
+    expect(joinError).toContain("aria-invalid=\"true\"");
     expect(joinError).not.toMatch(/SQL|constraint|Postgres/i);
   });
 

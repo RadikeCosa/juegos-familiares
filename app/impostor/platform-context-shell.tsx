@@ -46,6 +46,7 @@ function ImpostorRecognizedContext({
   roomJoinState,
   onCreateRoom,
   onShowJoinRoomForm,
+  onHideJoinRoomForm,
   onJoinRoomSubmit,
 }: RecognizedPlatformContext & {
   roomState: ActiveRoomContextState;
@@ -54,6 +55,7 @@ function ImpostorRecognizedContext({
   roomJoinState: RoomJoinState;
   onCreateRoom?: () => void;
   onShowJoinRoomForm?: () => void;
+  onHideJoinRoomForm?: () => void;
   onJoinRoomSubmit?: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const isAdmin = group.adminPlayerId === player.id;
@@ -119,39 +121,48 @@ function ImpostorRecognizedContext({
           <p className="impostor-platform-context__meta">
             No hay una sala activa.
           </p>
-          <button
-            className="impostor-action impostor-action--primary"
-            type="button"
-            disabled={roomJoinState.status === "joining"}
-            onClick={onShowJoinRoomForm}
-          >
-            Unirme a una sala
-          </button>
-          <button
-            className="impostor-action"
-            type="button"
-            disabled={roomCreationState.status === "creating"}
-            onClick={onCreateRoom}
-          >
-            {roomCreationState.status === "creating"
-              ? "Creando sala..."
-              : "Crear sala"}
-          </button>
-          {roomCreationState.status === "error" ? (
-            <p aria-live="polite">{roomCreationState.message}</p>
-          ) : null}
-          {roomJoinState.status === "form" ||
-          roomJoinState.status === "joining" ? (
+          {roomJoinState.status === "idle" ? (
+            <>
+              <button
+                className="impostor-action impostor-action--primary"
+                type="button"
+                onClick={onShowJoinRoomForm}
+              >
+                Unirme a una sala
+              </button>
+              <button
+                className="impostor-action"
+                type="button"
+                disabled={roomCreationState.status === "creating"}
+                onClick={onCreateRoom}
+              >
+                {roomCreationState.status === "creating"
+                  ? "Creando sala..."
+                  : "Crear sala"}
+              </button>
+              {roomCreationState.status === "error" ? (
+                <p aria-live="polite">{roomCreationState.message}</p>
+              ) : null}
+            </>
+          ) : (
             <form
-              className="impostor-create-group"
+              className="impostor-create-group impostor-room-join-step"
               aria-labelledby="impostor-join-room-title"
               onSubmit={onJoinRoomSubmit}
             >
-              <h3 id="impostor-join-room-title">Unirme a una sala</h3>
+              <div>
+                <p className="impostor-kicker">Unirse a una sala</p>
+                <h3 id="impostor-join-room-title">Ingresá el código de la sala</h3>
+                <p id="impostor-join-room-help">
+                  Pedíselo a la persona que creó la sala.
+                </p>
+              </div>
               <label className="impostor-field">
                 <span>Código de sala</span>
                 <input
                   ref={joinInputRef}
+                  aria-describedby="impostor-join-room-help"
+                  aria-invalid={roomJoinState.status === "error"}
                   name="roomCode"
                   type="text"
                   autoCapitalize="characters"
@@ -162,20 +173,32 @@ function ImpostorRecognizedContext({
                   disabled={roomJoinState.status === "joining"}
                 />
               </label>
-              <button
-                className="impostor-action impostor-action--primary"
-                type="submit"
-                disabled={roomJoinState.status === "joining"}
-              >
-                {roomJoinState.status === "joining"
-                  ? "Uniéndote..."
-                  : "Unirme"}
-              </button>
+              {roomJoinState.status === "error" ? (
+                <p className="impostor-room-join-step__error" aria-live="polite">
+                  {roomJoinState.message}
+                </p>
+              ) : null}
+              <div className="impostor-room-join-step__actions">
+                <button
+                  className="impostor-action impostor-action--primary"
+                  type="submit"
+                  disabled={roomJoinState.status === "joining"}
+                >
+                  {roomJoinState.status === "joining"
+                    ? "Entrando..."
+                    : "Entrar a la sala"}
+                </button>
+                <button
+                  className="impostor-action"
+                  type="button"
+                  disabled={roomJoinState.status === "joining"}
+                  onClick={onHideJoinRoomForm}
+                >
+                  Volver
+                </button>
+              </div>
             </form>
-          ) : null}
-          {roomJoinState.status === "error" ? (
-            <p aria-live="polite">{roomJoinState.message}</p>
-          ) : null}
+          )}
           <Link className="impostor-action" href="/impostor/grupo">
             Ver grupo
           </Link>
@@ -263,6 +286,7 @@ export function renderImpostorPlatformContext(
     roomJoinState?: RoomJoinState;
     onCreateRoom?: () => void;
     onShowJoinRoomForm?: () => void;
+    onHideJoinRoomForm?: () => void;
     onJoinRoomSubmit?: (event: FormEvent<HTMLFormElement>) => void;
   } = {}
 ) {
@@ -285,6 +309,7 @@ export function renderImpostorPlatformContext(
         roomJoinState={options.roomJoinState ?? { status: "idle" }}
         onCreateRoom={options.onCreateRoom}
         onShowJoinRoomForm={options.onShowJoinRoomForm}
+        onHideJoinRoomForm={options.onHideJoinRoomForm}
         onJoinRoomSubmit={options.onJoinRoomSubmit}
       />
     );
@@ -334,6 +359,7 @@ export function ImpostorPlatformContextShell() {
     roomJoinState,
     createRoom,
     showJoinRoomForm,
+    hideJoinRoomForm,
     joinRoomByCode
   } = useRoomEntryActions();
 
@@ -383,6 +409,7 @@ export function ImpostorPlatformContextShell() {
     roomJoinState,
     onCreateRoom: createRoom,
     onShowJoinRoomForm: showJoinRoomForm,
+    onHideJoinRoomForm: hideJoinRoomForm,
     onJoinRoomSubmit: handleJoinRoomSubmit
   });
 }

@@ -1206,7 +1206,14 @@ then P0 and a focused smoke before formal acceptance.
 
 ## 17. Approved Polish
 
-<!-- Intentionally empty until polish is explicitly approved. -->
+Después de observación posterior en producción se aprobaron estas correcciones de UX/UI:
+
+- Unificar la consulta privada de `role_reveal` y `discussion`: contenido oculto por defecto, un objetivo táctil amplio para revelar y el mismo objetivo para volver a ocultar. La palabra o `IMPOSTOR` no debe aparecer directamente con un botón separado debajo.
+- Convertir `Unirme a una sala` en una transición intencional: el formulario contextual reemplaza las acciones iniciales, explica qué código ingresar, ofrece `Entrar a la sala` y `Volver`, y reserva el rojo para un error real después del intento.
+
+Ambas decisiones están implementadas localmente y requieren un nuevo candidate SHA y smoke focal antes de aceptación formal. Sus contratos vigentes se documentan en `product-decisions.md`, `user-flow.md`, `game-state-model.md` y `technical-requirements.md`.
+
+La preferencia anti-impostor para elegir quién inicia no se clasifica como polish visual: es una corrección de regla de producto y se documenta por separado en `game-rules.md`, `product-decisions.md` y `technical-requirements.md`.
 
 ## 18. Candidate Baseline After Polish
 

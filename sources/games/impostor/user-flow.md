@@ -259,6 +259,20 @@ Crea una Room en estado `lobby`. Cualquier integrante puede hacerlo; no requiere
 
 Permite entrar a una Room `lobby` del mismo Group mediante código o enlace.
 
+Al seleccionar `Unirme a una sala`, las acciones iniciales se reemplazan por un paso con contexto explícito; el campo no aparece como un agregado inesperado ni el estado activo se presenta como error:
+
+```text
+Unirse a una sala
+Ingresá el código de la sala
+Pedíselo a la persona que creó la sala.
+
+Código de sala
+[ Entrar a la sala ]
+[ Volver ]
+```
+
+`Volver` recupera las acciones iniciales. El rojo queda reservado para un fallo real después de intentar entrar. Ante ese fallo, el formulario permanece visible y conserva el contexto necesario para corregir el código y reintentar.
+
 ### Agregar palabras
 
 Permite alimentar el banco del grupo en cualquier momento.
@@ -355,7 +369,9 @@ Un jugador selecciona:
 
 `Unirse a sala`
 
-Identifica la Room mediante código o enlace. El backend valida que el Player y la Room pertenecen al mismo Group. Conocer el código no reemplaza autorización.
+La acción abre un paso deliberado con título, explicación breve, campo de código, confirmación `Entrar a la sala` y acción `Volver`. En mobile reemplaza el bloque anterior de acciones para conservar una jerarquía clara y un único foco.
+
+El jugador identifica la Room mediante código o enlace. El backend valida que el Player y la Room pertenecen al mismo Group. Conocer el código no reemplaza autorización.
 
 Si el Player ya participa, el join devuelve la misma participación sin duplicarla.
 
@@ -461,17 +477,16 @@ El sistema:
 Antes de revelar el contenido privado, la pantalla muestra:
 
 ```text
-Tu rol está listo
-Ver mi rol
+Revelar palabra secreta
 ```
 
-Ese tap es local: no persiste confirmación, no cambia `GameSession` y no equivale a `roleAcknowledged`.
+Toda la superficie privada funciona como un objetivo táctil amplio. El primer tap revela la palabra autorizada o `IMPOSTOR`; el mismo objetivo muestra `Tocá de nuevo para ocultar` y permite volver a ocultarla.
+
+Ese reveal/hide es local: no persiste confirmación, no cambia `GameSession` y no equivale a `roleAcknowledged`.
 
 ## Jugador normal
 
-La pantalla muestra claramente:
-
-> Tu palabra es
+La superficie revela claramente la palabra, por ejemplo:
 
 # MILANESA
 
@@ -481,9 +496,9 @@ La interfaz debe evitar que otra persona pueda verla accidentalmente antes de qu
 
 ## Impostor
 
-La pantalla muestra:
+La superficie revela:
 
-# Sos el impostor
+# IMPOSTOR
 
 No muestra la palabra secreta.
 
@@ -519,6 +534,8 @@ discussion
 
 A partir de este momento el teléfono deja de ser protagonista.
 
+La pantalla conserva visible quién fue seleccionado para iniciar la vuelta de pistas, con copy adaptado al jugador actual (`Empezás vos` o `Empieza [nombre]`).
+
 ---
 
 # Conversación presencial
@@ -531,17 +548,19 @@ La aplicación puede mostrar únicamente un estado discreto:
 
 > Ronda en juego
 
-Los jugadores pueden volver a consultar localmente su información privada mediante una acción explícita:
+Los jugadores pueden volver a consultar localmente su información privada con la misma superficie táctil usada en `role_reveal`:
 
 ```text
-Ver mi rol
+Revelar palabra secreta
+→ palabra autorizada | IMPOSTOR
+→ Tocá de nuevo para ocultar
 ```
 
-La acción previa al reveal es la misma para todos los jugadores; no depende de si la vista privada contiene rol de impostor o palabra.
+La acción previa al reveal y el gesto para ocultar son iguales para todos los jugadores; no dependen de si la vista privada contiene rol de impostor o palabra. No se muestra directamente la palabra con un botón separado debajo.
 
-La información queda oculta por defecto para reducir exposición física. Este reveal local no se persiste.
+La información queda oculta por defecto y no está presente en el DOM hasta el reveal, para reducir exposición física. Este reveal local no se persiste. Al entrar a `discussion`, cambiar de ronda o reconstruir desde bootstrap vuelve a quedar oculto; un refetch de la misma ronda durante el mismo montaje preserva el estado local para evitar flicker.
 
-En Incremento 7 no se muestra un botón funcional ni falso de votación. La acción del host `Ir a votación` pertenece al Incremento 8.
+Históricamente, Incremento 7 todavía no mostraba votación. En el flujo vigente, la acción separada del host `Ir a votación` avanza la fase cuando termina la conversación; no forma parte de la superficie privada reveal/hide.
 
 No existe inicialmente temporizador obligatorio.
 

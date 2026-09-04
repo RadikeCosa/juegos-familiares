@@ -348,9 +348,13 @@ async function validateFirstRoundEligibilityAndRosterMembership() {
     roster.includes(round1.startingPlayerId),
     "Starting player must belong to the frozen GameSession roster."
   );
+  assert(
+    round1.startingPlayerId !== round1.impostorPlayerId,
+    "Round 1 must avoid selecting the impostor while other equally balanced starters exist."
+  );
 }
 
-async function validateSequentialBalanceAndRoleIndependence() {
+async function validateSequentialBalanceAndImpostorAvoidance() {
   const fixture = await buildThreePlayerFixture("sequential", ["Uno", "Dos", "Tres", "Cuatro", "Cinco"]);
   const participants = allParticipants(fixture);
   const roster = rosterPlayerIds(fixture.gameSessionId);
@@ -365,6 +369,23 @@ async function validateSequentialBalanceAndRoleIndependence() {
   await advanceToNextRound(fixture, "round 2 to 3");
   const round3 = roundByNumber(fixture.gameSessionId, 3);
   assert(roster.includes(round3.startingPlayerId), "Round 3 starting player must belong to the roster.");
+
+  assert(
+    round1.startingPlayerId !== round1.impostorPlayerId &&
+      round2.startingPlayerId !== round2.impostorPlayerId,
+    "The first two rounds must avoid the impostor while another minimum-count starter is available."
+  );
+
+  const firstThreeImpostors = [
+    round1.impostorPlayerId,
+    round2.impostorPlayerId,
+    round3.impostorPlayerId
+  ];
+  assertEqual(
+    new Set(firstThreeImpostors).size,
+    3,
+    "With exactly 3 participants, the first three impostors must all be distinct."
+  );
 
   const firstThree = [round1.startingPlayerId, round2.startingPlayerId, round3.startingPlayerId];
   assertEqual(
@@ -417,7 +438,7 @@ async function validateSequentialBalanceAndRoleIndependence() {
   assertEqual(
     roundOneAfterUpdate.impostorPlayerId,
     round1.startingPlayerId,
-    "The schema must not prevent the impostor from also being the starting player: selection is role-independent."
+    "The schema must still allow an impostor to start when preserving start-count balance requires it."
   );
 }
 
@@ -565,7 +586,7 @@ async function validateRefreshDoesNotResample() {
 async function main() {
   await validateMigrationApplied();
   await validateFirstRoundEligibilityAndRosterMembership();
-  await validateSequentialBalanceAndRoleIndependence();
+  await validateSequentialBalanceAndImpostorAvoidance();
   await validateClientCannotImposeStartingPlayer();
   await validateDirectTableAccessStaysClosed();
   await validateSharedReadAcrossAuthorizedParticipants();

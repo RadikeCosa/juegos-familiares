@@ -1701,13 +1701,15 @@ describe("renderRoomLobbyContent", () => {
             join(process.cwd(), "app/impostor/sala/[code]/room-lobby-shell.tsx"),
             "utf8"
         );
-        const surfaceStart = source.indexOf("aria-describedby=\"impostor-role-reveal-guidance\"");
-        const surfaceEnd = source.indexOf("</button>", surfaceStart);
+        const surfaceStart = source.indexOf("function renderPrivateViewToggle");
+        const surfaceEnd = source.indexOf("function renderRoomConnectionNotice", surfaceStart);
         const privateSurface = source.slice(surfaceStart, surfaceEnd);
 
-        expect(privateSurface).toContain("options.onHidePrivateView");
-        expect(privateSurface).toContain("options.onRevealPrivateView");
+        expect(privateSurface).toContain("options.onHide");
+        expect(privateSurface).toContain("options.onReveal");
         expect(privateSurface).not.toContain("options.onStartDiscussion");
+        expect(source).toContain("onReveal: options.onRevealPrivateView");
+        expect(source).toContain("onHide: options.onHidePrivateView");
     });
 
     it("reveals and hides the impostor role without ever rendering a word", () => {
@@ -1766,8 +1768,9 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("Ronda en juego");
         expect(markup).toContain("La ronda está en juego. Cuando termine la conversación, abrí la votación.");
         expect(markup).toContain("Ronda 1");
-        expect(markup).toContain("Ver mi rol");
-        expect(markup).not.toContain("Ver mi palabra");
+        expect(markup).toContain("Revelar palabra secreta");
+        expect(markup).toContain("aria-pressed=\"false\"");
+        expect(markup).not.toContain("Ver mi rol");
         expect(markup).toContain("Host actual: Ramiro");
         expect(markup).not.toContain("Casa");
         expect(markup).not.toContain("Empezar ronda");
@@ -1799,9 +1802,11 @@ describe("renderRoomLobbyContent", () => {
             )
         );
 
-        expect(revealedMarkup).toContain("Tu palabra es");
+        expect(revealedMarkup).toContain("aria-label=\"Ocultar información privada\"");
+        expect(revealedMarkup).toContain("aria-pressed=\"true\"");
         expect(revealedMarkup).toContain("Casa");
-        expect(revealedMarkup).toContain("Ocultar");
+        expect(revealedMarkup).toContain("Tocá de nuevo para ocultar");
+        expect(revealedMarkup).not.toContain("Tu palabra es");
         expect(hiddenMarkup).not.toContain("Casa");
     });
 
@@ -1909,8 +1914,9 @@ describe("renderRoomLobbyContent", () => {
         );
 
         expect(markup).toContain("Ronda en juego");
-        expect(markup).toContain("Ver mi rol");
-        expect(markup).not.toContain("Sos el impostor");
+        expect(markup).toContain("Revelar palabra secreta");
+        expect(markup).toContain("aria-pressed=\"false\"");
+        expect(markup).not.toContain("IMPOSTOR");
         expect(markup).not.toContain("Casa");
     });
 
@@ -1940,10 +1946,11 @@ describe("renderRoomLobbyContent", () => {
             )
         );
 
-        expect(revealedMarkup).toContain("Sos el impostor");
-        expect(revealedMarkup).toContain("Ocultar");
+        expect(revealedMarkup).toContain("IMPOSTOR");
+        expect(revealedMarkup).toContain("aria-label=\"Ocultar información privada\"");
+        expect(revealedMarkup).toContain("Tocá de nuevo para ocultar");
         expect(revealedMarkup).not.toContain("Casa");
-        expect(hiddenMarkup).not.toContain("Sos el impostor");
+        expect(hiddenMarkup).not.toContain("IMPOSTOR");
     });
 
     it("keeps discussion separate from voting", () => {

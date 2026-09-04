@@ -211,6 +211,31 @@ No todos los integrantes del grupo deben participar de todas las salas.
 
 ---
 
+# Entrada manual a una sala
+
+## Decisión
+
+Cuando un Player reconocido no tiene una Room activa, `Unirme a una sala` inicia un paso explícito y mobile-first. Ese paso reemplaza las acciones iniciales y muestra:
+
+```text
+Unirse a una sala
+Ingresá el código de la sala
+Pedíselo a la persona que creó la sala.
+Código de sala
+Entrar a la sala
+Volver
+```
+
+Entrar en este paso no es un error y no usa tratamiento rojo. El error aparece únicamente después de un intento fallido, dentro del mismo formulario, que permanece disponible para corregir el código y reintentar. `Volver` restaura las acciones iniciales.
+
+La decisión se aplica de forma consistente en `/impostor` y `/impostor/grupo`. Un enlace directo válido conserva su flujo propio y no obliga a escribir manualmente el código.
+
+## Motivo
+
+En una pantalla táctil, dejar el control activado en rojo y agregar un input debajo sin explicación se interpreta fácilmente como fallo. Reemplazar el bloque por un paso contextual comunica avance, reduce ambigüedad y mantiene un único foco de acción.
+
+---
+
 # Host de la sala
 
 ## Decisión
@@ -523,6 +548,10 @@ La acción visible implementada es:
 Empezar ronda
 ```
 
+La consulta de información privada conserva el mismo patrón en `role_reveal` y `discussion`: comienza oculta, usa una única superficie táctil amplia, revela la palabra autorizada o `IMPOSTOR` con un tap y vuelve a ocultarla al tocar la misma superficie. No se muestra directamente la palabra con un botón separado debajo.
+
+La guía de fase, la indicación de quién empieza y las acciones del host permanecen fuera de esa superficie privada.
+
 No se usa `playing` como `GameSession.state`, porque `Room.status = playing` ya significa que la Room está dentro de gameplay y no admite nuevos joins.
 
 `discussion` significa:
@@ -535,6 +564,10 @@ la app no controla turnos
 la app no controla timer
 la votación todavía no comenzó
 ```
+
+## Motivo de la interacción privada
+
+El mismo gesto y la misma jerarquía visual en ambas fases reducen aprendizaje y errores durante el pase físico del teléfono. El estado oculto por defecto protege la privacidad; permitir volver a ocultar conserva el control del jugador sin agregar estado persistido.
 
 La autoridad es siempre el host actual persistido en:
 
@@ -893,13 +926,13 @@ La interacción social presencial es el centro del juego.
 
 ## Decisión
 
-La aplicación selecciona autoritativamente quién da la primera pista de cada ronda, mediante azar equilibrado dentro de la `GameSession` actual: en la primera ronda todos los `SessionPlayers` tienen la misma posibilidad, y en las rondas siguientes solo participan del sorteo quienes hayan comenzado menos veces. La selección es independiente del rol asignado en esa ronda y no otorga ningún privilegio al host.
+La aplicación selecciona autoritativamente quién da la primera pista de cada ronda, mediante azar equilibrado dentro de la `GameSession` actual. Primero considera a quienes hayan comenzado menos veces. Si varias personas empatan en ese mínimo, evita al impostor cuando existe otra alternativa y sortea entre las restantes. Si el impostor es la única persona con el conteo mínimo, puede empezar para preservar el balance. La selección no otorga ningún privilegio al host.
 
 Después de esa primera intervención, el grupo continúa físicamente hacia la derecha. La aplicación no controla, registra ni avanza los turnos posteriores.
 
 ## Motivo
 
-El azar equilibrado evita repeticiones injustas sin necesidad de coordinación presencial adicional, preservando el resto de la conversación libre fuera de la aplicación.
+El azar equilibrado evita repeticiones injustas sin necesidad de coordinación presencial adicional. El desempate que evita al impostor reduce una ventaja accidental sin volver predecible a una única persona, y preserva el resto de la conversación libre fuera de la aplicación.
 
 ---
 

@@ -136,6 +136,21 @@ describe("createRoomEntryActionsController", () => {
     expect(navigate).toHaveBeenCalledWith("/impostor/sala/AB7KQ2M4");
   });
 
+  it("returns from the join step unless a request is in flight", () => {
+    const joinStates: RoomJoinState[] = [];
+    const controller = createRoomEntryActionsController({
+      createClient: () => ({}) as ImpostorRoomsClient,
+      navigate: () => {},
+      onCreationStateChange: () => {},
+      onJoinStateChange: (state) => joinStates.push(state),
+    });
+
+    controller.showJoinRoomForm();
+    controller.hideJoinRoomForm();
+
+    expect(joinStates).toEqual([{ status: "form" }, { status: "idle" }]);
+  });
+
   it("single-flights a double submit while joining", async () => {
     const deferred = createDeferred<{ data: unknown; error: unknown }>();
     const rpc = vi.fn(() => deferred.promise);

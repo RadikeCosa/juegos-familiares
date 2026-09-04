@@ -543,6 +543,42 @@ body {
   letter-spacing: 0;
 }
 
+.impostor-room-join-step {
+  width: 100%;
+  padding: var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, var(--border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--primary) 5%, var(--surface));
+}
+
+.impostor-room-join-step > div:first-child {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.impostor-room-join-step > div:first-child p {
+  margin: 0;
+}
+
+.impostor-room-join-step__actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+
+.impostor-room-join-step .impostor-room-join-step__error {
+  margin: 0;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+@media (min-width: 30rem) {
+  .impostor-room-join-step__actions {
+    grid-template-columns: auto auto;
+    justify-content: start;
+  }
+}
+
 .impostor-field {
   display: grid;
   gap: var(--space-2);
@@ -1129,6 +1165,24 @@ body {
 
 .impostor-room-role-reveal {
   align-content: start;
+}
+
+.impostor-room-private-toggle {
+  width: 100%;
+  max-width: 28rem;
+  min-height: 10rem;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+.impostor-room-private-toggle__hint {
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25;
 }
 
 .impostor-room-round-actions {

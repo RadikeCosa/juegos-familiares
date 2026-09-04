@@ -51,17 +51,22 @@ describe("Unirme a una sala action", () => {
         expect(markup).toContain("class=\"impostor-action\" type=\"button\">Crear sala");
     });
 
-    it("reveals a room code form once the entry point is used", () => {
+    it("replaces the entry actions with a contextual room code step", () => {
         const markup = renderWithJoinState({ status: "form" });
 
+        expect(markup).toContain("Ingresá el código de la sala");
+        expect(markup).toContain("Pedíselo a la persona que creó la sala.");
         expect(markup).toContain("Código de sala");
-        expect(markup).toContain("Unirme");
+        expect(markup).toContain("Entrar a la sala");
+        expect(markup).toContain("Volver");
+        expect(markup).not.toContain(">Crear sala<");
+        expect(markup).not.toContain(">Unirme a una sala</button>");
     });
 
     it("disables the form while joining", () => {
         const markup = renderWithJoinState({ status: "joining" });
 
-        expect(markup).toContain("Uniéndote...");
+        expect(markup).toContain("Entrando...");
         expect(markup).toContain("disabled=\"\"");
     });
 
@@ -72,6 +77,9 @@ describe("Unirme a una sala action", () => {
         });
 
         expect(markup).toContain("Ya estás en otra sala.");
+        expect(markup).toContain("Código de sala");
+        expect(markup).toContain("Entrar a la sala");
+        expect(markup).toContain("aria-invalid=\"true\"");
         expect(markup).not.toMatch(/SQL|constraint|Postgres/i);
     });
 

@@ -52,7 +52,11 @@ Al cierre técnico del Incremento 12, el producto ya soporta crear grupo, admini
 
 El Incremento 7 decide no implementar `roleAcknowledged` ni acknowledgements persistidos para el MVP. La coordinación de que todos vieron su rol ocurre presencialmente y el host actual ejecuta `Empezar ronda`.
 
-Durante `discussion`, cada jugador puede volver a revelar localmente su palabra o rol y volver a ocultarlo. La vista privada se oculta nuevamente al cambiar de fase y no se persiste ese reveal local.
+Durante `role_reveal` y `discussion`, cada jugador usa el mismo patrón privado: una superficie táctil amplia, oculta por defecto, que revela la palabra autorizada o `IMPOSTOR` con un tap y vuelve a ocultarla al tocarla de nuevo. No se presenta directamente la palabra con un botón separado debajo. La vista privada se oculta nuevamente al cambiar de fase o ronda y no se persiste ese reveal local.
+
+La entrada manual a una sala es un paso intencional y mobile-first. Al tocar `Unirme a una sala`, las acciones iniciales se reemplazan por un formulario con título, ayuda breve, confirmación `Entrar a la sala` y acción `Volver`. El rojo se reserva para errores reales posteriores al intento; ante un error, el formulario permanece disponible para corregir y reintentar.
+
+La persona que empieza la vuelta de pistas se elige autoritativamente entre quienes menos veces comenzaron dentro de la tanda. Si hay empate, se evita al impostor cuando existe otra alternativa y se sortea entre las personas restantes; el balance prevalece cuando el impostor es la única persona con el conteo mínimo.
 
 Incremento 11 cerró técnicamente scoring, marcador y nueva ronda: `SessionPlayer.score`, fase `scoreboard`, scoring server-side idempotente, read model/UI de marcador y apertura autoritativa de nueva ronda con validación DB multironda.
 

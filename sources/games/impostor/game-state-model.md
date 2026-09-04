@@ -386,14 +386,15 @@ No recibe la palabra secreta.
 
 Incremento 6 no persiste estado individual de confirmación de rol.
 
-La UI implementada usa una interacción local:
+La UI implementada usa una única superficie táctil privada, inicialmente oculta:
 
 ```text
-Tu rol está listo
-→ Ver mi rol
+Revelar palabra secreta
+→ palabra autorizada | IMPOSTOR
+→ Tocá de nuevo para ocultar
 ```
 
-Esto no cambia `GameSession`, no escribe `SessionPlayer` y se reinicia visualmente al refrescar porque la vista privada vuelve a reconstruirse desde servidor.
+El primer tap revela y el segundo vuelve a ocultar sobre el mismo objetivo amplio. Esto no cambia `GameSession`, no escribe `SessionPlayer` y se reinicia visualmente al refrescar porque la vista privada vuelve a reconstruirse desde servidor.
 
 En Incremento 7 se descarta para el MVP persistir:
 
@@ -456,25 +457,15 @@ La conversación presencial está ocurriendo.
 
 Al cierre técnico del Incremento 7, `discussion` es un estado durable implementado de `GameSession.state`.
 
-Durante `discussion`, la vista privada no aparece por defecto en el DOM. Cada jugador puede pedir explícitamente:
+Durante `discussion`, la vista privada no aparece por defecto en el DOM. Se conserva deliberadamente el mismo patrón y la misma superficie táctil de `role_reveal`:
 
 ```text
-Ver mi palabra
+Revelar palabra secreta
+→ palabra autorizada | IMPOSTOR
+→ Tocá de nuevo para ocultar
 ```
 
-o:
-
-```text
-Ver mi rol
-```
-
-Luego puede ocultarla con:
-
-```text
-Ocultar
-```
-
-Ese reveal/hide es local y no se persiste. Al entrar desde `role_reveal` a `discussion`, la vista privada vuelve a ocultarse. Si el polling reconstruye la misma ronda y el mismo payload mientras el componente sigue montado, se preserva el reveal local para evitar flicker. Si cambia la ronda o se reconstruye desde bootstrap, vuelve a ocultarse.
+No se muestra la palabra directamente con un botón separado debajo. Ese reveal/hide es local y no se persiste. Al entrar desde `role_reveal` a `discussion`, la vista privada vuelve a ocultarse. Si el polling reconstruye la misma ronda y el mismo payload mientras el componente sigue montado, se preserva el reveal local para evitar flicker. Si cambia la ronda o se reconstruye desde bootstrap, vuelve a ocultarse.
 
 Primero los jugadores realizan la vuelta inicial de pistas y después pueden conversar libremente.
 
@@ -1221,11 +1212,12 @@ room_participants.last_seen_at
 Durante `ROLE_REVEAL`, el reveal visual es local:
 
 ```text
-Tu rol está listo
-→ Ver mi rol
+Revelar palabra secreta
+→ palabra autorizada | IMPOSTOR
+→ Tocá de nuevo para ocultar
 ```
 
-No se persiste `roleAcknowledged`, `role_acknowledged_at` ni `allRolesSeen` en el contrato vigente del MVP. Refrescar puede volver a ocultar visualmente la información, pero `get_my_game_state()` reconstruye la vista privada.
+La interacción usa el mismo objetivo táctil amplio para revelar y ocultar, tanto en `ROLE_REVEAL` como en `DISCUSSION`. No se persiste `roleAcknowledged`, `role_acknowledged_at` ni `allRolesSeen` en el contrato vigente del MVP. Refrescar puede volver a ocultar visualmente la información, pero `get_my_game_state()` reconstruye la vista privada.
 
 ## Voto
 
