@@ -60,21 +60,14 @@ function inspect(node: ReactNode): { text: string; hrefs: string[] } {
   return { text: "", hrefs: [] };
 }
 
-function countMatches(text: string, pattern: string) {
-  return text.split(pattern).length - 1;
-}
-
 describe("Home", () => {
-  it("presents Juegos Familiares with the available Impostor entry point", () => {
+  it("presents Juegos Familiares and delegates the Impostor entry point to the platform shell", () => {
     const page = inspect(Home());
 
     expect(page.text).toContain("Juegos Familiares");
-    expect(page.text).toContain("Juegos");
-    expect(page.text).toContain("Impostor");
-    expect(page.text).toContain("Encontrá al impostor sin revelar demasiado");
-    expect(countMatches(page.text, "Impostor")).toBe(1);
-    expect(countMatches(page.text, "Encontrá al impostor sin revelar demasiado")).toBe(1);
-    expect(page.text).not.toContain("Jugar");
+    expect(page.text).toContain(
+      "Juegos simples para compartir en familia o con amigos."
+    );
   });
 
   it("does not create AuthIdentity when / renders", () => {
@@ -86,7 +79,7 @@ describe("Home", () => {
 });
 
 describe("renderPlatformHomeContext", () => {
-  it("shows the recognized Player and Group while checking the active Room", () => {
+  it("keeps the compact identity and a stable Impostor card while checking the active Room", () => {
     const state: PlatformBootstrapState = {
       status: "recognized",
       player: {
@@ -105,16 +98,17 @@ describe("renderPlatformHomeContext", () => {
 
     const page = inspect(renderPlatformHomeContext(state, { status: "loading" }));
 
-    expect(page.text).toContain("Hola, Ramiro");
-    expect(page.text).toContain("Tu grupo");
     expect(page.text).toContain("Familia");
-    expect(page.text).toContain("Comprobando sala activa");
-    expect(page.text).not.toContain("Ir al juego del grupo");
+    expect(page.text).toContain("Ramiro");
+    expect(page.text).toContain("Impostor");
+    expect(page.text).toContain("Comprobando tu sala activa");
+    expect(page.text).not.toContain("Jugar a Impostor");
     expect(page.text).not.toContain("Volver a la sala");
     expect(page.text).not.toContain("Volver a la partida");
+    expect(page.hrefs).toEqual(["/grupo"]);
   });
 
-  it("uses a single contextual Impostor CTA when no active Room exists", () => {
+  it("links the complete compact group context and the Impostor CTA when no active Room exists", () => {
     const state: PlatformBootstrapState = {
       status: "recognized",
       player: {
@@ -133,12 +127,18 @@ describe("renderPlatformHomeContext", () => {
 
     const page = inspect(renderPlatformHomeContext(state, { status: "absent" }));
 
-    expect(page.text).toContain("Tu grupo ya está listo para jugar.");
-    expect(page.text).toContain("Ir al juego del grupo");
-    expect(page.hrefs).toEqual(["/impostor/grupo"]);
+    const markup = renderToStaticMarkup(renderPlatformHomeContext(state, { status: "absent" }));
+
+    expect(page.text).toContain("Familia");
+    expect(page.text).toContain("Ramiro");
+    expect(markup).toContain(">Ramiro</strong><span>(Familia)</span>");
+    expect(page.text).toContain("Encontrá al impostor sin revelar demasiado.");
+    expect(page.text).toContain("Jugar a Impostor");
+    expect(page.hrefs).toEqual(["/grupo", "/impostor"]);
+    expect(markup).toContain('aria-label="Abrir el grupo actual: Familia"');
   });
 
-  it("links directly to active lobby and playing Rooms", () => {
+  it("links directly to active lobby and playing Rooms while keeping identity and a secondary Impostor link", () => {
     const state: PlatformBootstrapState = {
       status: "recognized",
       player: {
@@ -168,15 +168,24 @@ describe("renderPlatformHomeContext", () => {
       })
     );
 
+    expect(lobby.text).toContain("Familia");
+    expect(lobby.text).toContain("Ramiro");
     expect(lobby.text).toContain("Sala activa");
     expect(lobby.text).toContain("Volver a la sala");
-    expect(lobby.hrefs).toContain("/impostor/sala/AB7KQ2M4");
+    expect(lobby.text).toContain("Ver Impostor");
+    expect(lobby.text).not.toContain("Jugar a Impostor");
+    expect(lobby.hrefs).toEqual(["/grupo", "/impostor/sala/AB7KQ2M4", "/impostor"]);
+
+    expect(playing.text).toContain("Familia");
+    expect(playing.text).toContain("Ramiro");
     expect(playing.text).toContain("Partida en curso");
     expect(playing.text).toContain("Volver a la partida");
-    expect(playing.hrefs).toContain("/impostor/sala/PLAY1234");
+    expect(playing.text).toContain("Ver Impostor");
+    expect(playing.text).not.toContain("Jugar a Impostor");
+    expect(playing.hrefs).toEqual(["/grupo", "/impostor/sala/PLAY1234", "/impostor"]);
   });
 
-  it("shows retry and neutral navigation when active Room lookup fails", () => {
+  it("shows retry and a safe navigation to Impostor when active Room lookup fails", () => {
     const state: PlatformBootstrapState = {
       status: "recognized",
       player: {
@@ -203,9 +212,10 @@ describe("renderPlatformHomeContext", () => {
 
     expect(page.text).toContain("No pudimos comprobar si tenés una sala activa.");
     expect(page.text).toContain("Reintentar");
-    expect(page.text).toContain("Ir al grupo");
-    expect(page.text).not.toContain("Ir al juego del grupo");
-    expect(page.hrefs).toContain("/impostor/grupo");
+    expect(page.text).toContain("Ver Impostor");
+    expect(page.text).toContain("Familia");
+    expect(page.text).not.toContain("Jugar a Impostor");
+    expect(page.hrefs).toEqual(["/grupo", "/impostor"]);
   });
 
   it("keeps loading state focused on checking the group without showing stale data", () => {
@@ -215,7 +225,7 @@ describe("renderPlatformHomeContext", () => {
 
     expect(markup).toContain("Comprobando tu grupo");
     expect(markup).not.toContain("Hola,");
-    expect(markup).not.toContain("Ver grupo");
+    expect(markup).not.toContain("Abrir el grupo actual");
   });
 
   it("keeps unrecognized users on a lightweight home without onboarding", () => {

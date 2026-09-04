@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { AdminInvitationSection } from "../admin-invitation-panel";
 import { createBrowserSupabaseClient } from "../../../lib/supabase/browser-client";
+import {
+  useRoomEntryActions,
+  type RoomCreationState,
+  type RoomJoinState,
+} from "../use-room-entry-actions";
 import {
   getMyGroupWordCount,
   listMyGroupWords,
@@ -12,12 +16,7 @@ import {
   type MyGroupWord,
 } from "../../../lib/supabase/impostor-group-words";
 import {
-  createCreateRoomController,
-  createJoinRoomByCodeController,
   getMyActiveRoom,
-  normalizeRoomJoinCode,
-  recordRoomCreationIntent,
-  recordRoomJoinIntent,
   type ImpostorRoomsClient,
   type RoomLobby,
 } from "../../../lib/supabase/impostor-rooms";
@@ -45,16 +44,7 @@ type GroupWordsSummaryState =
   | { status: "success"; totalCount: number; ownWords: MyGroupWord[] }
   | { status: "error"; message: string };
 
-export type RoomCreationState =
-  | { status: "idle" }
-  | { status: "creating" }
-  | { status: "error"; message: string };
-
-export type RoomJoinState =
-  | { status: "idle" }
-  | { status: "form" }
-  | { status: "joining" }
-  | { status: "error"; message: string };
+export type { RoomCreationState, RoomJoinState };
 
 export type ActiveRoomState =
   | { status: "idle" }
@@ -249,6 +239,7 @@ export function renderImpostorGroupContext(
 
       <div
         className="impostor-group-section impostor-play-section"
+        id="jugar"
         aria-labelledby="impostor-play-title"
       >
         <h2 id="impostor-play-title">Jugar</h2>
@@ -409,7 +400,6 @@ export function renderImpostorGroupContext(
 }
 
 export function ImpostorGroupContextShell() {
-  const router = useRouter();
   const [bootstrapState, setBootstrapState] = useState<PlatformBootstrapState>({
     status: "loading",
   });
@@ -420,21 +410,16 @@ export function ImpostorGroupContextShell() {
     useState<GroupWordsSummaryState>({
       status: "idle",
     });
-  const [roomCreationState, setRoomCreationState] = useState<RoomCreationState>(
-    {
-      status: "idle",
-    },
-  );
-  const [roomJoinState, setRoomJoinState] = useState<RoomJoinState>({
-    status: "idle",
-  });
   const [activeRoomState, setActiveRoomState] = useState<ActiveRoomState>({
     status: "idle",
   });
-  const createRoomController = useState(() => createCreateRoomController())[0];
-  const joinRoomController = useState(() =>
-    createJoinRoomByCodeController(),
-  )[0];
+  const {
+    roomCreationState,
+    roomJoinState,
+    createRoom,
+    showJoinRoomForm,
+    joinRoomByCode,
+  } = useRoomEntryActions();
 
   async function runBootstrap(showLoading: boolean) {
     if (showLoading) {
@@ -509,68 +494,12 @@ export function ImpostorGroupContextShell() {
     }
   }
 
-  async function handleCreateRoom() {
-    if (roomCreationState.status === "creating") {
-      return;
-    }
-
-    setRoomCreationState({ status: "creating" });
-
-    try {
-      const lobby = await createRoomController.submit(
-        createImpostorRoomsClient(),
-      );
-
-      recordRoomCreationIntent(lobby.room.code);
-      router.push(`/impostor/sala/${encodeURIComponent(lobby.room.code)}`);
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "No pudimos crear la sala. Intentá de nuevo.";
-
-      setRoomCreationState({ status: "error", message });
-    }
-  }
-
-  function handleShowJoinRoomForm() {
-    if (roomJoinState.status === "joining") {
-      return;
-    }
-
-    setRoomJoinState({ status: "form" });
-  }
-
   async function handleJoinRoomSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (roomJoinState.status === "joining") {
-      return;
-    }
-
     const formData = new FormData(event.currentTarget);
-    const roomCode = normalizeRoomJoinCode(
-      String(formData.get("roomCode") ?? ""),
-    );
 
-    setRoomJoinState({ status: "joining" });
-
-    try {
-      const lobby = await joinRoomController.submit(
-        createImpostorRoomsClient(),
-        roomCode,
-      );
-
-      recordRoomJoinIntent(lobby.room.code);
-      router.push(`/impostor/sala/${encodeURIComponent(lobby.room.code)}`);
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "No pudimos unir a la sala. Intentá de nuevo.";
-
-      setRoomJoinState({ status: "error", message });
-    }
+    joinRoomByCode(String(formData.get("roomCode") ?? ""));
   }
 
   useEffect(() => {
@@ -727,8 +656,8 @@ export function ImpostorGroupContextShell() {
       bootstrapState.status === "recognized"
         ? () => void loadActiveRoom()
         : undefined,
-    onCreateRoom: () => void handleCreateRoom(),
-    onShowJoinRoomForm: () => handleShowJoinRoomForm(),
+    onCreateRoom: createRoom,
+    onShowJoinRoomForm: showJoinRoomForm,
     onJoinRoomSubmit: (event) => void handleJoinRoomSubmit(event),
   });
 }

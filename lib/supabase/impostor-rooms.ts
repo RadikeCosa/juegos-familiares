@@ -635,6 +635,10 @@ type RoundSummaryRow = {
 
 type RoundImpostorRow = VoteCandidateRow;
 
+type StartingPlayerRow = VoteCandidateRow & {
+    is_self: boolean;
+};
+
 type NextRoundBlockReason =
     | "not_host"
     | "no_words"
@@ -654,6 +658,7 @@ type MyGameStateRow = {
     impostor_guess_correct?: boolean | null;
     scoreboard_players?: unknown;
     round_impostor?: unknown;
+    starting_player?: unknown;
     can_start_next_round?: boolean;
     can_end_session?: boolean;
     available_unused_words_count?: number | null;
@@ -718,6 +723,10 @@ export type RoundSummary = {
 
 export type RoundImpostor = VoteCandidate;
 
+export type StartingPlayer = VoteCandidate & {
+    isSelf: boolean;
+};
+
 export type ScoreboardState = {
     players: ScoreboardPlayer[];
     roundImpostor: RoundImpostor | null;
@@ -742,6 +751,7 @@ export type MyGameState = {
     state: GameSessionState;
     roundNumber: number;
     privateView: MyPrivateRoundView;
+    startingPlayer?: StartingPlayer | null;
     candidates: VoteCandidate[] | null;
     voting: {
         candidates: VoteCandidate[];
@@ -1396,7 +1406,21 @@ function isMyGameStateRow(value: unknown): value is MyGameStateRow {
         return false;
     }
 
+    if (
+        !(
+            row.starting_player === null ||
+            typeof row.starting_player === "undefined" ||
+            isStartingPlayerRow(row.starting_player)
+        )
+    ) {
+        return false;
+    }
+
     if (row.state === "finished") {
+        if (row.starting_player !== null && typeof row.starting_player !== "undefined") {
+            return false;
+        }
+
         return (
             row.role === null &&
             row.word === null &&
@@ -1626,6 +1650,12 @@ function isRoundImpostorRow(value: unknown): value is RoundImpostorRow {
     return isVoteCandidateRow(value);
 }
 
+function isStartingPlayerRow(value: unknown): value is StartingPlayerRow {
+    const row = value as Partial<StartingPlayerRow>;
+
+    return isVoteCandidateRow(value) && typeof row.is_self === "boolean";
+}
+
 function isNextRoundBlockReason(
     value: unknown
 ): value is NextRoundBlockReason | null {
@@ -1709,6 +1739,22 @@ function toRoundImpostor(value: unknown): RoundImpostor | null {
     return {
         playerId: value.player_id,
         nickname: value.nickname
+    };
+}
+
+function toStartingPlayer(value: unknown): StartingPlayer | null {
+    if (value === null || typeof value === "undefined") {
+        return null;
+    }
+
+    if (!isStartingPlayerRow(value)) {
+        return null;
+    }
+
+    return {
+        playerId: value.player_id,
+        nickname: value.nickname,
+        isSelf: value.is_self === true
     };
 }
 
@@ -1828,6 +1874,7 @@ function toMyGameState(row: MyGameStateRow): MyGameState {
             state: "finished",
             roundNumber: row.round_number,
             privateView: { role: "player", word: null },
+            startingPlayer: null,
             candidates: null,
             voting: null,
             voteResults: null,
@@ -1848,6 +1895,7 @@ function toMyGameState(row: MyGameStateRow): MyGameState {
     const candidates = toVoteCandidates(row.candidates);
     const scoreboardPlayers = toScoreboardPlayers(row.scoreboard_players);
     const roundImpostor = toRoundImpostor(row.round_impostor);
+    const startingPlayer = toStartingPlayer(row.starting_player);
     const voting =
         row.state === "voting_first" || row.state === "voting_second"
             ? {
@@ -1884,6 +1932,7 @@ function toMyGameState(row: MyGameStateRow): MyGameState {
             state: row.state,
             roundNumber: row.round_number,
             privateView: { role: "player", word: row.word },
+            startingPlayer,
             candidates,
             voting,
             voteResults,
@@ -1897,6 +1946,7 @@ function toMyGameState(row: MyGameStateRow): MyGameState {
         state: row.state,
         roundNumber: row.round_number,
         privateView: { role: "impostor", word: row.word },
+        startingPlayer,
         candidates,
         voting,
         voteResults,
@@ -2316,9 +2366,14 @@ export function createCreateRoomController() {
 
             activeRequest = createRoom(supabase);
 
-            void activeRequest.finally(() => {
-                activeRequest = null;
-            });
+            activeRequest.then(
+                () => {
+                    activeRequest = null;
+                },
+                () => {
+                    activeRequest = null;
+                }
+            );
 
             return activeRequest;
         }
@@ -2379,9 +2434,14 @@ export function createJoinRoomByCodeController() {
 
             activeRequest = joinRoomByCode(supabase, roomCode);
 
-            void activeRequest.finally(() => {
-                activeRequest = null;
-            });
+            activeRequest.then(
+                () => {
+                    activeRequest = null;
+                },
+                () => {
+                    activeRequest = null;
+                }
+            );
 
             return activeRequest;
         }

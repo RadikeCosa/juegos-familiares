@@ -3872,6 +3872,22 @@ Incremento 14 queda cerrado con la fórmula `INCREMENT 14 CLOSED WITH EXTERNAL M
 
 Incremento 15 está en curso. `15.4` implementó claridad UX y quedó cubierto por el P0 del candidato `a064ce2`, con smoke UX/UI en mobile real pendiente. `15.5` creó el protocolo de aceptación y registró P0 `PASS`; S1-S8, N1, C1-C10, R1-R4, U1, E1 y D1 siguen pendientes.
 
+El refinamiento posterior de la portada `/` está implementado en el commit
+`365fe5a`: Impostor conserva la prioridad y su acceso explícito, mientras el
+contexto reconocido se reduce a un control que navega a `/grupo`. Los tests
+focalizados de la home, lint y `git diff --check` se ejecutaron durante su
+implementación. La revisión manual local con tres usuarios reconocidos del
+mismo Group, sin Room activa, aprobó ese resultado.
+
+Siguen pendientes la observación manual del estado de portada con Room activa,
+la revalidación que corresponda a una nueva candidata y las validaciones
+formales ya abiertas del Incremento 15. La observación `POLISH` de la entrada
+a Room quedó implementada en el commit `ea73954`: desde `/impostor`, un
+jugador reconocido sin Room activa puede crear sala directamente o unirse
+mediante un formulario inline, sin pasar por `/impostor/grupo#jugar`. Falta la
+revisión manual de ese cambio (crear, unirse, código inválido, doble tap,
+lobby, playing, viewport móvil, teclado).
+
 Antes de la aceptación física pre-beta se ejecutará, como paso preparatorio, un
 smoke UX/UI exploratorio en un solo dispositivo. Esta actividad no forma parte
 de S1-S8, N1, C1-C10, R1-R4, U1, E1 o D1 y no usa resultados `PASS`/`FAIL` de

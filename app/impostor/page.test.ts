@@ -65,6 +65,9 @@ describe("ImpostorPage", () => {
     expect(page.text).toContain("pistas, sospechas y engaño");
     expect(page.text).toContain("Todos conocen la palabra menos una persona");
     expect(page.text).toContain("Cada participante usa su teléfono");
+    expect(page.text).toContain(
+      "En cada ronda, la app elige quién da la primera pista"
+    );
     expect(page.hrefs).toContain("/");
 
     expect(page.text).not.toContain("Crear sala");

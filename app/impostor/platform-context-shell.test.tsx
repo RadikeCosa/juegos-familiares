@@ -1,5 +1,7 @@
 import { isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   copyInvitation,
@@ -120,7 +122,7 @@ describe("renderImpostorPlatformContext", () => {
     expect(text).not.toContain("Invitar personas");
   });
 
-  it("shows a direct group-flow CTA when no active Room exists", () => {
+  it("offers direct create/join Room actions instead of delegating to the group play section", () => {
     const state: PlatformBootstrapState = {
       status: "recognized",
       player: {
@@ -141,11 +143,156 @@ describe("renderImpostorPlatformContext", () => {
       renderImpostorPlatformContext(state, { roomState: { status: "absent" } })
     );
 
-    expect(markup).toContain("Tu grupo ya está listo para jugar.");
-    expect(markup).toContain("Ir al juego del grupo");
+    expect(markup).toContain("Empezar a jugar");
+    expect(markup).toContain(
+      "class=\"impostor-action impostor-action--primary\" type=\"button\">Unirme a una sala"
+    );
+    expect(markup).toContain(
+      "class=\"impostor-action\" type=\"button\">Crear sala"
+    );
+    expect(markup).not.toContain("href=\"/impostor/grupo#jugar\"");
     expect(markup).toContain("Compartir invitación");
+    expect(markup).toContain("href=\"/grupo\"");
     expect(markup).toContain("href=\"/impostor/grupo\"");
-    expect(markup).not.toContain("Crear sala");
+  });
+
+  it("does not reveal the join Room form until it is explicitly requested", () => {
+    const state: PlatformBootstrapState = {
+      status: "recognized",
+      player: {
+        id: "player-1",
+        groupId: "group-1",
+        nickname: "Ramiro",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      },
+      group: {
+        id: "group-1",
+        name: "Familia",
+        adminPlayerId: "player-1",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      }
+    };
+
+    const markup = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, { roomState: { status: "absent" } })
+    );
+
+    expect(markup).not.toContain("Código de sala");
+  });
+
+  it("reveals an inline, keyboard-submittable join Room form with an accessible input", () => {
+    const state: PlatformBootstrapState = {
+      status: "recognized",
+      player: {
+        id: "player-1",
+        groupId: "group-1",
+        nickname: "Ramiro",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      },
+      group: {
+        id: "group-1",
+        name: "Familia",
+        adminPlayerId: "player-1",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      }
+    };
+
+    const markup = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, {
+        roomState: { status: "absent" },
+        roomJoinState: { status: "form" }
+      })
+    );
+
+    expect(markup).toContain("<form");
+    expect(markup).toContain("Código de sala");
+    expect(markup).toContain("autoCapitalize=\"characters\"");
+    expect(markup).toContain("autoCorrect=\"off\"");
+    expect(markup).toContain("maxLength=\"8\"");
+    expect(markup).toContain(
+      "class=\"impostor-action impostor-action--primary\" type=\"submit\""
+    );
+    expect(markup).not.toContain("Jugar a Impostor");
+  });
+
+  it("disables create/join controls and shows progress copy while a request is in flight", () => {
+    const state: PlatformBootstrapState = {
+      status: "recognized",
+      player: {
+        id: "player-1",
+        groupId: "group-1",
+        nickname: "Ramiro",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      },
+      group: {
+        id: "group-1",
+        name: "Familia",
+        adminPlayerId: "player-1",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      }
+    };
+
+    const creating = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, {
+        roomState: { status: "absent" },
+        roomCreationState: { status: "creating" }
+      })
+    );
+    const joining = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, {
+        roomState: { status: "absent" },
+        roomJoinState: { status: "joining" }
+      })
+    );
+
+    expect(creating).toContain("Creando sala...");
+    expect(creating).toContain("disabled=\"\"");
+    expect(joining).toContain("Uniéndote...");
+    expect(joining).toContain("disabled=\"\"");
+  });
+
+  it("shows product-level feedback and allows retrying on create/join errors without navigating away", () => {
+    const state: PlatformBootstrapState = {
+      status: "recognized",
+      player: {
+        id: "player-1",
+        groupId: "group-1",
+        nickname: "Ramiro",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      },
+      group: {
+        id: "group-1",
+        name: "Familia",
+        adminPlayerId: "player-1",
+        createdAt: "2026-08-14T12:00:00.000Z"
+      }
+    };
+
+    const createError = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, {
+        roomState: { status: "absent" },
+        roomCreationState: {
+          status: "error",
+          message: "No pudimos crear la sala. Intentá de nuevo."
+        }
+      })
+    );
+    const joinError = renderToStaticMarkup(
+      renderImpostorPlatformContext(state, {
+        roomState: { status: "absent" },
+        roomJoinState: {
+          status: "error",
+          message: "No encontramos esa sala. Revisá el código e intentá de nuevo."
+        }
+      })
+    );
+
+    expect(createError).toContain("No pudimos crear la sala. Intentá de nuevo.");
+    expect(createError).not.toMatch(/SQL|constraint|Postgres/i);
+    expect(joinError).toContain(
+      "No encontramos esa sala. Revisá el código e intentá de nuevo."
+    );
+    expect(joinError).not.toMatch(/SQL|constraint|Postgres/i);
   });
 
   it("shows active lobby and playing Room CTAs with neutral group navigation", () => {
@@ -187,9 +334,13 @@ describe("renderImpostorPlatformContext", () => {
     expect(lobby).toContain("Ver grupo");
     expect(lobby).toContain("href=\"/impostor/sala/AB7KQ2M4\"");
     expect(lobby).toContain("href=\"/impostor/grupo\"");
+    expect(lobby).not.toContain("Crear sala");
+    expect(lobby).not.toContain("Unirme a una sala");
     expect(playing).toContain("Partida en curso");
     expect(playing).toContain("Volver a la partida");
     expect(playing).toContain("href=\"/impostor/sala/PLAY1234\"");
+    expect(playing).not.toContain("Crear sala");
+    expect(playing).not.toContain("Unirme a una sala");
   });
 
   it("does not show invitation sharing to an admin while a Room is active", () => {
@@ -321,7 +472,7 @@ describe("renderImpostorPlatformContext", () => {
     expect(text).toContain("Hola, Pedro");
     expect(text).toContain("Tu grupo");
     expect(text).toContain("Familia");
-    expect(text).toContain("Ir al juego del grupo");
+    expect(text).toContain("Crear sala");
     expect(text).not.toContain("Invitá a los demás");
     expect(text).not.toContain("Invitar personas");
     expect(text).not.toContain("Compartir invitación");
@@ -376,6 +527,22 @@ describe("ImpostorAnonymousOnboardingActions", () => {
 
     expect(text).toContain("Unirme a un grupo");
     expect(text).not.toContain("Crear grupo");
+  });
+
+  it("offers a semantic confirmation and group continuation after invitation join", () => {
+    const source = readFileSync(
+      join(process.cwd(), "app/impostor/anonymous-onboarding-actions.tsx"),
+      "utf8"
+    );
+    const successBlock = source.slice(
+      source.indexOf('{state.status === "success" ? (', source.indexOf("ImpostorJoinByLinkActions")),
+      source.indexOf("</section>", source.indexOf("ImpostorJoinByLinkActions"))
+    );
+
+    expect(successBlock).toContain('className="impostor-onboarding__success"');
+    expect(successBlock).toContain('role="status"');
+    expect(successBlock).toContain('href="/impostor/grupo"');
+    expect(successBlock).toContain("Ir al grupo");
   });
 });
 

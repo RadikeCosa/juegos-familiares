@@ -92,6 +92,11 @@ const playerGameState: MyGameState = {
     voteResults: null
 };
 
+const playerGameStateSelfStarts: MyGameState = {
+    ...playerGameState,
+    startingPlayer: { playerId: "player-1", nickname: "Ramiro", isSelf: true }
+};
+
 const impostorGameState: MyGameState = {
     state: "role_reveal",
     roundNumber: 1,
@@ -126,6 +131,16 @@ const secondRoundDiscussionGameState: MyGameState = {
     candidates: null,
     voting: null,
     voteResults: null
+};
+
+const discussionGameStateSelfStarts: MyGameState = {
+    ...discussionGameState,
+    startingPlayer: { playerId: "player-1", nickname: "Ramiro", isSelf: true }
+};
+
+const discussionGameStateOtherStarts: MyGameState = {
+    ...discussionGameState,
+    startingPlayer: { playerId: "player-2", nickname: "Pedro", isSelf: false }
 };
 
 const votingGameState: MyGameState = {
@@ -1790,6 +1805,95 @@ describe("renderRoomLobbyContent", () => {
         expect(hiddenMarkup).not.toContain("Casa");
     });
 
+    it("shows no starting-player notice when the read model has not persisted one", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "discussion",
+                    lobby: playingHostLobby,
+                    gameState: discussionGameState,
+                    isPrivateViewRevealed: false
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).not.toContain("Empezás vos");
+        expect(markup).not.toMatch(/Empieza [A-ZÁÉÍÓÚÑ]/);
+    });
+
+    it("shows the same persisted starting player to the chosen participant with the self variant", () => {
+        const hiddenMarkup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "discussion",
+                    lobby: playingHostLobby,
+                    gameState: discussionGameStateSelfStarts,
+                    isPrivateViewRevealed: false
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+        const revealedMarkup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "discussion",
+                    lobby: playingHostLobby,
+                    gameState: discussionGameStateSelfStarts,
+                    isPrivateViewRevealed: true
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        for (const markup of [hiddenMarkup, revealedMarkup]) {
+            expect(markup).toContain("Empezás vos");
+            expect(markup).toContain(
+                "Da una pista breve. Después sigue la persona que está a tu derecha."
+            );
+            expect(markup).not.toMatch(/Empieza [A-ZÁÉÍÓÚÑ]/);
+        }
+    });
+
+    it("shows the same persisted starting player to other participants with their nickname", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "discussion",
+                    lobby: playingHostLobby,
+                    gameState: discussionGameStateOtherStarts,
+                    isPrivateViewRevealed: false
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).toContain("Empieza Pedro");
+        expect(markup).toContain("Después continúen hacia la derecha.");
+        expect(markup).not.toContain("Empezás vos");
+    });
+
+    it("does not show the starting-player notice outside the discussion phase", () => {
+        const markup = renderToStaticMarkup(
+            renderRoomLobbyContent(
+                recognizedState,
+                {
+                    status: "role-reveal",
+                    lobby: playingHostLobby,
+                    gameState: playerGameStateSelfStarts,
+                    isPrivateViewRevealed: false
+                },
+                { roomCode: "AB7KQ2M4" }
+            )
+        );
+
+        expect(markup).not.toContain("Empezás vos");
+    });
+
     it("renders impostor discussion hidden before reveal and never renders a word", () => {
         const markup = renderToStaticMarkup(
             renderRoomLobbyContent(
@@ -2363,6 +2467,9 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("Ramiro");
         expect(markup).toContain("3 puntos");
         expect(markup).toContain("2 rondas jugadas");
+        expect(markup).toContain(
+            "La tanda terminó. Desde tu grupo podés crear otra sala."
+        );
         expect(markup).toContain("Volver al grupo");
         expect(markup).toContain("href=\"/impostor/grupo\"");
         expect(markup).not.toMatch(/Nueva ronda|Terminar tanda|voto|Casa|Mesa|impostor_guess|roundsSummary/i);

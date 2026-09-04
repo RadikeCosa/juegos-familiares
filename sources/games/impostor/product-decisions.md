@@ -893,13 +893,13 @@ La interacción social presencial es el centro del juego.
 
 ## Decisión
 
-La aplicación no selecciona quién habla primero.
+La aplicación selecciona autoritativamente quién da la primera pista de cada ronda, mediante azar equilibrado dentro de la `GameSession` actual: en la primera ronda todos los `SessionPlayers` tienen la misma posibilidad, y en las rondas siguientes solo participan del sorteo quienes hayan comenzado menos veces. La selección es independiente del rol asignado en esa ronda y no otorga ningún privilegio al host.
 
-El grupo lo decide presencialmente.
+Después de esa primera intervención, el grupo continúa físicamente hacia la derecha. La aplicación no controla, registra ni avanza los turnos posteriores.
 
 ## Motivo
 
-Evita agregar una regla digital que no aporta suficiente valor y evita cualquier posible inferencia sobre quién es el impostor.
+El azar equilibrado evita repeticiones injustas sin necesidad de coordinación presencial adicional, preservando el resto de la conversación libre fuera de la aplicación.
 
 ---
 

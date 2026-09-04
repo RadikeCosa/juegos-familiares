@@ -779,6 +779,66 @@ Possible directions to evaluate later are reducing the visual weight of Group
 context, clarifying access to the Group, and adding relevant create/join actions
 to the Impostor card. These are hypotheses, not approved solutions.
 
+### UX-01 — Resolución posterior aprobada en `/`
+
+Implementación: el commit `365fe5a` reorganizó la portada para que Impostor
+sea el destino principal, con la acción explícita `Jugar a Impostor`. El
+contexto reconocido pasó a un control compacto que muestra nickname y Group,
+navega a `/grupo` y no compite como tarjeta independiente. Sin Room activa ya
+no se muestran textos de preparación de sala. Cuando hay Room activa, el
+retorno directo permanece junto a la entrada de Impostor.
+
+Revisión manual posterior: tres usuarios reconocidos del mismo Group revisaron
+localmente `/` sin Room activa. La jerarquía de Impostor, el acceso explícito y
+el control compacto de contexto fueron aprobados.
+
+Pendiente: observar y revisar manualmente el estado de `/` con Room activa. No
+hay evidencia de revisión manual de esa superficie en esta actualización.
+
+### UX-13 — La entrada para unirse a una Room repite una decisión
+
+```text
+Moment/screen: /impostor -> /impostor/grupo#jugar
+Viewport: Pendiente de observación focal
+Actor/session/perspective: Group member
+Type: follow-up observation
+
+Trying to: Introduce a Room code to join an existing Room.
+Expected: Reach the code-entry flow with a clear, direct continuation.
+Basis for expectation: The user already selected "Unirme a una sala" in the
+  Impostor entry.
+Observed: Selecting "Unirme a una sala" from /impostor navigates to
+  /impostor/grupo#jugar, where the user must select "Unirme a una sala" again
+  before the form opens.
+Consequence or friction: There is an extra step and a repeated decision before
+  introducing the code.
+Evidence/repetition: Recorded as a follow-up observation; solution not yet
+  designed or approved.
+
+Classification: POLISH
+Severity: LOW
+Confidence: MEDIUM
+```
+
+### UX-13 — Resolución posterior aprobada
+
+Implementación: el commit `ea73954` habilita la creación y unión directa a una
+Room desde `/impostor`. Un jugador reconocido sin Room activa ve `Crear sala`
+(acción directa) y `Unirme a una sala` (formulario inline con foco automático,
+enviable por teclado), sin pasar por `/impostor/grupo#jugar`. `Ver grupo` se
+mantiene como navegación secundaria explícita. La lógica de creación/unión se
+extrajo a una pieza compartida (`useRoomEntryActions`) reutilizada también por
+`/impostor/grupo`, que conserva sus acciones equivalentes.
+
+Validación registrada: tests focalizados de `/impostor` y `/impostor/grupo`,
+suite completa (`npm test`), lint y `git diff --check` se ejecutaron durante la
+implementación.
+
+Pendiente: revisión manual (crear Room, abrir/cerrar formulario, código válido
+e inválido, doble tap, tres sesiones reales, lobby, playing, viewport móvil y
+navegación por teclado). No hay evidencia de esa revisión manual en esta
+actualización.
+
 ### UX-02 — Impostor entry mixes game and Group context
 
 ```text
