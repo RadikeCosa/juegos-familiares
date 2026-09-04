@@ -72,9 +72,10 @@ describe("Home", () => {
     expect(page.text).toContain("Juegos");
     expect(page.text).toContain("Impostor");
     expect(page.text).toContain("Encontrá al impostor sin revelar demasiado");
-    expect(countMatches(page.text, "Impostor")).toBe(1);
+    expect(countMatches(page.text, "Impostor")).toBe(2);
     expect(countMatches(page.text, "Encontrá al impostor sin revelar demasiado")).toBe(1);
-    expect(page.text).not.toContain("Jugar");
+    expect(page.text).toContain("Jugar a Impostor");
+    expect(page.hrefs).toContain("/impostor");
   });
 
   it("does not create AuthIdentity when / renders", () => {
@@ -86,7 +87,7 @@ describe("Home", () => {
 });
 
 describe("renderPlatformHomeContext", () => {
-  it("shows the recognized Player and Group while checking the active Room", () => {
+  it("shows a compact current group link while checking the active Room", () => {
     const state: PlatformBootstrapState = {
       status: "recognized",
       player: {
@@ -105,16 +106,15 @@ describe("renderPlatformHomeContext", () => {
 
     const page = inspect(renderPlatformHomeContext(state, { status: "loading" }));
 
-    expect(page.text).toContain("Hola, Ramiro");
-    expect(page.text).toContain("Tu grupo");
     expect(page.text).toContain("Familia");
+    expect(page.text).toContain("Ramiro");
     expect(page.text).toContain("Comprobando sala activa");
     expect(page.text).not.toContain("Ir al juego del grupo");
     expect(page.text).not.toContain("Volver a la sala");
     expect(page.text).not.toContain("Volver a la partida");
   });
 
-  it("uses a single contextual Impostor CTA when no active Room exists", () => {
+  it("links the complete compact group context when no active Room exists", () => {
     const state: PlatformBootstrapState = {
       status: "recognized",
       player: {
@@ -133,9 +133,16 @@ describe("renderPlatformHomeContext", () => {
 
     const page = inspect(renderPlatformHomeContext(state, { status: "absent" }));
 
-    expect(page.text).toContain("Tu grupo ya está listo para jugar.");
-    expect(page.text).toContain("Ir al juego del grupo");
-    expect(page.hrefs).toEqual(["/impostor/grupo"]);
+    const markup = renderToStaticMarkup(renderPlatformHomeContext(state, { status: "absent" }));
+
+    expect(page.text).toContain("Familia");
+    expect(page.text).toContain("Ramiro");
+    expect(markup).toContain(">Ramiro</strong><span>(Familia)</span>");
+    expect(page.text).not.toContain("Tu grupo ya está listo para jugar.");
+    expect(page.text).not.toContain("Listo para empezar una sala.");
+    expect(page.hrefs).toContain("/grupo");
+    expect(page.hrefs).toEqual(["/grupo"]);
+    expect(markup).toContain('aria-label="Abrir el grupo actual: Familia"');
   });
 
   it("links directly to active lobby and playing Rooms", () => {
@@ -171,9 +178,11 @@ describe("renderPlatformHomeContext", () => {
     expect(lobby.text).toContain("Sala activa");
     expect(lobby.text).toContain("Volver a la sala");
     expect(lobby.hrefs).toContain("/impostor/sala/AB7KQ2M4");
+    expect(lobby.hrefs).toEqual(["/impostor/sala/AB7KQ2M4"]);
     expect(playing.text).toContain("Partida en curso");
     expect(playing.text).toContain("Volver a la partida");
     expect(playing.hrefs).toContain("/impostor/sala/PLAY1234");
+    expect(playing.hrefs).toEqual(["/impostor/sala/PLAY1234"]);
   });
 
   it("shows retry and neutral navigation when active Room lookup fails", () => {
@@ -203,9 +212,9 @@ describe("renderPlatformHomeContext", () => {
 
     expect(page.text).toContain("No pudimos comprobar si tenés una sala activa.");
     expect(page.text).toContain("Reintentar");
-    expect(page.text).toContain("Ir al grupo");
+    expect(page.text).toContain("Familia");
     expect(page.text).not.toContain("Ir al juego del grupo");
-    expect(page.hrefs).toContain("/impostor/grupo");
+    expect(page.hrefs).toEqual(["/grupo"]);
   });
 
   it("keeps loading state focused on checking the group without showing stale data", () => {
@@ -215,7 +224,7 @@ describe("renderPlatformHomeContext", () => {
 
     expect(markup).toContain("Comprobando tu grupo");
     expect(markup).not.toContain("Hola,");
-    expect(markup).not.toContain("Ver grupo");
+    expect(markup).not.toContain("Abrir el grupo actual");
   });
 
   it("keeps unrecognized users on a lightweight home without onboarding", () => {

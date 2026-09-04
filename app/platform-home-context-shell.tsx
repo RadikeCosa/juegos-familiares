@@ -40,60 +40,58 @@ export function renderPlatformHomeContext(
     const isLobbyRoom =
       roomState.status === "success" && roomState.room.status === "lobby";
 
+    if (roomState.status === "success" && activeRoomHref) {
+      return (
+        <section className="home-platform-context home-platform-context--active">
+          <p className="home-platform-context__meta">
+            {isPlayingRoom ? "Partida en curso" : "Sala activa"}
+          </p>
+          <Link
+            className="home-secondary-cta home-secondary-cta--primary"
+            href={activeRoomHref}
+          >
+            {isPlayingRoom
+              ? "Volver a la partida"
+              : isLobbyRoom
+                ? "Volver a la sala"
+                : "Ir al juego del grupo"}
+          </Link>
+        </section>
+      );
+    }
+
     return (
-      <section
-        className="home-platform-context"
-        aria-labelledby="home-platform-context-title"
-      >
-        <h2 id="home-platform-context-title">Hola, {state.player.nickname}</h2>
-        <div className="home-group-summary">
-          <p>Tu grupo</p>
-          <strong>{state.group.name}</strong>
-        </div>
+      <section className="home-platform-context home-platform-context--recognized">
+        <Link
+          className="home-group-context-link"
+          href="/grupo"
+          aria-label={`Abrir el grupo actual: ${state.group.name}`}
+        >
+          <span className="home-group-context-link__initial" aria-hidden="true">
+            {state.player.nickname.slice(0, 1).toLocaleUpperCase()}
+          </span>
+          <span className="home-group-context-link__details">
+            <strong>{state.player.nickname}</strong>
+            <span>({state.group.name})</span>
+          </span>
+        </Link>
         {roomState.status === "loading" || roomState.status === "idle" ? (
-          <p aria-live="polite">Comprobando sala activa...</p>
-        ) : null}
-        {roomState.status === "absent" ? (
-          <>
-            <p className="home-platform-context__meta">
-              Tu grupo ya está listo para jugar.
-            </p>
-            <Link className="home-secondary-cta home-secondary-cta--primary" href="/impostor/grupo">
-              Ir al juego del grupo
-            </Link>
-          </>
-        ) : null}
-        {roomState.status === "success" && activeRoomHref ? (
-          <>
-            <p className="home-platform-context__meta">
-              {isPlayingRoom ? "Partida en curso" : "Sala activa"}
-            </p>
-            <Link className="home-secondary-cta home-secondary-cta--primary" href={activeRoomHref}>
-              {isPlayingRoom
-                ? "Volver a la partida"
-                : isLobbyRoom
-                  ? "Volver a la sala"
-                  : "Ir al juego del grupo"}
-            </Link>
-          </>
+          <p className="home-platform-context__checking" aria-live="polite">
+            Comprobando sala activa...
+          </p>
         ) : null}
         {roomState.status === "error" ? (
           <>
             <p>No pudimos comprobar si tenés una sala activa.</p>
-            <div className="home-context-actions">
-              {options.onRetryActiveRoom ? (
-                <button
-                  className="home-secondary-cta home-secondary-cta--primary"
-                  type="button"
-                  onClick={options.onRetryActiveRoom}
-                >
-                  Reintentar
-                </button>
-              ) : null}
-              <Link className="home-secondary-cta" href="/impostor/grupo">
-                Ir al grupo
-              </Link>
-            </div>
+            {options.onRetryActiveRoom ? (
+              <button
+                className="home-secondary-cta home-secondary-cta--primary"
+                type="button"
+                onClick={options.onRetryActiveRoom}
+              >
+                Reintentar
+              </button>
+            ) : null}
           </>
         ) : null}
       </section>
@@ -105,7 +103,10 @@ export function renderPlatformHomeContext(
       <section className="home-platform-context" aria-live="polite">
         <h2>No pudimos recuperar correctamente tu grupo.</h2>
         <p>Podés entrar a Impostor para revisar tu contexto.</p>
-        <Link className="home-secondary-cta home-secondary-cta--primary" href="/impostor">
+        <Link
+          className="home-secondary-cta home-secondary-cta--primary"
+          href="/impostor"
+        >
           Ir a Impostor
         </Link>
       </section>
@@ -117,7 +118,10 @@ export function renderPlatformHomeContext(
       <section className="home-platform-context" aria-live="polite">
         <h2>No pudimos comprobar tu grupo ahora.</h2>
         <p>Podés entrar a Impostor y volver a intentar desde ahí.</p>
-        <Link className="home-secondary-cta home-secondary-cta--primary" href="/impostor">
+        <Link
+          className="home-secondary-cta home-secondary-cta--primary"
+          href="/impostor"
+        >
           Ir a Impostor
         </Link>
       </section>
@@ -127,7 +131,10 @@ export function renderPlatformHomeContext(
   return (
     <section className="home-platform-context" aria-live="polite">
       <p>Entrá a Impostor para unirte a tu grupo o seguir jugando.</p>
-      <Link className="home-secondary-cta home-secondary-cta--primary" href="/impostor">
+      <Link
+        className="home-secondary-cta home-secondary-cta--primary"
+        href="/impostor"
+      >
         Jugar
       </Link>
     </section>
