@@ -2,13 +2,14 @@
 
 ## Proyecto
 
-Juegos Familiares es una plataforma mobile-first de juegos sociales
-presenciales, con objetivo PWA progresiva.
+Juegos Familiares es una plataforma mobile-first para experiencias compartidas
+entre familiares, amigos o grupos pequeños, con objetivo PWA progresiva.
 
-Impostor es el primer juego, alcanzó approved beta y conserva su dominio propio.
-Producción es una superficie real y protegida. No promover conceptos de
-Impostor a una arquitectura común sin evidencia aportada por otra utilidad
-real, ni asumir que la próxima utilidad de Juegos Familiares será un juego.
+Impostor es su primer juego social presencial, alcanzó approved beta y conserva
+su dominio propio. Producción es una superficie real y protegida. No promover
+conceptos de Impostor a una arquitectura común sin evidencia aportada por otra
+utilidad real, ni asumir que la próxima utilidad de Juegos Familiares será un
+juego.
 
 Stack actual: Next.js, React, TypeScript, Supabase Auth, Postgres, RLS y
 Realtime cuando el producto lo necesita.
@@ -37,7 +38,7 @@ el tipo e impacto de la tarea.
 | --- | --- |
 | Cambio localizado de UI, ruta o test | Implementación y tests cercanos |
 | Etapa actual, baseline productiva o roadmap | `sources/project-status.md` |
-| Cambio de producto de plataforma | `sources/platform/product-brief.md` |
+| Cambio de producto de plataforma | `sources/product-brief.md` |
 | Principios duraderos de producto o desarrollo | `sources/project-principles.md` |
 | Entorno local, setup o scripts operativos | `README.md` y `package.json` |
 | Arquitectura, autorización, datos, Supabase, Realtime, PWA o límites entre dominios | `sources/architecture.md` y superficie afectada |

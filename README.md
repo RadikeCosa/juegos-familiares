@@ -9,8 +9,7 @@ de implementacion.
 
 - `sources/project-status.md`: etapa actual, baseline productiva y workstreams
   post-beta.
-- `sources/platform/product-brief.md`: contrato actual de producto de
-  plataforma.
+- `sources/product-brief.md`: contrato actual de producto de Juegos Familiares.
 - `sources/project-principles.md`: principios duraderos de producto y
   desarrollo.
 - `sources/architecture.md`: arquitectura actual y limites de autoridad.
@@ -73,7 +72,7 @@ No usar este comando como procedimiento de produccion.
 
 ### Provisionar admin de plataforma
 
-En la etapa actual del MVP, solo el admin de plataforma puede crear grupos. El alta del primer admin es un paso operativo manual, no una pantalla publica del producto.
+Actualmente, solo el admin de plataforma puede crear grupos. El alta del primer admin es un paso operativo manual, no una pantalla publica del producto.
 
 En local, usar siempre el script:
 
@@ -216,9 +215,11 @@ npm run supabase:stop
 
 La CLI/proyecto no documenta aqui un concepto separado de pausa; para este repo, pausar/reanudar se maneja como `stop`/`start`.
 
-## Validacion completa local
+## Referencia de validacion completa local
 
-Workflow recomendado antes de cerrar un cambio relevante:
+Ejecutar estas capas cuando el alcance y riesgo del cambio lo requieran. El
+criterio general de validacion proporcional esta en
+`sources/working-method.md`.
 
 ```bash
 npm run supabase:start
