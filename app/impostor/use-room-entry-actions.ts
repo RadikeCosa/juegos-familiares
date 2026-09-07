@@ -39,6 +39,7 @@ type RoomEntryActionsControllerOptions = {
 export type RoomEntryActionsController = {
   createRoom: () => void;
   showJoinRoomForm: () => void;
+  hideJoinRoomForm: () => void;
   joinRoomByCode: (rawCode: string) => void;
 };
 
@@ -101,6 +102,14 @@ export function createRoomEntryActionsController({
       setJoinState({ status: "form" });
     },
 
+    hideJoinRoomForm() {
+      if (joinState.status === "joining") {
+        return;
+      }
+
+      setJoinState({ status: "idle" });
+    },
+
     joinRoomByCode(rawCode: string) {
       if (joinState.status === "joining") {
         return;
@@ -150,6 +159,7 @@ export function useRoomEntryActions() {
     roomJoinState,
     createRoom: () => controller.createRoom(),
     showJoinRoomForm: () => controller.showJoinRoomForm(),
+    hideJoinRoomForm: () => controller.hideJoinRoomForm(),
     joinRoomByCode: (rawCode: string) => controller.joinRoomByCode(rawCode),
   };
 }

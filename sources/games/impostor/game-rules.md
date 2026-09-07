@@ -175,7 +175,7 @@ La privacidad no debe depender solamente de ocultar visualmente información que
 
 Cuando todos disponen de su información, la aplicación indica que puede comenzar el juego.
 
-La aplicación selecciona autoritativamente quién da la primera pista, mediante azar equilibrado dentro de la tanda actual: entre quienes hayan comenzado menos veces tiene prioridad, y la selección es independiente del rol asignado en esa ronda.
+La aplicación selecciona autoritativamente quién da la primera pista, mediante azar equilibrado dentro de la tanda actual. Tienen prioridad quienes hayan comenzado menos veces y, cuando varias personas empatan en ese mínimo, se evita elegir al impostor si existe otra alternativa. Entre las personas restantes, la selección es aleatoria.
 
 Después de esa primera intervención, el grupo continúa físicamente, por ejemplo hacia la derecha. La aplicación no controla ni registra los turnos posteriores.
 

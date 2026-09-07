@@ -123,6 +123,7 @@ export function renderImpostorGroupContext(
     onRetryActiveRoom?: () => void;
     onCreateRoom?: () => void;
     onShowJoinRoomForm?: () => void;
+    onHideJoinRoomForm?: () => void;
     onJoinRoomSubmit?: (event: FormEvent<HTMLFormElement>) => void;
   } = {},
 ) {
@@ -279,43 +280,53 @@ export function renderImpostorGroupContext(
         {activeRoomState.status === "absent" ||
         (activeRoomState.status === "success" && !hasActiveRoom) ? (
           <>
-            <button
-              className="impostor-action impostor-action--primary"
-              type="button"
-              disabled={roomJoinState.status === "joining"}
-              onClick={options.onShowJoinRoomForm}
-            >
-              Unirme a una sala
-            </button>
+            {roomJoinState.status === "idle" ? (
+              <>
+                <button
+                  className="impostor-action impostor-action--primary"
+                  type="button"
+                  onClick={options.onShowJoinRoomForm}
+                >
+                  Unirme a una sala
+                </button>
 
-            <button
-              className="impostor-action"
-              type="button"
-              disabled={roomCreationState.status === "creating"}
-              onClick={options.onCreateRoom}
-            >
-              {roomCreationState.status === "creating"
-                ? "Creando sala..."
-                : "Crear sala"}
-            </button>
+                <button
+                  className="impostor-action"
+                  type="button"
+                  disabled={roomCreationState.status === "creating"}
+                  onClick={options.onCreateRoom}
+                >
+                  {roomCreationState.status === "creating"
+                    ? "Creando sala..."
+                    : "Crear sala"}
+                </button>
 
-            {roomCreationState.status === "error" ? (
-              <div className="impostor-group-error" aria-live="polite">
-                <p>{roomCreationState.message}</p>
-              </div>
-            ) : null}
-
-            {roomJoinState.status === "form" ||
-            roomJoinState.status === "joining" ? (
+                {roomCreationState.status === "error" ? (
+                  <div className="impostor-group-error" aria-live="polite">
+                    <p>{roomCreationState.message}</p>
+                  </div>
+                ) : null}
+              </>
+            ) : (
               <form
-                className="impostor-create-group"
+                className="impostor-create-group impostor-room-join-step"
                 aria-labelledby="impostor-join-room-title"
                 onSubmit={options.onJoinRoomSubmit}
               >
-                <h3 id="impostor-join-room-title">Unirme a una sala</h3>
+                <div>
+                  <p className="impostor-kicker">Unirse a una sala</p>
+                  <h3 id="impostor-join-room-title">
+                    Ingresá el código de la sala
+                  </h3>
+                  <p id="impostor-join-room-help">
+                    Pedíselo a la persona que creó la sala.
+                  </p>
+                </div>
                 <label className="impostor-field">
                   <span>Código de sala</span>
                   <input
+                    aria-describedby="impostor-join-room-help"
+                    aria-invalid={roomJoinState.status === "error"}
                     name="roomCode"
                     type="text"
                     autoCapitalize="characters"
@@ -326,23 +337,32 @@ export function renderImpostorGroupContext(
                     disabled={roomJoinState.status === "joining"}
                   />
                 </label>
-                <button
-                  className="impostor-action impostor-action--primary"
-                  type="submit"
-                  disabled={roomJoinState.status === "joining"}
-                >
-                  {roomJoinState.status === "joining"
-                    ? "Uniéndote..."
-                    : "Unirme"}
-                </button>
+                {roomJoinState.status === "error" ? (
+                  <p className="impostor-room-join-step__error" aria-live="polite">
+                    {roomJoinState.message}
+                  </p>
+                ) : null}
+                <div className="impostor-room-join-step__actions">
+                  <button
+                    className="impostor-action impostor-action--primary"
+                    type="submit"
+                    disabled={roomJoinState.status === "joining"}
+                  >
+                    {roomJoinState.status === "joining"
+                      ? "Entrando..."
+                      : "Entrar a la sala"}
+                  </button>
+                  <button
+                    className="impostor-action"
+                    type="button"
+                    disabled={roomJoinState.status === "joining"}
+                    onClick={options.onHideJoinRoomForm}
+                  >
+                    Volver
+                  </button>
+                </div>
               </form>
-            ) : null}
-
-            {roomJoinState.status === "error" ? (
-              <div className="impostor-group-error" aria-live="polite">
-                <p>{roomJoinState.message}</p>
-              </div>
-            ) : null}
+            )}
           </>
         ) : null}
       </div>
@@ -418,6 +438,7 @@ export function ImpostorGroupContextShell() {
     roomJoinState,
     createRoom,
     showJoinRoomForm,
+    hideJoinRoomForm,
     joinRoomByCode,
   } = useRoomEntryActions();
 
@@ -658,6 +679,7 @@ export function ImpostorGroupContextShell() {
         : undefined,
     onCreateRoom: createRoom,
     onShowJoinRoomForm: showJoinRoomForm,
+    onHideJoinRoomForm: hideJoinRoomForm,
     onJoinRoomSubmit: (event) => void handleJoinRoomSubmit(event),
   });
 }

@@ -155,6 +155,21 @@ La garantía de una Room activa por Player se sostiene con una estructura técni
 
 Las mutaciones directas sobre `rooms`, `room_participants` y slots activos no son API de cliente. El cliente solicita intenciones mediante RPCs.
 
+## Estado UI de entrada manual a Room
+
+Para un Player reconocido sin Room activa, el cliente modela la entrada manual como estados locales explícitos:
+
+```text
+acciones iniciales
+→ formulario de código
+→ enviando
+→ éxito | error reintentable
+```
+
+Activar `Unirme a una sala` reemplaza el bloque de acciones por un paso con título, ayuda, input, submit `Entrar a la sala` y acción `Volver`; no agrega un input suelto debajo ni aplica estilo de error al control que inició el flujo. El estado de error sólo existe después de una respuesta fallida y mantiene el formulario montado. `Volver` limpia el error local y recupera las acciones iniciales.
+
+Este contrato es común a `/impostor` y `/impostor/grupo` y no modifica `join_room_by_code(room_code)`, autorización, routing de enlaces directos ni lifecycle de Room.
+
 ## No requiere sincronización continua
 
 No hace falta sincronizar digitalmente:
@@ -742,8 +757,8 @@ El reveal privado vuelve inicialmente oculto después de refresh/reconnect. Esto
 | Fase | Estado compartido autoritativo | Estado privado | Acción propia persistida | UI esperada al reconectar |
 | --- | --- | --- | --- | --- |
 | `lobby` | Room `lobby`, host, participants, código/enlace, Presence efímera | ninguno | pertenencia a Room | lobby actual o salida al grupo si Room cerró |
-| `role_reveal` | Room `playing`, GameSession, Round, roster, round number, jugador que empieza (`Round.starting_player_id`) | rol y palabra sólo para no-impostor | ninguna confirmación persistida | reveal oculto; botón para ver rol/palabra vigente |
-| `discussion` | fase, host, roster, round number, jugador que empieza (`Round.starting_player_id`) | misma vista privada autorizada del caller | ninguna | conversación vigente; indicación de quién empieza; reveal local oculto salvo estado efímero preservado en mismo montaje |
+| `role_reveal` | Room `playing`, GameSession, Round, roster, round number, jugador que empieza (`Round.starting_player_id`) | rol y palabra sólo para no-impostor | ninguna confirmación persistida | superficie privada oculta; un tap revela palabra/rol vigente y otro tap sobre la misma superficie oculta |
+| `discussion` | fase, host, roster, round number, jugador que empieza (`Round.starting_player_id`) | misma vista privada autorizada del caller | ninguna | conversación vigente; indicación de quién empieza; la misma superficie reveal/hide de `role_reveal`, oculta salvo estado efímero preservado en mismo montaje |
 | `voting_first` | fase y candidatos desde `SessionPlayers` | rol/word según reglas vigentes, sin parciales | voto propio de `voting_round = 1` | votar si no votó; espera si `has_voted = true`; fase siguiente si avanzó |
 | `tie_discussion` | resultado agregado de primera votación y candidatos empatados derivados | ningún secreto adicional | voto de primera etapa ya cerrado | ver empate vigente; host actual puede iniciar segunda votación si read model lo permite |
 | `voting_second` | candidatos empatados autorizados, sin parciales | ningún secreto adicional | voto propio de `voting_round = 2` | votar si no votó; espera si `has_voted = true`; usar `my_vote_target_player_id` si llega |
@@ -957,9 +972,10 @@ La aplicación selecciona autoritativamente, dentro de la misma operación que c
 
 * contar cuántas veces empezó cada `SessionPlayer` dentro de la `GameSession` actual, usando `Round.starting_player_id`;
 * determinar el menor conteo;
-* elegir aleatoriamente entre los `SessionPlayers` con ese conteo mínimo.
+* entre los `SessionPlayers` con ese conteo mínimo, evitar al impostor si existe otra persona empatada;
+* elegir aleatoriamente entre las personas restantes.
 
-La selección es independiente del rol asignado en esa ronda y del host. El resultado se persiste en `Round.starting_player_id`, referenciando el roster congelado de esa `GameSession`, y se expone mediante `get_my_game_state()` a todos los participantes autorizados. El cliente no puede enviar `starting_player_id`. Rondas creadas antes de esta regla pueden no tener el dato; se tratan como conteo cero, sin bloquear la selección de rondas nuevas.
+El conteo de inicios sigue siendo el criterio principal: si el impostor es la única persona con el mínimo, puede ser seleccionado. El host no recibe privilegios. El resultado se persiste en `Round.starting_player_id`, referenciando el roster congelado de esa `GameSession`, y se expone mediante `get_my_game_state()` a todos los participantes autorizados. El cliente no puede enviar `starting_player_id`. Rondas creadas antes de esta regla pueden no tener el dato; se tratan como conteo cero, sin bloquear la selección de rondas nuevas.
 
 ---
 
@@ -1089,6 +1105,16 @@ impostor → role = impostor, word = null
 ```
 
 No debe devolver `impostor_player_id`, `normalized_secret_word` ni roles de otros.
+
+En `role_reveal` y `discussion`, el cliente debe renderizar la vista privada con el mismo contrato:
+
+* oculta por defecto y sin el secreto presente en el DOM;
+* una superficie táctil amplia revela la palabra autorizada o `IMPOSTOR`;
+* un segundo tap sobre esa misma superficie vuelve a ocultar;
+* no se renderiza la palabra visible con un botón de ocultar separado debajo;
+* el estado es local y no produce escrituras server-side;
+* la transición de fase, el cambio de ronda o un bootstrap vuelven a ocultar; un refetch de la misma ronda durante el mismo montaje puede conservar el estado para evitar flicker;
+* las instrucciones de fase, quién empieza y las acciones host-only se renderizan fuera de la superficie privada.
 
 Como `role_reveal → discussion` no modifica `Room.status`, Incremento 7 sincroniza por polling lento de `get_my_game_state()` mientras `Room.status = playing`, con valor inicial de aproximadamente 3 segundos. El host que ejecuta la transición hace refetch autoritativo inmediato tras respuesta exitosa.
 
