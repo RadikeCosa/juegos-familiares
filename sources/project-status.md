@@ -11,32 +11,45 @@ development log.
 Impostor has reached an approved beta, and that approved beta is currently
 deployed to production.
 
-- Production baseline SHA: `7296dee` (`main`).
-- The baseline is supported by a confirmed Vercel Production deployment,
-  repeated real-world play, and positive human evaluation.
+```yaml
+product: Impostor
+stage: approved beta
+production_branch: main
+production_baseline_SHA: 7431605
+deployment_status: confirmed in Vercel Production
+observed_status: working correctly based on validation performed so far
+```
+
+The baseline is supported by a manually confirmed Vercel Production
+deployment, repeated real-world use, positive human evaluation, and the correct
+behavior observed so far.
 
 Approved beta does not imply product-market fit, mass validation, finished
 UX/UI, absence of bugs, or product completion.
 
-## Preview feedback branch
+## Integrated production-feedback refinements
 
 ```yaml
-branch: pre-beta-production-feedback
-SHA: ec730c5
-status: preview only / not merged / not production
+source_branch: pre-beta-production-feedback
+source_SHA: ec730c5
+merged_via: PR #40
+merged_into: main
+production_merge_SHA: 7431605
+status: integrated / deployed to production / currently active
 ```
 
-The branch contains refinements prompted by observation of production use:
+The integrated refinements prompted by observation of production use are:
 
 - join-room UX refinement;
 - unified private reveal/hide interaction;
 - starting-player rule refinement to avoid selecting the impostor when an
   equally balanced alternative exists.
 
-These changes are not part of the current production contract. They must be
-evaluated within the post-beta UX/UI refinement workstream. A preview branch
-must not be used as a source of current behavior, and its changes must not be
-promoted automatically to mandatory backlog items.
+These changes are integrated into `main`, deployed to Production, and part of
+the current production behavior. The active source of that behavior is
+`main@7431605`, not the historical source branch. The refinements remain
+subject to observation and progressive improvement; their integration does not
+mean the UX/UI is finished.
 
 ## Post-beta roadmap
 
