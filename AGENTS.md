@@ -55,10 +55,9 @@ decisión relevante o posible contradicción.
 `sources/project-status.md` posee la etapa, baseline productiva y roadmap; este
 archivo no debe duplicar ni fijar por su cuenta un SHA de producción.
 
-`sources/implementation-plan.md`, `sources/portfolio-case-study.md`,
-`sources/technical-narrative.md` y los documentos de aceptación pre-beta aún
-existen como material histórico o narrativo, pero no gobiernan el trabajo
-actual.
+`sources/archive/` conserva evidencia histórica y material narrativo
+seleccionado. No gobierna comportamiento, producto, arquitectura, roadmap,
+backlog ni operación actual. Git conserva la historia completa.
 
 La documentación activa posee contratos y decisiones. El comportamiento de
 producción no debe inferirse de documentos históricos o stale: cuando una

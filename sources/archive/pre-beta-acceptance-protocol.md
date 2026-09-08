@@ -1,5 +1,18 @@
 # Protocolo de aceptacion manual pre-beta
 
+> **Nota histórica:** este documento fue un protocolo de evaluación. No existe
+> evidencia de su ejecución completa ni registro suficiente para afirmar `D1
+> PASS`; no debe interpretarse retroactivamente como aceptación formal
+> ejecutada. La beta aprobada actual deriva de uso real repetido y evaluación
+> humana posterior, según `sources/project-status.md`.
+>
+> El runbook asociado registró únicamente esta evidencia concreta: P0 `PASS` el
+> 2026-09-02 para el código de producto `973dc0d`, con el contrato de tests
+> corregido en `53e9799`, cubriendo unit tests, lint, build, validadores DB y
+> smokes Realtime. También registró como candidata inicial de la ejecución
+> `a064ce2c38abe4502b8c11ceeb9be5b7187aea62` en Vercel Preview. La matriz
+> restante, incluida D1, quedó sin completar.
+
 Este documento define como preparar, ejecutar y registrar la aceptacion manual
 general pre-beta de Juegos Familiares / Impostor.
 

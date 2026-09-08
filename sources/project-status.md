@@ -68,6 +68,34 @@ and change control through distinct branches or tasks.
 The next Juegos Familiares utility is future exploration. It may be a game or
 another kind of utility; the roadmap does not decide that in advance.
 
+## Known limitations
+
+- A SessionPlayer who disconnects during a session remains in the frozen
+  roster and can prevent completion of actions that require full participation,
+  including voting.
+- If the host disappears during `playing`, host-only transitions can remain
+  blocked. Automatic host succession is currently implemented only in the
+  lobby.
+
+These are known limitations, not an automatic backlog. Host succession during
+`playing` requires a product decision. Leaving during a session, timeout or a
+host override remain future exploration.
+
+## Future exploration
+
+These questions are not committed roadmap items:
+
+- whether absence or departure during a session needs timeout, host override
+  or another explicit policy;
+- whether nickname changes, nickname ownership or transfer of Group
+  administration need explicit product rules.
+
+Architectural questions about multi-group membership, global versus
+group-scoped Player identity and capabilities shared by future utilities live
+only in `sources/architecture.md`. Impostor-specific future capabilities remain
+classified in `sources/games/impostor/product-brief.md`. The next utility is
+already owned by the roadmap above.
+
 ## Current improvement work
 
 Only observations confirmed against the current product should become active

@@ -20,6 +20,8 @@ de implementacion.
 - `sources/games/impostor/game-state.md`: estados, transiciones y actores.
 - `sources/games/impostor/technical-requirements.md`: invariantes y requisitos
   tecnicos.
+- `sources/archive/`: evidencia historica seleccionada; no gobierna producto,
+  arquitectura, roadmap, backlog ni operacion actual.
 
 Consultar `sources/project-status.md` en lugar de duplicar aqui el estado, la
 baseline o el roadmap.

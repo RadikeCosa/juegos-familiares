@@ -1,5 +1,13 @@
 # UX/UI Exploratory Smoke
 
+> **Nota histórica:** este documento preserva metodología, evidencia de uso y
+> observaciones de septiembre de 2026. No constituye un backlog actual. Sus
+> observaciones deben revalidarse contra producción; algunas ya fueron
+> resueltas y otras quedaron sin revalidación. Futuras mejoras siguen el ciclo
+> vigente: uso real → observación → fricción → priorización → intervención
+> pequeña → volver a usar. Los ítems UX-02…UX-12 no se promueven
+> automáticamente a trabajo activo.
+
 ## 1. Purpose
 
 This document is the living operational source for the local, multi-session
