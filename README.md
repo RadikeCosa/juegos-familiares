@@ -2,6 +2,30 @@
 
 Aplicacion mobile-first con objetivo PWA para juegos familiares. El primer juego es Impostor.
 
+## Documentacion canonica
+
+La documentacion activa describe el sistema actual. Git conserva la historia
+de implementacion.
+
+- `sources/project-status.md`: etapa actual, baseline productiva y workstreams
+  post-beta.
+- `sources/product-brief.md`: contrato actual de producto de Juegos Familiares.
+- `sources/project-principles.md`: principios duraderos de producto y
+  desarrollo.
+- `sources/architecture.md`: arquitectura actual y limites de autoridad.
+- `sources/working-method.md`: metodo de trabajo, cambio y validacion.
+- `sources/games/impostor/product-brief.md`: contrato de producto de Impostor.
+- `sources/games/impostor/game-rules.md`: reglas vigentes de Impostor.
+- `sources/games/impostor/user-flow.md`: recorrido actual de usuario.
+- `sources/games/impostor/game-state.md`: estados, transiciones y actores.
+- `sources/games/impostor/technical-requirements.md`: invariantes y requisitos
+  tecnicos.
+- `sources/archive/`: evidencia historica seleccionada; no gobierna producto,
+  arquitectura, roadmap, backlog ni operacion actual.
+
+Consultar `sources/project-status.md` en lugar de duplicar aqui el estado, la
+baseline o el roadmap.
+
 ## Desarrollo local
 
 ### Instalar dependencias
@@ -27,7 +51,8 @@ NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable-key-local>
 npm run supabase:start
 ```
 
-Levanta los servicios locales necesarios para desarrollo. El script excluye servicios que el proyecto no necesita para este incremento.
+Levanta los servicios locales necesarios para desarrollo. El script excluye
+servicios que el proyecto no utiliza actualmente.
 
 Para consultar URLs y keys locales:
 
@@ -49,7 +74,7 @@ No usar este comando como procedimiento de produccion.
 
 ### Provisionar admin de plataforma
 
-En la etapa actual del MVP, solo el admin de plataforma puede crear grupos. El alta del primer admin es un paso operativo manual, no una pantalla publica del producto.
+Actualmente, solo el admin de plataforma puede crear grupos. El alta del primer admin es un paso operativo manual, no una pantalla publica del producto.
 
 En local, usar siempre el script:
 
@@ -192,9 +217,11 @@ npm run supabase:stop
 
 La CLI/proyecto no documenta aqui un concepto separado de pausa; para este repo, pausar/reanudar se maneja como `stop`/`start`.
 
-## Validacion completa local
+## Referencia de validacion completa local
 
-Workflow recomendado antes de cerrar un incremento:
+Ejecutar estas capas cuando el alcance y riesgo del cambio lo requieran. El
+criterio general de validacion proporcional esta en
+`sources/working-method.md`.
 
 ```bash
 npm run supabase:start
@@ -214,8 +241,13 @@ npm run supabase:stop
 
 ## Produccion
 
-Los comandos de reset documentados son para Supabase local. La migracion de produccion se realiza por un procedimiento controlado separado.
+Produccion es una superficie real y protegida. El estado y la baseline vigentes
+se documentan en `sources/project-status.md`.
 
-Antes de una beta con usuarios reales, limpiar datos remotos solo si el entorno no contiene informacion que haya que conservar. Hacerlo desde Supabase Dashboard/SQL con una revision explicita de tablas afectadas; no usar `supabase:reset` como equivalente de produccion.
+Los comandos `supabase:start`, `supabase:stop` y `supabase:reset` documentados
+en este README corresponden al entorno local. No usar `supabase:reset` como
+procedimiento de produccion.
 
-Para el Incremento 2, las migrations remotas quedaron alineadas con el historial local y el smoke de produccion en Vercel fue aprobado de punta a punta.
+Cualquier migration, cambio de datos, limpieza, deploy u otra operacion remota
+requiere alcance, destino y autorizacion explicitos. Este README no define un
+procedimiento general para modificar produccion.

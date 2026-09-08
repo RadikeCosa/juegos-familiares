@@ -1,1033 +1,191 @@
-# Impostor — User Flow
+# Impostor — Recorrido del usuario
 
 ## Propósito
 
-Este documento describe cómo una persona utiliza Impostor desde que abre la aplicación hasta que termina una tanda.
-
-Impostor es accesible desde la portada de Juegos Familiares.
-
-Este flujo se concentra en lo que ocurre una vez que la persona entra al juego Impostor.
-
-El flujo parte de tres principios:
-
-1. cada participante utiliza su propio teléfono;
-2. la aplicación interviene cuando la tecnología aporta valor;
-3. la conversación principal ocurre presencialmente.
-
----
-
-# Flujo general
-
-```text
-Abrir aplicación
-      ↓
-Portada Juegos Familiares
-      ↓
-Elegir Impostor
-      ↓
-Inicio
-      ↓
-┌────────────────┬──────────────────┐
-│ Crear un grupo │ Unirme a un grupo│
-└────────────────┴──────────────────┘
-      ↓
-Grupo reconocido
-      ↓
-Ver grupo
-      ↓
-Integrantes
-      ↓
-Invitar personas (solo admin)
-      ↓
-Sala / lobby
-      ↓
-┌───────────────┬────────────────┬────────────────┐
-│ Crear sala    │ Unirse a sala  │ Agregar palabra│
-└───────────────┴────────────────┴────────────────┘
-      ↓
-Sala / Lobby
-      ↓
-Jugadores presentes
-      ↓
-Iniciar tanda
-      ↓
-Preparar ronda
-      ↓
-Información privada
-      ↓
-Conversación presencial
-      ↓
-Votación
-      ↓
-Resultado
-      ↓
-Marcador
-      ↓
-Nueva ronda / Terminar
-```
+Este contrato describe las rutas, acciones, pantallas, feedback y recovery
+visibles de la experiencia productiva. Las reglas pertenecen a
+`game-rules.md`; los guards y estados durables, a `game-state.md`.
 
----
+## Superficies actuales
 
-# Primera experiencia
+### Plataforma
 
-## Primer acceso
+- `/`: inicio de Juegos Familiares y acceso a Impostor o al contexto existente.
+- `/grupo`: superficie canónica del Group, con integrantes e invitación para el
+  administrador.
 
-La primera decisión para una persona nueva es:
+### Impostor
 
-```text
-[ Crear un grupo ]
-[ Unirme a un grupo ]
-```
+- `/impostor`: presentación del juego y entrada principal para crear, unirse o
+  volver a una Room.
+- `/impostor/grupo`: contexto secundario del Group dentro de Impostor, también
+  con acceso a Room y al banco de palabras.
+- `/impostor/grupo/palabras`: cantidad disponible, alta y gestión de los
+  aportes propios.
+- `/impostor/join/[code]`: invitación directa para unirse a un Group.
+- `/impostor/sala/[code]`: entrada directa, lobby y todas las fases de una
+  tanda.
 
-El nickname se solicita dentro del flujo elegido.
+No existe una ruta separada para “join Room”: el enlace compartido abre la
+misma ruta `/impostor/sala/[code]`.
 
-El objetivo es evitar una experiencia de registro tradicional.
+## Identidad y onboarding
 
-No se requieren inicialmente:
+La aplicación no usa un registro tradicional con email y contraseña. Una
+sesión de Supabase Auth anónima sustenta la identidad liviana cuando una acción
+de producto la necesita.
 
-* email;
-* contraseña;
-* perfil público.
+Renderizar `/`, `/impostor`, `/impostor/grupo`, el banco de palabras o una
+invitación no crea una identidad por sí solo. Sin contexto reconocido, la UI
+ofrece acciones explícitas:
 
----
+- un admin de plataforma puede iniciar la creación de un Group;
+- un usuario común entra a un Group mediante código o enlace de invitación;
+- una visita directa a una Room sin Auth ofrece `Continuar para unirme` antes
+  de crear identidad o intentar el join.
 
-# Pertenencia a un grupo
+Si existe Auth pero no un Player asociado, la experiencia guía al flujo de
+Group en vez de inventar pertenencia desde datos locales.
 
-Si el dispositivo todavía no pertenece a un grupo, debe poder:
+## Inicio habitual
 
-* crear grupo;
-* unirse a un grupo existente.
+Un Player reconocido ve su contexto y, si corresponde, una Room activa:
 
-### Crear grupo
+- `Volver a la sala` cuando está en lobby;
+- `Volver a la partida` cuando la tanda está en curso;
+- acciones para crear o unirse cuando no existe Room activa.
 
-Flujo mínimo:
+El administrador del Group puede compartir su invitación. El rol de
+administrador no lo convierte en host de una Room.
 
-```text
-Crear grupo
-↓
-Tu nombre
-Nombre del grupo
-↓
-Crear grupo
-```
+## Entrada a una Room
 
-### Unirse a grupo por código
+### Crear
 
-Flujo mínimo:
+`Crear sala` ejecuta una única intención. Al completarse, navega a
+`/impostor/sala/[code]`; mientras espera muestra `Creando sala...` y evita
+envíos duplicados. La persona creadora aparece como host inicial.
 
-```text
-Unirme
-↓
-Ingresar código
-↓
-Resolver grupo
-↓
-Mostrar nombre del grupo
-↓
-Pedir nickname
-```
+### Unirse con código
 
-### Unirse a grupo por enlace
+`Unirme a una sala` reemplaza el bloque de acciones por un paso contextual:
 
-Flujo mínimo:
+- título `Ingresá el código de la sala`;
+- ayuda para pedirlo a quien creó la Room;
+- input de código;
+- `Entrar a la sala`;
+- `Volver`.
 
-```text
-Abrir enlace
-↓
-Resolver grupo
-↓
-Mostrar nombre del grupo
-↓
-Pedir nickname
-```
+Entrar al formulario no se muestra como error. Si el intento falla, el mensaje
+aparece dentro del mismo contexto y el input permanece disponible para corregir
+y reintentar. `Volver` restaura las acciones iniciales.
 
-Si el enlace es válido, no se vuelve a pedir el código.
+### Unirse con enlace
 
-Una vez asociado, el dispositivo recuerda:
+El enlace compartido abre la Room directamente. Un Player elegible puede
+confirmar el join; una Room inexistente, cerrada, de otro Group o incompatible
+mantiene feedback contextual y no concede acceso.
 
-* jugador;
-* grupo.
+## Lobby
 
-Las visitas siguientes deberían evitar repetir esa configuración.
+La pantalla muestra código, participantes, host y disponibilidad visual. Se
+puede compartir la Room. Un participante no-host puede salir; el host puede
+cerrar el lobby. Si el host queda stale y existe otro participante activo, la
+UI puede reflejar la sucesión decidida remotamente.
 
-Visitar `/`, `/impostor`, `/impostor/join/[code]` o `/impostor/grupo` no debe crear Auth automáticamente. La identidad anónima se crea o reutiliza cuando la persona confirma una intención de producto, como crear grupo o unirse.
+Sólo el host ve la acción para iniciar la tanda. El inicio requiere al menos
+tres participantes activos y una palabra disponible. Los errores —por ejemplo,
+falta de jugadores, palabras o pérdida del rol de host— se muestran sin asumir
+que el estado local sigue siendo válido.
 
----
+## Revelación privada
 
-# Inicio habitual
+Al comenzar cada ronda, todos llegan a la misma superficie privada, oculta por
+defecto. Un tap revela la palabra autorizada o `IMPOSTOR`; otro tap la oculta.
+El contenido secreto no se renderiza mientras la superficie está cerrada.
 
-Desde A.1, para un jugador ya reconocido la portada `/` muestra:
+El mismo patrón sigue disponible durante `role_reveal` y `discussion`. El reveal
+es local, vuelve a ocultarse al cambiar de ronda o fase relevante y no funciona
+como confirmación persistida. El grupo confirma presencialmente que está listo;
+el host toca `Empezar ronda`.
 
-> Hola, Ramiro
+## Discusión y primera votación
 
-> Tu grupo
+En discusión se muestra quién da la primera pista. La conversación continúa
+cara a cara. Cuando el grupo está listo, el host usa `Ir a votación`.
 
-> Familia
+Cada participante ve los candidatos permitidos y envía su voto. Después del
+envío, la pantalla confirma que ya fue registrado y no permite reemplazarlo.
+Mientras faltan votos no se muestran conteos ni elecciones ajenas.
 
-> Ver grupo
+Al completar la primera votación:
 
-La misma persona puede entrar a Impostor desde la lista de juegos. Durante A.1,
-`/impostor` conserva también la señal de contexto reconocida; su simplificación
-definitiva queda para un incremento posterior.
+- un empate abre la pantalla de discusión de desempate;
+- descubrir al impostor abre su intento final;
+- acusar a otra persona abre el resultado de la ronda.
 
-La acción principal de contexto es entrar al grupo.
+## Empate y segunda votación
 
-## Vista de grupo
+La pantalla de empate muestra las personas empatadas y pide conversar otra vez.
+El host usa `Ir a segunda votación`. Luego cada participante vota entre los
+candidatos empatados permitidos y ve la misma confirmación de voto registrado.
 
-Flujo actual para acceder al grupo desde la portada:
+No hay una tercera votación. La resolución lleva al intento final únicamente si
+el impostor quedó como único más votado; en cualquier otro caso muestra el
+resultado de ronda.
 
-```text
-/
-↓
-Ver grupo
-↓
-/impostor/grupo
-```
+## Intento final y resultado
 
-Flujo heredado todavía compatible:
+En `impostor_guess` todos ven quién era el impostor, pero no la palabra. El
+impostor ve un input y `Enviar intento`; los demás ven que está realizando su
+intento final. El formulario exige texto y evita submits paralelos.
 
-```text
-/impostor
-↓
-Ver grupo
-↓
-/impostor/grupo
-```
+En `round_result` se muestra el bando ganador, la persona impostora, la palabra
+y, cuando existió, el intento y si fue correcto. La UI explica si el resultado
+surgió de una acusación incorrecta, un desempate no concluyente o el intento
+final.
 
-La vista de grupo muestra:
+## Marcador, siguiente ronda y cierre
 
-```text
-Familia
+Después del resultado se aplica el scoring remoto y aparece el marcador
+ordenado. Todos ven los puntajes; sólo el host recibe las acciones habilitadas:
 
-Integrantes
+- `Nueva ronda`, cuando queda una palabra no usada;
+- `Terminar tanda`.
 
-Ramiro · Admin
-Pedro
-Camila
+La nueva ronda vuelve a la revelación privada con el contenido cerrado. Si no
+quedan palabras, la UI explica el bloqueo y ofrece terminar la tanda o volver al
+banco para agregar contenido.
 
-Banco de palabras
-12 disponibles
-Tus aportes: 3
+Al terminar, la pantalla final muestra ganador o ganadores, clasificación,
+puntajes y cantidad de rondas. `Volver al grupo` sale de la Room cerrada; para
+otra tanda se crea una Room nueva.
 
-[ Agregar palabras ]
-```
+## Recovery visible
 
-El administrador ve:
+Cuando el navegador detecta pérdida de red muestra estado offline y pausa las
+acciones sensibles. Durante la reconciliación muestra que está reconectando; si
+la reconstrucción falla ofrece reintentar.
 
-```text
-[ Invitar personas ]
-```
+Refresh, retorno a foreground, evento online, invalidación Realtime y polling
+de gameplay provocan una nueva lectura del estado autorizado. La pantalla pasa
+a la fase remota vigente, aunque otro dispositivo haya avanzado mientras estaba
+fuera.
 
-Un jugador común ve los integrantes, pero no ve acciones administrativas ni código/enlace de invitación.
+La UI reconstruye, entre otros:
 
-Refrescar directamente `/impostor/grupo` debe recuperar el contexto mediante sesión Auth, `Player` y `Group`; no depende de haber navegado antes desde `/impostor`.
+- Room y host actuales;
+- rol y palabra permitidos de la ronda vigente, inicialmente ocultos;
+- voto propio ya registrado;
+- elegibilidad para el intento final;
+- marcador y nueva ronda;
+- resultado final de una tanda terminada, aun con la Room ya cerrada.
 
-Si no hay sesión, la vista no crea Auth, no muestra un grupo ajeno y ofrece una salida clara hacia Impostor.
+La selección de voto o el intento escrito pero no enviado, un modal y el reveal
+abierto son estado local efímero y pueden perderse. Una respuesta perdida no
+habilita a repetir una acción ya aceptada: la relectura muestra el resultado
+autoritativo.
 
-Acciones disponibles desde el cierre del Incremento 4:
-
-### Sala activa
-
-Si el jugador no tiene una Room activa, la vista de grupo ofrece:
-
-```text
-Crear sala
-Unirme a una sala
-```
-
-Si el jugador tiene una Room activa en `lobby` o `playing`, la vista de grupo muestra:
-
-```text
-Sala activa
-Volver a la sala
-```
-
-`Volver a la sala` aplica tanto a host como guest y reconstruye la Room activa autoritativamente.
-
-Cuando una Room queda `closed`, deja de considerarse activa y vuelven a mostrarse:
-
-```text
-Crear sala
-Unirme a una sala
-```
-
-### Crear sala
-
-Crea una Room en estado `lobby`. Cualquier integrante puede hacerlo; no requiere ser administrador. Si ya pertenece a una Room activa, recupera esa Room.
-
-### Unirse a sala
-
-Permite entrar a una Room `lobby` del mismo Group mediante código o enlace.
-
-Al seleccionar `Unirme a una sala`, las acciones iniciales se reemplazan por un paso con contexto explícito; el campo no aparece como un agregado inesperado ni el estado activo se presenta como error:
-
-```text
-Unirse a una sala
-Ingresá el código de la sala
-Pedíselo a la persona que creó la sala.
-
-Código de sala
-[ Entrar a la sala ]
-[ Volver ]
-```
-
-`Volver` recupera las acciones iniciales. El rojo queda reservado para un fallo real después de intentar entrar. Ante ese fallo, el formulario permanece visible y conserva el contexto necesario para corregir el código y reintentar.
-
-### Agregar palabras
-
-Permite alimentar el banco del grupo en cualquier momento.
-
-Ruta prevista:
-
-```text
-/impostor/grupo/palabras
-```
-
----
-
-# Agregar palabra
-
-Esta acción debe funcionar aunque no exista ninguna partida.
-
-Flujo:
-
-```text
-Inicio
-  ↓
-Agregar palabras
-  ↓
-/impostor/grupo/palabras
-  ↓
-Campo de texto
-  ↓
-Agregar
-  ↓
-Validación
-  ↓
-Palabra guardada
-```
-
-Ejemplo:
-
-> Agregar palabra
-
-`Chocotorta`
-
-`Agregar`
-
-Después:
-
-> ✓ Palabra agregada
-
-> 64 palabras disponibles
-
-El jugador puede continuar agregando más palabras o volver al inicio.
-
-La pantalla permite agregar una palabra o frase por vez, ver la cantidad total disponible, consultar aportes propios y borrar aportes propios.
-
----
-
-# Error por duplicado
-
-Si la palabra ya existe:
-
-> Esa palabra ya está en el banco.
-
-No es necesario revelar quién la agregó.
-
----
-
-# Crear sala
-
-Un jugador selecciona:
-
-`Crear sala`
-
-La aplicación crea una Room persistida en estado `lobby`, convierte a ese jugador en host y lo agrega como RoomParticipant. La creación es idempotente si ya existe una Room activa para ese Player.
-
-El host llega al lobby.
-
-Si el jugador ya pertenece a una Room activa, la aplicación recupera esa Room en lugar de crear otra.
-
----
-
-# Compartir sala
-
-El lobby muestra un código opaco de 8 caracteres y permite compartir el enlace equivalente:
-
-```text
-/impostor/sala/[code]
-```
-
-QR queda fuera de Incremento 4.
-
----
-
-# Unirse a sala
-
-Un jugador selecciona:
-
-`Unirse a sala`
-
-La acción abre un paso deliberado con título, explicación breve, campo de código, confirmación `Entrar a la sala` y acción `Volver`. En mobile reemplaza el bloque anterior de acciones para conservar una jerarquía clara y un único foco.
-
-El jugador identifica la Room mediante código o enlace. El backend valida que el Player y la Room pertenecen al mismo Group. Conocer el código no reemplaza autorización.
-
-Si el Player ya participa, el join devuelve la misma participación sin duplicarla.
-
-Como su identidad ya está guardada, no debería volver a escribir su nick en cada partida.
-
-Visitar directamente un link de sala no equivale a intención de unirse. Si no hay Auth, la pantalla no crea una identidad por renderizar. Si hay Auth pero no Player, no auto-une al usuario a ningún Group.
-
-Si el Player ya pertenece a esa Room y abre `/impostor/sala/[code]`, la aplicación reconstruye el lobby autoritativamente desde el contexto remoto.
-
-Si el Player abre un enlace de sala que ya no coincide con su Room activa, la aplicación no debe presentar una sala viva falsa. Debe mostrar el estado actual: volver a la Room activa real si existe, mostrar que no hay sala activa si esa Room cerró, o permitir volver al grupo.
-
----
-
-# Lobby
-
-Todos los participantes ven el estado persistido del lobby, no la conexión actual del dispositivo.
-
-Ejemplo:
-
-> Sala
-
-* Ramiro · Host
-* Pedro
-* Victoria
-
-> 3 jugadores
-
-El lobby muestra también el código/enlace para compartir y acciones de salida/cierre según el participante.
-
-En Incremento 4 todavía no muestra `Iniciar partida`, mínimo de jugadores, `2 de 3`, Presence, roles, palabra, impostor ni marcador.
-
-Un participante no-host puede salir. El host puede cerrar la Room. Si el host usa la acción explícita de abandono/cierre vigente, la Room se cierra. Eso no se confunde con sucesión por desconexión/staleness.
-
-Cuando un no-host elige `Salir de la sala`, deja de pertenecer a la Room y vuelve al contexto de Group. La Room sigue en `lobby` para el host y los demás participantes.
-
-Cuando el host elige `Cerrar sala`, la Room pasa a `closed`, deja de ser activa y los participantes que estén mirando el lobby vuelven al contexto de Group tras la sincronización autoritativa.
-
-## Lobby con Presence
-
-En Incremento 5.1, el lobby agrega estado discreto de conexión:
-
-```text
-Ramiro · Host · conectado
-Pedro · conectado
-Victoria · desconectada
-```
-
-Este estado visual viene de Presence y representa disponibilidad efímera. No cambia por sí solo la pertenencia a la Room.
-
-Si una persona bloquea el teléfono, cambia de app o pierde conexión brevemente, puede aparecer como desconectada sin abandonar la sala.
-
-La interfaz no muestra heartbeat, `last_seen_at`, tiempos técnicos ni métricas de conexión.
-
-En 5.1 y 5.2, si el host deja de estar disponible, el lobby puede indicarlo de forma no bloqueante, pero no reasigna host.
-
-5.2 agregó liveness autoritativo mínimo sin mostrarlo en la interfaz. El cliente mantiene esa señal con heartbeat cada 30 segundos mientras el lobby está activo y con refresh al volver a foreground. Un teléfono en background, bloqueado o con timers suspendidos no se considera abandono por ese solo hecho.
-
-5.3 agregó sucesión autoritativa de host. Si después de validar staleness la autoridad cambia el host, todos observan el cambio al releer el lobby:
-
-```text
-Camila ahora es host
-```
-
-El aviso debe ser breve y no bloquear el uso del lobby.
-
-Si el host aparece `desconectado` en Presence pero su `last_seen_at` sigue active, no hay sucesión. Presence puede mostrar disponibilidad efímera, pero no decide el host.
-
-Si el host está stale y no hay otro participante active, no hay cambio: la Room sigue `lobby`, el host actual permanece y no se cierra automáticamente.
-
-Si el host original vuelve después de haber sido reemplazado, aparece como participante normal.
-
----
-
-# Inicio de tanda
-
-Cuando el host inicia:
-
-1. la autoridad valida que quien llama es el host actual de la Room;
-2. se fija el conjunto de participantes activos de la tanda;
-3. la Room pasa de `lobby` a `playing`;
-4. se crea la GameSession de esa Room;
-5. se prepara la primera ronda.
-
-Desde ese momento no se admiten nuevos ingresos a la Room.
-
-El creador original de la Room no recupera autoridad si ya no es host. El administrador del Group tampoco puede iniciar la tanda por ser administrador.
-
----
-
-# Preparación de ronda
-
-El sistema:
-
-1. selecciona una palabra;
-2. selecciona un impostor;
-3. crea la ronda con la palabra usada y el impostor;
-4. permite que cada dispositivo recupere solamente su vista privada.
-
----
-
-# Información del jugador
-
-Antes de revelar el contenido privado, la pantalla muestra:
-
-```text
-Revelar palabra secreta
-```
-
-Toda la superficie privada funciona como un objetivo táctil amplio. El primer tap revela la palabra autorizada o `IMPOSTOR`; el mismo objetivo muestra `Tocá de nuevo para ocultar` y permite volver a ocultarla.
-
-Ese reveal/hide es local: no persiste confirmación, no cambia `GameSession` y no equivale a `roleAcknowledged`.
-
-## Jugador normal
-
-La superficie revela claramente la palabra, por ejemplo:
-
-# MILANESA
-
-La interfaz debe evitar que otra persona pueda verla accidentalmente antes de que el jugador esté preparado.
-
----
-
-## Impostor
-
-La superficie revela:
-
-# IMPOSTOR
-
-No muestra la palabra secreta.
-
----
-
-# Coordinación presencial
-
-La confirmación persistida de que cada jugador vio su información no forma parte del MVP.
-
-No se persiste:
-
-```text
-roleAcknowledged
-role_acknowledged_at
-allRolesSeen
-```
-
-El grupo coordina verbalmente que todos estén listos. En 6.5, refrescar la pantalla vuelve a ocultar visualmente el rol y reconstruye la vista privada desde servidor.
-
----
-
-# Empezar ronda
-
-Cuando el grupo confirmó presencialmente que todos vieron su información, el host actual selecciona:
-
-`Empezar ronda`
-
-La fase pasa a:
-
-```text
-discussion
-```
-
-A partir de este momento el teléfono deja de ser protagonista.
-
-La pantalla conserva visible quién fue seleccionado para iniciar la vuelta de pistas, con copy adaptado al jugador actual (`Empezás vos` o `Empieza [nombre]`).
-
----
-
-# Conversación presencial
-
-Primero se realiza una vuelta en la que todos dan una pista.
-
-Después puede existir conversación libre.
-
-La aplicación puede mostrar únicamente un estado discreto:
-
-> Ronda en juego
-
-Los jugadores pueden volver a consultar localmente su información privada con la misma superficie táctil usada en `role_reveal`:
-
-```text
-Revelar palabra secreta
-→ palabra autorizada | IMPOSTOR
-→ Tocá de nuevo para ocultar
-```
-
-La acción previa al reveal y el gesto para ocultar son iguales para todos los jugadores; no dependen de si la vista privada contiene rol de impostor o palabra. No se muestra directamente la palabra con un botón separado debajo.
-
-La información queda oculta por defecto y no está presente en el DOM hasta el reveal, para reducir exposición física. Este reveal local no se persiste. Al entrar a `discussion`, cambiar de ronda o reconstruir desde bootstrap vuelve a quedar oculto; un refetch de la misma ronda durante el mismo montaje preserva el estado local para evitar flicker.
-
-Históricamente, Incremento 7 todavía no mostraba votación. En el flujo vigente, la acción separada del host `Ir a votación` avanza la fase cuando termina la conversación; no forma parte de la superficie privada reveal/hide.
-
-No existe inicialmente temporizador obligatorio.
-
-Al cierre técnico del Incremento 7, el flujo implementado termina en esta conversación presencial con reveal/hide privado local.
-
----
-
-# Incremento 8: iniciar primera votación
-
-Cuando el grupo lo decide, el host toca:
-
-`Ir a votación`
-
-Todos los dispositivos cambian a `voting_first` mediante polling de `get_my_game_state()`.
-
-Solo el host actual de la Room puede iniciar esta transición. El administrador del Group y el creador original no tienen permiso especial si no son el host actual.
-
----
-
-# Pantalla de votación
-
-Cada participante ve:
-
-> ¿Quién es el impostor?
-
-Lista de jugadores elegibles.
-
-Ejemplo para Ramiro:
-
-* Pedro
-* Camila
-* Victoria
-
-Ramiro no aparece como opción porque nadie puede votarse a sí mismo.
-
-La lista sale del roster congelado de `SessionPlayers`, no de Presence ni de quién aparece conectado. El impostor también vota. El host también vota y no tiene voto especial.
-
-Después:
-
-`Votar`
-
----
-
-# Voto enviado
-
-Después de votar:
-
-> Voto registrado
-
-> Esperando al resto...
-
-No se muestran resultados parciales.
-
-El voto no se puede editar. Si la respuesta de red se pierde, la pantalla se recupera al releer el estado y mostrar que el voto propio ya quedó registrado.
-
----
-
-# Revelación
-
-Cuando todos los `SessionPlayers` votaron, todos reciben el resultado agregado.
-
-Ejemplo:
-
-> Resultado
-
-> Camila — 3 votos
-> Pedro — 1 voto
-
----
-
-# Votación incorrecta
-
-Desde aquí el flujo entra en estados posteriores a la primera votación. Incremento 8 solo llegaba a `round_result`; Incremento 11.0 define documentalmente scoring, marcador y nueva ronda.
-
-Si la persona más votada no era el impostor:
-
-> El impostor era...
-
-# Victoria
-
-> Victoria gana la ronda
-
-> +2 puntos
-
-Después se muestra el marcador.
-
----
-
-# Impostor descubierto
-
-Si el grupo votó correctamente:
-
-> Encontraron al impostor
-
-# Camila
-
-La palabra todavía permanece oculta.
-
-En el dispositivo del impostor:
-
-> Tenés una última oportunidad.
-
-> ¿Cuál era la palabra?
-
-El impostor escribe su intento y toca:
-
-`Enviar intento`
-
-En los demás dispositivos:
-
-> El impostor está haciendo su intento final
-
----
-
-# Revelar palabra
-
-Después del intento, la ronda pasa a resultado.
-
-Todos los dispositivos muestran:
-
-> La palabra era
-
-# MILANESA
-
-También muestran el intento del impostor y el ganador:
-
-> El impostor acertó
-
----
-
-# Resultado final de ronda
-
-## Si el impostor acertó
-
-> Camila gana
-
-> +2 puntos
-
-## Si falló
-
-> Gana el grupo
-
-Los jugadores normales reciben:
-
-`+1 punto`
-
----
-
-# Marcador
-
-Después de cada ronda:
-
-> Marcador
-
-1. Victoria — 4
-2. Pedro — 3
-3. Camila — 3
-4. Ramiro — 2
-
-Acciones del host:
-
-`Nueva ronda`
-
-`Terminar tanda`
-
-El marcador muestra puntuación individual acumulada dentro de la tanda.
-
-La ronda otorga puntos según el bando ganador:
-
-* si gana el grupo, cada jugador normal recibe 1 punto;
-* si gana el impostor, solo el impostor recibe 2 puntos.
-
-Los demás jugadores ven el marcador y el estado de espera, pero no pueden iniciar la siguiente ronda.
-
----
-
-# Nueva ronda
-
-Si el host selecciona `Nueva ronda`:
-
-1. se conserva el marcador;
-2. se mantiene el mismo grupo de jugadores;
-3. se evita reutilizar palabras de la tanda;
-4. se considera el historial de impostores;
-5. si hay una palabra disponible no utilizada en la tanda, se prepara automáticamente una nueva ronda.
-
-Si no quedan palabras disponibles, la aplicación permite agregar nuevas palabras o terminar la tanda.
-
-El teléfono del host no elige palabra, impostor ni número de ronda. La aplicación prepara esos datos desde el servidor.
-
-El flujo vuelve a:
-
-`Información privada`
-
-En esa nueva información privada se preserva la misma regla de privacidad: el impostor no recibe la palabra antes del reveal permitido para su rol.
-
----
-
-# Terminar tanda
-
-Si el host selecciona `Terminar tanda` desde el marcador:
-
-1. la tanda se marca como finalizada;
-2. se calcula el o los ganadores finales por puntaje;
-3. se conserva el historial mínimo de tanda y rondas;
-4. la Room queda cerrada;
-5. todos ven el resultado final.
-
-Los demás jugadores no pueden terminar la tanda.
-
-Si varios jugadores empatan en el mayor puntaje, todos se muestran como ganadores.
-
-Para jugar otra tanda, el grupo vuelve al grupo y crea una nueva Room.
-
-La pantalla final del MVP muestra resultado final, ganador único o ganadores empatados, clasificación completa, puntajes, cantidad de rondas y `Volver al grupo`.
-
-No muestra detalle de rondas, votos individuales históricos ni palabras.
-
----
-
-# Empate
-
-Si la primera votación termina empatada:
-
-> Empate
-
-> Ramiro y Camila recibieron 2 votos.
-
-La aplicación indica:
-
-> Hablen un poco más y vuelvan a votar.
-
-En Incremento 8, la aplicación llega hasta `tie_discussion`: muestra el resultado agregado y el empate. La acción del host para continuar a una segunda votación, la pantalla `voting_second` y su resolución pertenecen al Incremento 9.
-
-En Incremento 9, todos ven además quiénes son los candidatos empatados. Esa lista se deriva de la primera votación registrada, no de una lista persistida aparte.
-
-El host actual ve:
-
-`Ir a segunda votación`
-
-Cuando el host toca esa acción, todos los dispositivos pasan a:
-
-```text
-voting_second
-```
-
-La segunda votación usa la misma pantalla vertical de voto, pero solo muestra como candidatos votables a los jugadores empatados. Si el jugador actual también está empatado, no aparece como opción para sí mismo porque nadie puede votarse a sí mismo.
-
-Todos los `SessionPlayers` votan otra vez. El impostor vota, el host vota sin voto especial y Presence/liveness no cambia quién debe votar.
-
-Después de votar:
-
-> Voto registrado
-
-> Esperando al resto...
-
-No se muestran resultados parciales.
-
-Cuando votaron todos, la aplicación muestra el resultado agregado de la segunda votación, no el de la primera.
-
-Si el impostor fue el único más votado:
-
-> El impostor fue señalado
-
-La ronda pasa al intento final del impostor, que pertenece al Incremento 10.
-
-Si hubo un nuevo empate o fue más votado cualquier otro jugador:
-
-> La ronda quedó resuelta
-
-No hay tercera votación. La victoria conceptual es del impostor y, según el contrato de puntuación, el impostor recibe 2 puntos al cerrarse la ronda.
-
----
-
-# Intento final del impostor
-
-Cuando la ronda entra en:
-
-```text
-impostor_guess
-```
-
-Todos ven que el impostor fue señalado correctamente.
-
-La palabra todavía no se muestra.
-
-## Vista del impostor
-
-El impostor ve un formulario mínimo:
-
-> ¿Cuál era la palabra?
-
-Acción:
-
-```text
-Enviar intento
-```
-
-Solo puede enviar un intento.
-
-## Vista de los demás jugadores
-
-Los demás jugadores ven una pantalla de espera:
-
-> El impostor está haciendo su intento final
-
-No pueden enviar un guess.
-
-## Después del intento
-
-La aplicación pasa a:
-
-```text
-round_result
-```
-
-Todos pueden ver:
-
-* palabra secreta;
-* intento enviado por el impostor;
-* si acertó o falló;
-* ganador conceptual.
-
-Si acertó:
-
-> Gana el impostor
-
-Si falló:
-
-> Gana el grupo
-
-Scoring, marcador y nueva ronda quedaron cerrados en el Incremento 11. Historial y cierre final de tanda quedaron cerrados técnicamente en el Incremento 12.
-
----
-
-# Finalizar tanda
-
-Cuando el host selecciona:
-
-`Terminar tanda`
-
-se muestra:
-
-> Resultado final
-
-# Victoria gana
-
-> 4 puntos
-
-y debajo la clasificación completa.
-
-La tanda termina.
-
-El banco de palabras y el grupo permanecen disponibles para futuras tandas. Para jugar otra tanda, el grupo vuelve al grupo y crea una nueva Room.
-
----
-
-# Administración del grupo
-
-El administrador dispone de una sección secundaria de administración.
-
-No debe competir visualmente con las acciones principales del juego.
-
-Puede acceder a:
-
-## Integrantes
-
-* ver participantes;
-* eliminar participante.
-
-## Palabras
-
-En el Incremento 3 no existe una sección administrativa para explorar el banco completo.
-
-La pantalla vigente de palabras permite a cualquier integrante:
-
-* agregar una palabra o frase por vez;
-* ver la cantidad total disponible;
-* ver sus propios aportes;
-* borrar sus propios aportes.
-
-Las comprobaciones automáticas de duplicados y formato no requieren intervención manual.
-
----
-
-# Principio de UX
-
-La cantidad de interacción con la aplicación debería seguir aproximadamente esta curva:
-
-```text
-Preparación       ALTA
-Distribución      ALTA
-Conversación      MUY BAJA
-Votación          ALTA
-Resultado         ALTA
-Nueva ronda       BAJA
-```
-
-La aplicación debe estar presente cuando coordina información entre dispositivos y hacerse discreta cuando la diversión depende de la conversación presencial.
-
----
-
-# Estado de flujos
-
-## Ya diseñados e implementados
-
-Estos flujos ya están respaldados por el diseño y la implementación vigente:
-
-* creación inicial de grupo;
-* unión a grupo por código o enlace;
-* vista de grupo con integrantes y contexto recuperable;
-* compartir/copiar invitación de grupo para administrador de Group;
-* creación de Room desde el grupo;
-* unión a sala por código o enlace;
-* compartir/copiar invitación de sala desde el lobby;
-* salida de participante no-host y cierre de Room por host;
-* sucesión autoritativa de host cuando la autoridad valida que el host está stale y existe un sucesor active.
-
-## Contrato de reconexión para Incremento 13
-
-Cuando una persona refresca, reabre la PWA, vuelve del bloqueo de pantalla, cambia de app y vuelve, pasa de offline a online o recupera una suscripción Realtime, la pantalla debe reconciliarse con el servidor.
-
-El usuario debe ver el estado vigente de la partida, no el estado visual viejo del teléfono.
-
-Ejemplos esperados:
-
-* si estaba en `role_reveal`, al volver el reveal aparece oculto y puede ver nuevamente su rol/palabra vigente;
-* si ya votó en `voting_first`, al volver ve `Voto registrado` y no vuelve a poder votar;
-* si ya votó en `voting_second`, al volver ve su estado de espera y no se ofrecen votos duplicados;
-* si el grupo avanzó de `discussion` a `voting_first`, al volver ve votación;
-* si el grupo avanzó de votación a `scoreboard`, al volver ve marcador;
-* si el host cambió por sucesión, al volver ve el host actual;
-* si la Room terminó, al volver no queda en una sala viva falsa y, si participó en la tanda, ve `finished`;
-* si el host original vuelve después de sucesión, vuelve como participante normal.
-
-Puede perderse sin considerarse error:
-
-* modal abierto;
-* reveal visible;
-* selección de voto no enviada;
-* texto de intento final no enviado;
-* feedback temporal.
-
-La aplicación no promete jugar offline. Puede conservar el último estado compartido con un indicador de reconexión/offline, pero al recuperar conexión debe aceptar el estado autoritativo actual.
-
-Incremento 13.2 implementa la UX mínima para ese intervalo: muestra "Sin conexión", "Reconectando..." o error reintentable en Room/gameplay, pausa acciones sensibles y no renderiza secretos privados stale mientras la reconciliación no haya terminado.
-
-## Implementados y técnicamente cerrados; aceptación física pendiente
-
-Incremento 13 cerró técnicamente los triggers de reconstrucción autoritativa,
-la UX offline/reconnecting y retry, el recovery foreground de
-Presence/liveness, multi-tab y host succession recovery. La matriz 13.5 quedó
-cerrada sin requerir cambios adicionales de código.
-
-La validación física general R1-R4 en teléfonos y con múltiples actores sigue
-pendiente dentro de la aceptación pre-beta. La reasignación de host no está
-pendiente como contrato ni como implementación central: la DB conserva la
-autoridad y Presence no decide el host.
-
-## Flujos todavía abiertos o futuros
-
-Siguen pendientes dentro del roadmap o como decisiones explícitamente diferidas:
-
-* validación de primera instalación de la PWA en Android/iOS reales;
-* salida o incorporación de un jugador durante una tanda;
-* validación física de update PWA y recovery multi-actor.
-
-Estas cuestiones pertenecen al trabajo posterior al cierre técnico de 13/14 y
-a la aceptación pre-beta de Incremento 15, no a las reglas centrales ya
-implementadas del juego.
+La experiencia está implementada y cubierta por pruebas automatizadas, pero no
+se considera exhaustivamente validada para toda combinación de dispositivo
+físico, instalación, suspensión y condiciones de red.

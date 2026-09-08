@@ -2,12 +2,14 @@
 
 ## Proyecto
 
-Juegos Familiares es una plataforma mobile-first de juegos sociales
-presenciales, con objetivo PWA progresiva.
+Juegos Familiares es una plataforma mobile-first para experiencias compartidas
+entre familiares, amigos o grupos pequeños, con objetivo PWA progresiva.
 
-Impostor es el primer juego y conserva su dominio propio. No promover conceptos
-de Impostor a una arquitectura común para futuros juegos sin evidencia de un
-segundo juego real que requiera reutilización.
+Impostor es su primer juego social presencial, alcanzó approved beta y conserva
+su dominio propio. Producción es una superficie real y protegida. No promover
+conceptos de Impostor a una arquitectura común sin evidencia aportada por otra
+utilidad real, ni asumir que la próxima utilidad de Juegos Familiares será un
+juego.
 
 Stack actual: Next.js, React, TypeScript, Supabase Auth, Postgres, RLS y
 Realtime cuando el producto lo necesita.
@@ -29,32 +31,53 @@ Realtime cuando el producto lo necesita.
 `AGENTS.md` es la entrada operativa permanente. Leer solo lo necesario según
 el tipo e impacto de la tarea.
 
+> Active documentation describes the current system. Git preserves
+> implementation history.
+
 | Tipo de tarea | Lectura mínima |
 | --- | --- |
 | Cambio localizado de UI, ruta o test | Implementación y tests cercanos |
-| Cambio de reglas o flujo de Impostor | Implementación, tests y documentos relevantes de `sources/games/impostor/` |
-| Cambio de producto de plataforma | `sources/platform/product-brief.md` |
+| Etapa actual, baseline productiva o roadmap | `sources/project-status.md` |
+| Cambio de producto de plataforma | `sources/product-brief.md` |
+| Principios duraderos de producto o desarrollo | `sources/project-principles.md` |
 | Entorno local, setup o scripts operativos | `README.md` y `package.json` |
 | Arquitectura, autorización, datos, Supabase, Realtime, PWA o límites entre dominios | `sources/architecture.md` y superficie afectada |
-| Alcance, decisiones relevantes o planificación | `sources/working-method.md`, `sources/project-principles.md` y, si corresponde, `sources/implementation-plan.md` |
-| Aprendizajes verificables | `sources/portfolio-case-study.md` |
+| Método de trabajo, alcance, change control o validación | `sources/working-method.md` |
+| Producto de Impostor | `sources/games/impostor/product-brief.md` |
+| Reglas de Impostor | `sources/games/impostor/game-rules.md` |
+| Flujo actual de Impostor | `sources/games/impostor/user-flow.md` |
+| Estados, transiciones, actores o guards de Impostor | `sources/games/impostor/game-state.md` |
+| Invariantes o requisitos técnicos de Impostor | `sources/games/impostor/technical-requirements.md` |
 
 Ampliar la lectura cuando exista incertidumbre, impacto transversal, una
 decisión relevante o posible contradicción.
 
-La documentación posee contratos y decisiones. El código, SQL y tests muestran
-el comportamiento actualmente implementado. Si difieren, reportar el drift o
-contradicción; no corregirlo ni decidir silenciosamente qué fuente prevalece
-fuera del alcance autorizado.
+`sources/project-status.md` posee la etapa, baseline productiva y roadmap; este
+archivo no debe duplicar ni fijar por su cuenta un SHA de producción.
+
+`sources/archive/` conserva evidencia histórica y material narrativo
+seleccionado. No gobierna comportamiento, producto, arquitectura, roadmap,
+backlog ni operación actual. Git conserva la historia completa.
+
+La documentación activa posee contratos y decisiones. El comportamiento de
+producción no debe inferirse de documentos históricos o stale: cuando una
+afirmación implementada sea relevante, contrastarla con código, migrations,
+tests y configuración correspondientes a la baseline indicada por
+`sources/project-status.md`. Si difieren, reportar el drift o contradicción; no
+corregirlo ni decidir silenciosamente qué fuente prevalece fuera del alcance
+autorizado.
 
 ## Antes de cambiar
 
 1. Confirmar raíz, rama y `git status --short`.
 2. Detectar instrucciones aplicables y cambios preexistentes.
 3. Inspeccionar implementación y tests cercanos antes de proponer una solución.
-4. Delimitar objetivo, alcance, fuera de alcance, riesgos y validación.
+4. Delimitar objetivo, alcance, fuera de alcance, supuestos, riesgos y
+   validación.
 5. Separar hechos, decisiones existentes, hipótesis y preguntas abiertas.
-6. Si una decisión relevante no está definida o contradice una fuente de
+6. Hacer explícita cualquier decisión relevante introducida con ayuda de IA o
+   herramientas.
+7. Si una decisión relevante no está definida o contradice una fuente de
    verdad, detenerse y reportarla.
 
 El working tree puede contener cambios preexistentes legítimos. Preservarlos:
@@ -72,12 +95,15 @@ no restaurarlos, descartarlos, reformatearlos ni incorporarlos al alcance.
   migrations remotas ni cambios de documentación.
 - Modificar documentación requiere que el encargo la incluya o autorización
   explícita para resolver drift real.
+- Una pregunta o tarea documental no autoriza cambios de producto, código,
+  tests, datos o infraestructura.
 
 ## Reglas de trabajo
 
 - Trabajar en incrementos pequeños, verticales y verificables.
 - Resolver el problema pedido; no agregar refactors, limpieza, dependencias ni
   cambios no relacionados.
+- No agregar funcionalidades por inercia de planes o documentos históricos.
 - Preferir la alternativa mínima cuando la diferencia sea exclusivamente
   técnica.
 - No tomar silenciosamente decisiones relevantes de producto, arquitectura,
@@ -86,9 +112,18 @@ no restaurarlos, descartarlos, reformatearlos ni incorporarlos al alcance.
 - Crear componentes, carpetas y abstracciones solo ante reutilización real.
   No crear `GenericGame`, `GameEngine`, `GenericRoom` ni equivalentes por
   anticipación.
+- Una pregunta retrospectiva no autoriza un refactor. Una exploración futura no
+  constituye deuda técnica por sí sola.
+- Los cambios de UX/UI deben originarse principalmente en observaciones
+  actuales. Revalidar hallazgos históricos antes de convertirlos en backlog.
 - Diseñar y comprobar desde mobile-first. PWA es progresiva: no asumir offline
   completo para partidas sincronizadas.
 - Mantener código, tipos y tests comprensibles.
+
+Después de cerrar la consolidación documental, narrativa/material profesional,
+refinamiento UX/UI y exploración de la próxima utilidad pueden avanzar en
+paralelo, pero deben mantener alcance y change control separados mediante ramas
+o tareas distintas.
 
 ## Seguridad, autoridad y privacidad
 
@@ -162,8 +197,8 @@ Reportar las validaciones ejecutadas, sus resultados y las no ejecutadas.
   autorizada y dentro de su alcance.
 - No iniciar servicios, instalar dependencias ni persistir datos cuando no sean
   necesarios para el encargo.
-- Mantener autorización explícita para operaciones remotas, destructivas o
-  externas.
+- Mantener alcance, destino y autorización explícitos para operaciones remotas,
+  destructivas o externas, especialmente en producción.
 
 ## Documentación
 
@@ -173,8 +208,8 @@ explícita para resolver una decisión, contrato, aprendizaje o drift real.
 - Mantener separados hechos, decisiones, hipótesis, implementación, validación
   y aprendizaje.
 - Actualizar la fuente específica que posee el contrato; no duplicarla aquí.
-- Usar `sources/portfolio-case-study.md` para aprendizajes relevantes y verificables,
-  no como tablero de estado actual.
+- No usar planes históricos, protocolos pre-beta ni material narrativo como
+  contratos vigentes o backlog automático.
 - No convertir este archivo en roadmap, changelog, inventario de migrations,
   schema, firmas RPC ni especificación completa de Impostor.
 
