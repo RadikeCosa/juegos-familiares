@@ -1,347 +1,103 @@
-# Impostor — Product Brief
-
-## Idea
-
-Impostor es el primer juego dentro de Juegos Familiares.
-
-Es un juego social presencial para grupos en el que cada participante utiliza su propio teléfono.
-
-Los jugadores forman parte de un grupo persistente y pueden agregar palabras a un banco compartido en cualquier momento, incluso cuando no hay una partida activa.
-
-Cuando quieren jugar, uno de ellos crea una sala y los demás participantes presentes se unen desde sus dispositivos.
-
-En cada ronda la aplicación:
-
-1. selecciona una palabra;
-2. selecciona un impostor;
-3. muestra la palabra a todos los jugadores normales;
-4. muestra únicamente `IMPOSTOR` al jugador seleccionado.
-
-A partir de ese momento, el juego sucede principalmente en el mundo real: los participantes hablan, dan pistas, sospechan y tratan de descubrir al impostor.
-
-Al finalizar la conversación, cada jugador vota secretamente desde su teléfono.
-
-Si el impostor es descubierto, obtiene una última oportunidad para adivinar la palabra.
-
-La aplicación resuelve el resultado y mantiene el marcador de la tanda de partidas.
-
----
-
-# Objetivo del producto
-
-Crear una experiencia social divertida, rápida y fácil de usar en reuniones familiares o de amigos.
-
-La aplicación debe utilizar la tecnología solamente cuando aporta valor:
-
-* reunir dispositivos;
-* administrar grupos y salas;
-* mantener un banco compartido de palabras;
-* distribuir información privada;
-* sincronizar estados;
-* realizar votaciones secretas;
-* resolver resultados;
-* mantener el marcador.
-
-La conversación y la parte principal del juego ocurren entre las personas.
-
----
-
-# Alcance vigente
-
-Al cierre técnico del Incremento 12, el producto ya soporta crear grupo, administrar banco de palabras, crear/unirse a Room, Presence/liveness/sucesión de host, iniciar tanda desde el host actual, revelar roles/palabras privadas, avanzar a discusión, votar, resolver empates con segunda votación, ejecutar el intento final del impostor, puntuar rondas, acumular marcador, iniciar nuevas rondas y terminar la tanda desde `scoreboard`.
-
-El Incremento 7 decide no implementar `roleAcknowledged` ni acknowledgements persistidos para el MVP. La coordinación de que todos vieron su rol ocurre presencialmente y el host actual ejecuta `Empezar ronda`.
-
-Durante `role_reveal` y `discussion`, cada jugador usa el mismo patrón privado: una superficie táctil amplia, oculta por defecto, que revela la palabra autorizada o `IMPOSTOR` con un tap y vuelve a ocultarla al tocarla de nuevo. No se presenta directamente la palabra con un botón separado debajo. La vista privada se oculta nuevamente al cambiar de fase o ronda y no se persiste ese reveal local.
-
-La entrada manual a una sala es un paso intencional y mobile-first. Al tocar `Unirme a una sala`, las acciones iniciales se reemplazan por un formulario con título, ayuda breve, confirmación `Entrar a la sala` y acción `Volver`. El rojo se reserva para errores reales posteriores al intento; ante un error, el formulario permanece disponible para corregir y reintentar.
-
-La persona que empieza la vuelta de pistas se elige autoritativamente entre quienes menos veces comenzaron dentro de la tanda. Si hay empate, se evita al impostor cuando existe otra alternativa y se sortea entre las personas restantes; el balance prevalece cuando el impostor es la única persona con el conteo mínimo.
-
-Incremento 11 cerró técnicamente scoring, marcador y nueva ronda: `SessionPlayer.score`, fase `scoreboard`, scoring server-side idempotente, read model/UI de marcador y apertura autoritativa de nueva ronda con validación DB multironda.
-
-Incremento 12 cerró técnicamente terminar tanda e historial mínimo: `end_session()` cierra autoritativamente desde `scoreboard`, la Room queda cerrada, `get_my_game_state()` reconstruye el resultado final para participantes históricos aunque no haya Room activa, la UI muestra ganador o ganadores, clasificación completa, puntajes finales, cantidad de rondas y `Volver al grupo`, y el historial mínimo queda validado adversarialmente contra Supabase local.
-
-Para jugar otra tanda, el grupo vuelve a `/impostor/grupo` y crea otra Room.
-
-Todavía no están implementados timer, estadísticas, ranking histórico, revancha automática, reutilización de Room, Realtime de gameplay ni Broadcast.
-
-El contrato documental de Incremento 8 deja preparada la primera votación: el host actual avanza `discussion → voting_first`, todos los `SessionPlayers` votan secretamente una vez, sin auto-voto ni resultados parciales, y el sistema resuelve automáticamente hacia `tie_discussion`, `impostor_guess` o `round_result`. Presence/liveness no cambian quién debe votar; solo el roster congelado de `SessionPlayers` define membership de la tanda.
-
----
-
-# Contexto inicial
-
-El grupo principal de referencia está formado por:
-
-* Ramiro;
-* Pedro;
-* Camila;
-* Victoria.
-
-El producto debe funcionar especialmente bien para cuatro jugadores.
-
-Debe permitir también partidas con otros grupos pequeños sin diseñar inicialmente alrededor de comunidades públicas o grandes cantidades de usuarios.
-
----
-
-# Plataforma
-
-Impostor se jugará dentro de Juegos Familiares, una aplicación web mobile-first con objetivo PWA.
-
-La aplicación contenedora debe funcionar correctamente en teléfonos iOS y Android.
-
-La PWA debe contemplar específicamente Safari en iOS y Chrome en Android.
-
-Cada participante podrá acceder desde el navegador y, cuando el dispositivo lo permita, instalar la aplicación.
-
-La instalación no debe ser obligatoria para poder jugar.
-
-La PWA forma también parte del objetivo de aprendizaje del proyecto.
-
----
-
-# Grupo
-
-Existe un grupo persistente independiente de las partidas.
-
-El grupo y la identidad del jugador pueden ser capacidades compartidas de Juegos Familiares.
-
-Impostor utiliza ese grupo para su banco de palabras y sus partidas.
-
-El grupo mantiene:
-
-* participantes;
-* banco de palabras;
-* configuración básica.
-
-Inicialmente no se requieren cuentas tradicionales con email y contraseña.
-
-Cada dispositivo mantiene una identidad sencilla del jugador dentro de su grupo.
-
----
-
-# Administrador
-
-En la etapa actual del MVP, solo el admin de plataforma puede crear grupos.
-
-Cuando el admin de plataforma crea un grupo, actúa inicialmente como administrador de ese Group.
-
-Los usuarios comunes entran a grupos existentes por invitación.
-
-Puede:
-
-* consultar integrantes;
-* eliminar integrantes.
-
-En el MVP del banco de palabras no puede explorar el banco completo por ser administrador.
-
-La moderación completa del banco queda diferida hasta que exista una necesidad real.
-
-La administración permanente del grupo es independiente del rol temporal de host de una partida.
-
----
-
-# Banco de palabras
-
-Las palabras o frases cortas pertenecen al grupo y persisten entre partidas.
-
-Los participantes pueden agregar palabras en cualquier momento desde la pantalla principal.
-
-En el Incremento 3, el banco se alimenta con palabras agregadas por los integrantes.
-
-Las palabras precargadas quedan diferidas para una etapa posterior.
-
-Las palabras pueden relacionarse con personas, lugares, situaciones, objetos, recuerdos, personajes o referencias propias del grupo.
-
-Esto permite que el contenido se vuelva progresivamente más personal y divertido.
-
----
-
-# Privacidad del banco
-
-Los integrantes no necesitan poder consultar la lista completa.
-
-Pueden ver, por ejemplo:
-
-`63 palabras disponibles`
-
-y consultar las palabras que ellos mismos agregaron.
-
-También pueden borrar sus propios aportes.
-
-En el MVP del banco, el administrador tampoco explora el banco completo. Esta decisión preserva la sorpresa porque el administrador también puede participar de las partidas.
-
----
-
-# Validación de palabras
-
-La aplicación debe resolver automáticamente comprobaciones sencillas:
-
-* valores vacíos;
-* espacios innecesarios;
-* duplicados triviales;
-* diferencias de mayúsculas y minúsculas;
-* límites de longitud entre 2 y 40 caracteres.
-
-La normalización conserva tildes, `ñ` y puntuación, y no intenta corregir lingüísticamente las entradas.
-
-Inicialmente las nuevas palabras no necesitan aprobación manual.
-
----
-
-# Sala
-
-Una sala representa a quienes están jugando en ese momento.
-
-No todos los integrantes del grupo deben participar de todas las partidas.
-
-La persona que crea la sala actúa como host inicial.
-
-El host actual es el valor persistido de la Room y puede cambiar por sucesión.
-
-El host no necesita ser administrador del grupo.
-
----
-
-# Tanda
-
-Una tanda reúne varias rondas consecutivas.
-
-Durante la tanda se conservan:
-
-* participantes;
-* resultados;
-* marcador;
-* palabras utilizadas.
-
-El grupo decide libremente cuándo terminar.
-
----
-
-# Ronda
-
-Cada ronda tiene:
-
-* participantes;
-* una palabra;
-* un impostor;
-* pistas presenciales;
-* una votación;
-* un resultado.
-
-La palabra utilizada no vuelve a seleccionarse durante esa misma tanda.
-
-Puede volver a aparecer en tandas futuras.
-
----
-
-# Diferencial inicial
-
-El banco de palabras compartido es una parte central del producto.
-
-El grupo puede alimentarlo progresivamente entre encuentros.
-
-Con el tiempo, el juego puede transformarse en una colección de referencias, recuerdos y conceptos propios de quienes juegan habitualmente.
-
-También queremos conservar un historial mínimo de tandas y rondas finalizadas para poder construir más adelante estadísticas divertidas del grupo.
-
-La interfaz de estadísticas no forma parte obligatoria del MVP visual.
-
----
-
-# Principios del producto
-
-1. Llegar a jugar debe requerir pocos pasos.
-2. Cada participante utiliza su propio teléfono.
-3. No exigir cuentas tradicionales sin una necesidad concreta.
-4. El teléfono debe intervenir poco durante la conversación.
-5. La información privada debe permanecer realmente privada.
-6. La aplicación debe mantener un estado consistente entre dispositivos.
-7. Agregar palabras debe ser rápido y espontáneo.
-8. La administración no debe generar trabajo innecesario.
-9. La experiencia debe diseñarse primero para mobile.
-10. La infraestructura debe ser proporcional al problema.
-11. El producto debe permitir aprender mientras se construye.
-12. Las primeras decisiones deben poder revisarse después de jugar con personas reales.
-
----
-
-# MVP
-
-## Grupo
-
-* crear grupo desde admin de plataforma;
-* identidad sencilla del jugador;
-* recordar jugador y grupo;
-* administración básica.
-
-## Palabras
-
-* agregar palabras propias;
-* ver cantidad total disponible;
-* consultar y borrar aportes propios;
-* banco persistente;
-* validación automática;
-* evitar duplicados;
-* privacidad del contenido del banco.
-
-## Sala
-
-* crear sala;
-* unirse a sala;
-* visualizar participantes;
-* identificar al host;
-* iniciar tanda.
-
-## Ronda
-
-* seleccionar palabra;
-* seleccionar impostor;
-* distribuir información privada;
-* confirmar inicio;
-* realizar conversación presencial;
-* iniciar votación;
-* votar secretamente;
-* resolver empate;
-* revelar impostor;
-* permitir intento de adivinar la palabra;
-* resolver ganador.
-
-## Marcador
-
-* actualizar puntuación;
-* mostrar clasificación;
-* iniciar nueva ronda;
-* terminar tanda.
-
-## Historial mínimo
-
-* conservar resumen de tandas finalizadas;
-* conservar resumen de rondas finalizadas;
-* permitir estadísticas futuras derivables.
-
----
-
-# Fuera del MVP inicial
-
-* registro con email;
-* contraseña;
-* perfiles públicos;
-* matchmaking;
-* chat;
-* partidas remotas;
-* ranking global;
-* compras;
-* anuncios;
-* moderación avanzada;
-* interfaz de estadísticas;
-* inteligencia artificial durante la partida;
-* estadísticas históricas complejas;
-* publicación en tiendas de aplicaciones.
-
----
-
-# Pregunta central del MVP
-
-¿Puede un grupo abrir la aplicación, reunirse en una sala y comenzar una ronda de Impostor rápidamente, sin que la tecnología interfiera con la diversión?
+# Impostor — Product brief
+
+## Propósito
+
+Impostor es un juego social presencial de Juegos Familiares para grupos
+pequeños. Cada participante usa su teléfono, pero la conversación, las pistas,
+las sospechas y la mayor parte de la experiencia ocurren cara a cara.
+
+La tecnología coordina lo que resulta engorroso resolver presencialmente:
+
+- reunir a quienes juegan;
+- elegir y distribuir información privada;
+- sincronizar las fases;
+- registrar votos secretos y resolverlos;
+- calcular resultados y puntuación;
+- reconstruir la tanda vigente después de una interrupción.
+
+La aplicación no reemplaza la interacción social ni dirige cada turno de la
+conversación.
+
+## Experiencia actual
+
+Impostor usa capacidades persistentes de plataforma —identidad liviana,
+`Player` y `Group`— y agrega su propio dominio de juego.
+
+El `Group` conserva sus integrantes y un banco privado de palabras entre
+encuentros. Cualquier integrante puede aportar palabras o frases cortas y ver
+sus propios aportes y la cantidad total disponible, pero no explorar el banco
+completo. Esto mantiene la sorpresa y permite que el contenido acumule
+referencias propias del grupo.
+
+Para jugar, una persona crea una `Room` temporal y comparte su código o enlace.
+Los demás integrantes que participarán se unen desde sus teléfonos. Al iniciar,
+la tanda congela ese roster: una `GameSession` contiene múltiples rondas y
+mantiene sus participantes, palabras usadas y marcador hasta que el host la
+termina.
+
+El ciclo productivo completo incluye:
+
+1. crear o unirse a una Room;
+2. revelar el rol o la palabra de cada participante;
+3. conversar y dar pistas presencialmente;
+4. realizar una primera votación secreta;
+5. conversar y votar una segunda vez si hubo empate;
+6. ofrecer un intento final al impostor si fue descubierto;
+7. mostrar el resultado de la ronda;
+8. aplicar y mostrar el marcador;
+9. iniciar otra ronda o terminar la tanda;
+10. mostrar ganadores, clasificación final y cantidad de rondas.
+
+Para jugar otra tanda se crea una Room nueva; una Room terminada no se reutiliza.
+
+## Capacidades existentes
+
+- contexto de Group persistente y acceso por invitación;
+- banco de palabras con validación, deduplicación y privacidad;
+- Room temporal con host, código compartible y lobby multi-dispositivo;
+- Presence visual, liveness persistida y sucesión de host en lobby;
+- roster congelado al comenzar la tanda;
+- selección autoritativa y balanceada de palabra, impostor y primer jugador;
+- revelación privada y sincronización de todas las fases de juego;
+- primera votación, desempate único y resolución del intento final;
+- scoring, marcador, nuevas rondas y cierre de tanda;
+- reconstrucción de la partida vigente y del resultado final;
+- historial mínimo de tandas y rondas finalizadas.
+
+## Límites de producto
+
+- El caso principal son grupos pequeños y conocidos; no comunidades públicas.
+- Cada participante usa su propio dispositivo y la partida compartida requiere
+  conectividad.
+- La instalación como PWA es opcional; el navegador sigue siendo una entrada
+  válida.
+- No hay cuentas tradicionales con email y contraseña. La identidad liviana no
+  reduce los controles remotos de identidad, pertenencia o permisos. En grupos
+  conocidos y partidas casuales evita una fricción que hoy no aporta valor.
+- No existe un número obligatorio de rondas ni una meta de puntos: el host
+  decide cuándo terminar desde el marcador.
+- Presence expresa disponibilidad efímera, no pertenencia a la tanda ni
+  autoridad sobre su estado.
+- La beta aprobada describe un producto usable y observado en juego real; no
+  implica product-market fit, UX terminada ni ausencia de defectos.
+
+## Fuera de alcance actual
+
+- partidas remotas o gameplay compartido sin conexión;
+- matchmaking, chat, perfiles públicos o ranking global;
+- registro tradicional, compras, anuncios o publicación en tiendas;
+- timer obligatorio o control digital de cada intervención presencial;
+- revancha automática o reutilización de una Room;
+- entrada o salida dinámica de participantes durante una tanda;
+- moderación avanzada o exploración completa del banco de palabras;
+- categorías, catálogo precargado o inteligencia artificial durante la partida;
+- interfaz de estadísticas históricas avanzadas.
+
+Las capacidades futuras se incorporan sólo a partir de una necesidad observada;
+este contrato no las convierte en backlog.
+
+## Criterio de producto
+
+Impostor cumple su propósito cuando un grupo puede reunirse, comenzar una tanda
+con pocos pasos y completar varias rondas sin que la tecnología desplace la
+diversión presencial.

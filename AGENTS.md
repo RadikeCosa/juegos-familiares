@@ -46,7 +46,7 @@ el tipo e impacto de la tarea.
 | Producto de Impostor | `sources/games/impostor/product-brief.md` |
 | Reglas de Impostor | `sources/games/impostor/game-rules.md` |
 | Flujo actual de Impostor | `sources/games/impostor/user-flow.md` |
-| Estados, transiciones, actores o guards de Impostor | `sources/games/impostor/game-state-model.md` |
+| Estados, transiciones, actores o guards de Impostor | `sources/games/impostor/game-state.md` |
 | Invariantes o requisitos técnicos de Impostor | `sources/games/impostor/technical-requirements.md` |
 
 Ampliar la lectura cuando exista incertidumbre, impacto transversal, una

@@ -17,7 +17,7 @@ de implementacion.
 - `sources/games/impostor/product-brief.md`: contrato de producto de Impostor.
 - `sources/games/impostor/game-rules.md`: reglas vigentes de Impostor.
 - `sources/games/impostor/user-flow.md`: recorrido actual de usuario.
-- `sources/games/impostor/game-state-model.md`: estados, transiciones y actores.
+- `sources/games/impostor/game-state.md`: estados, transiciones y actores.
 - `sources/games/impostor/technical-requirements.md`: invariantes y requisitos
   tecnicos.
 
