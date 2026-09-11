@@ -20,17 +20,46 @@ necesidad propia.
 
 Objetivo: transformar preguntas abiertas en decisiones explícitas de producto.
 
-Debe cerrar:
+Estado: cerrado para pasar a diseño de arquitectura inicial, siempre que el MVP
+mantenga fuera las decisiones postergadas.
 
-- fuente inicial de palabras y definiciones reales;
-- criterio de palabra jugable;
-- mínimo de definiciones para resolver una palabra;
-- comportamiento con pocas definiciones;
-- pausa y reanudación;
-- desconexión o salida durante resolución;
-- ciclo de propuestas pendientes;
-- alcance del historial inicial;
-- moderación mínima.
+Decisiones ya cerradas para avanzar:
+
+- fuente inicial basada en catálogo propio curado;
+- lemarios abiertos y listas de frecuencia como pool auxiliar, no como cartas
+  finales;
+- no usar DLE/RAE ni RAE API como fuente automática de definiciones;
+- palabra jugable con definición real breve, dificultad razonable y posibilidad
+  de definiciones inventadas plausibles;
+- mínimo de tres definiciones votables por palabra: una real y dos inventadas de
+  autores distintos;
+- pausa por propuesta y confirmación de otra persona presente;
+- conjunto de votantes fijado por palabra al entrar a votación;
+- exclusión de palabras ya usadas por el Group mientras haya alternativas;
+- formato editorial de carta jugable;
+- dificultad, familia léxica, categoría amplia y revisión como metadata mínima;
+- tamaño inicial: 120 cartas para MVP técnico, 300 para beta familiar y 1.000 o
+  más como base saludable;
+- moderación mínima basada en validaciones de texto y confianza de grupo;
+- entrada de definiciones como texto plano, con normalización visual
+  determinista y bloqueo de emojis, vacío, largo inválido o puro ruido;
+- sugerencias privadas de ortografía, tono personal o formato, con recomendación
+  de estilo breve, impersonal y de diccionario;
+- sin inteligencia artificial, autocorrección semántica ni garantía de anonimato
+  perfecto en el MVP;
+- historial inicial con palabra, definición real, definiciones reveladas,
+  autores, votos agregados, puntos y fecha de resolución;
+- propuestas sin expiración automática; se invalidan por estado o guards;
+- sin reciclaje de palabras en MVP si el Group agota el catálogo disponible;
+- sin omitir, anular o reemplazar palabras dentro de una partida en MVP.
+
+Queda postergado fuera del MVP:
+
+- reciclaje después de una ventana larga de enfriamiento;
+- cancelación explícita de propuestas;
+- anulación de palabras;
+- abandono de partida;
+- moderación avanzada.
 
 Salida esperada:
 
@@ -55,7 +84,7 @@ Capacidades:
 
 - entrada desde la plataforma o el contexto de Group;
 - pantalla inicial de Diccionario;
-- creación o asignación de partida activa según la fuente decidida;
+- creación o asignación de partida activa desde el catálogo curado;
 - visualización de tres palabras;
 - estado vacío de definiciones propias;
 - mensajes claros cuando falta contexto de Group.
@@ -65,6 +94,7 @@ Validación:
 - no crear identidad por renderizar;
 - no mezclar estado de Impostor;
 - reconstruir partida activa desde estado autorizado;
+- excluir palabras ya usadas por el Group mientras haya alternativas;
 - cubrir ausencia de partida o falta de pertenencia.
 
 ## Incremento 2 — Definiciones propias y progreso privado
@@ -76,6 +106,9 @@ Capacidades:
 
 - guardar definición propia por palabra;
 - editar definición propia antes de resolución;
+- normalizar texto plano antes de guardarlo;
+- bloquear emojis, vacío, largo inválido y puro ruido;
+- mostrar sugerencias privadas y consultivas de ortografía, tono y formato;
 - ver progreso propio y progreso permitido del grupo;
 - impedir duplicados propios por palabra;
 - preservar participación parcial como estado válido.
@@ -86,6 +119,9 @@ Validación:
 - edición queda acotada al autor;
 - progreso no filtra contenido;
 - reintentos o taps rápidos no duplican definiciones;
+- la normalización es determinista y no reescribe el significado;
+- las sugerencias no filtran contenido, no bloquean por sí solas y no se exponen
+  a otros participantes;
 - refresh reconstruye lo guardado.
 
 ## Incremento 3 — Inicio presencial y congelamiento
@@ -184,15 +220,16 @@ Validación:
 - rankings globales;
 - estadísticas avanzadas;
 - votación histórica;
-- moderación compleja;
+- moderación compleja o garantía de anonimato perfecto;
 - IA generativa;
+- autocorrección semántica;
 - soporte offline para resolución compartida;
 - múltiples partidas simultáneas por Group;
 - abstracciones genéricas compartidas con Impostor.
 
 ## Primer checkpoint recomendado
 
-El próximo trabajo debería ser el Incremento 0. Si una decisión parece
-exclusivamente técnica, puede proponerse una alternativa mínima; si afecta reglas
-de juego, privacidad, presencia o UX presencial, debe quedar documentada como
-decisión de producto antes de implementar.
+El próximo trabajo debería ser diseñar la arquitectura inicial de Diccionario o
+preparar una muestra editorial pequeña de cartas curadas. Si una decisión nueva
+afecta reglas de juego, privacidad, presencia o UX presencial, debe quedar
+documentada como decisión de producto antes de implementar.

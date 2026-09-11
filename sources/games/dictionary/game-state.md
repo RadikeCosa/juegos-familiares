@@ -64,6 +64,10 @@ resultados.
 
 Estos nombres no deciden la forma final de implementación.
 
+El catálogo curado existe antes de la partida. La partida selecciona cartas del
+catálogo y conserva un snapshot suficiente para resolver aunque el catálogo
+cambie después.
+
 ## Contrato por estado
 
 ### `preparation`
@@ -73,7 +77,11 @@ Propósito: permitir carga y edición asincrónica de definiciones.
 - Puede actuar: integrantes del Group.
 - Acciones: crear, editar o eliminar definición propia para una palabra activa,
   según se defina el flujo final.
+- Guards de contenido: la definición normalizada es texto plano; no está vacía,
+  no contiene emojis, respeta los límites mínimo y máximo y no es puro ruido.
 - Transición: `preparation → resolution_start_proposed`.
+- Guards: cada palabra debe tener al menos la definición real y dos
+  definiciones inventadas de autores distintos para poder iniciar resolución.
 - Visibilidad: cada participante ve sus propias definiciones y el progreso del
   grupo, pero no contenido ajeno.
 
@@ -118,6 +126,7 @@ Propósito: registrar votos de los participantes presentes.
 - Puede actuar: participantes presentes habilitados para votar.
 - Guards: una persona vota una vez por palabra; el voto no puede apuntar a su
   propia definición inventada.
+- Efecto al entrar: fija el conjunto de votantes presentes para esa palabra.
 - Mientras faltan votos: permanece en `voting`.
 - Al completarse: habilita `reveal_proposed`.
 - Visibilidad: cada votante puede conocer su propio voto registrado; no se
@@ -147,12 +156,13 @@ Propósito: revelar y puntuar la palabra actual.
 
 Propósito: conservar una resolución interrumpida.
 
-- Puede actuar: pendiente de definir.
+- Puede actuar: una persona presente propone y otra persona presente confirma.
 - Transición: reanudar al estado de resolución correspondiente.
 - Visibilidad: conserva lo ya congelado y resuelto; no reabre edición de
   definiciones.
 
-La política de pausa sigue abierta y debe cerrarse antes de implementar.
+Reanudar requiere al menos dos presentes. La pausa no modifica el conjunto de
+votantes ya fijado para una palabra en votación.
 
 ### `finished`
 
@@ -182,24 +192,36 @@ resultado visible puede mostrar agregados por definición.
 - Toda acción debe derivar el actor desde identidad autenticada y pertenencia al
   Group.
 - Una partida activa tiene exactamente tres palabras.
+- Las tres palabras se seleccionan desde un catálogo propio curado.
+- La selección excluye palabras ya usadas por el Group mientras existan
+  alternativas disponibles.
 - Una persona puede tener como máximo una definición inventada por palabra.
+- La forma durable de cada definición inventada es su texto plano normalizado.
+- La normalización de espacios, saltos de línea, signos repetidos y formato
+  visual no debe introducir cambios semánticos intencionales.
+- Una definición con emojis, vacía, demasiado corta o larga, o compuesta sólo
+  por ruido no puede guardarse.
+- Las sugerencias de ortografía, tono personal o formato son privadas y
+  consultivas; no forman parte del contenido compartido ni lo reescriben.
+- Una palabra no puede resolverse con menos de tres definiciones votables:
+  definición real y al menos dos inventadas de autores distintos.
 - Nadie puede leer definiciones ajenas durante preparación.
 - Al comenzar resolución, las definiciones quedan congeladas.
 - Participantes ausentes pueden aportar puntos como autores, pero no votar.
 - Sólo participantes presentes pueden iniciar, confirmar avances, votar y
   revelar.
+- El conjunto de votantes se fija por palabra al entrar a `voting`.
 - La confirmación de propuesta requiere una persona distinta de quien propuso.
+- Las propuestas no expiran por tiempo en el MVP; se invalidan si el estado o
+  los guards dejan de cumplirse.
 - Nadie puede votar su propia definición inventada.
 - Votos, puntaje, avance de palabra y cierre deben ser idempotentes frente a
   reintentos previstos cuando se implemente.
 
-## Decisiones pendientes que afectan estado
+## Decisiones postergadas
 
-- Fuente de palabras y persistencia de definición real.
-- Mínimo de definiciones requeridas por palabra para iniciar o resolver.
-- Política de presencia durante una resolución pausada o interrumpida.
-- Política ante desconexión de una persona presente antes de votar.
-- Si las propuestas tienen expiración, cancelación explícita o reemplazo por
-  una propuesta nueva.
-- Si una palabra puede omitirse, anularse o reemplazarse después de creada la
-  partida.
+- Reciclaje de palabras ya usadas después de una ventana larga de enfriamiento.
+- Cancelación explícita o reemplazo manual de propuestas pendientes.
+- Omisión, anulación o reemplazo de una palabra después de creada la partida.
+- Abandono de una partida en curso.
+- Moderación avanzada de contenido.

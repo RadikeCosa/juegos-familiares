@@ -3,14 +3,14 @@
 ## Estado del contrato
 
 Este documento traduce la planificación de Diccionario a requisitos técnicos
-iniciales. Todavía no autoriza implementación: existen decisiones de producto
-abiertas que afectan modelo de datos, permisos, estado y UX.
+iniciales. Habilita el diseño de arquitectura del primer incremento, pero
+todavía no autoriza implementación.
 
 El objetivo es separar:
 
 - requisitos ya derivados de la baseline de producto;
 - restricciones de seguridad y privacidad que deben mantenerse al implementar;
-- decisiones pendientes que bloquean un contrato técnico completo.
+- decisiones postergadas que no pertenecen al MVP inicial.
 
 ## Alcance
 
@@ -28,7 +28,7 @@ No incluye todavía:
 
 - esquema SQL definitivo;
 - nombres finales de tablas, RPCs o modelos de lectura;
-- integración con una fuente externa de palabras;
+- integración con una fuente externa de palabras durante la partida;
 - diseño visual;
 - reutilización técnica de entidades de Impostor.
 
@@ -76,12 +76,32 @@ Diccionario, no por similitud nominal.
   que se decida explícitamente soportar partidas paralelas.
 - Una partida activa contiene exactamente tres palabras.
 - Cada palabra necesita una definición real disponible antes de resolución.
-- La fuente de esas palabras y definiciones reales sigue pendiente.
+- Las palabras salen de un catálogo propio curado.
+- La partida conserva un snapshot suficiente de cada carta para no depender de
+  cambios posteriores del catálogo durante una resolución.
+- La selección excluye palabras usadas previamente por el Group mientras existan
+  alternativas disponibles.
+- Si no existen tres cartas elegibles no usadas, no se crea una nueva partida en
+  el MVP.
 
 ### Definiciones de participantes
 
 - Un participante puede guardar como máximo una definición inventada propia por
   palabra.
+- La entrada y la representación persistida son texto plano.
+- Antes de persistir, el backend debe aplicar una normalización determinista de
+  espacios, saltos de línea, signos repetidos y formato visual. La normalización
+  no debe intentar cambiar el significado.
+- El backend debe rechazar emojis, texto vacío, contenido fuera de los límites
+  mínimo y máximo definidos y contenido compuesto sólo por ruido. La UI puede
+  anticipar las mismas validaciones, pero no reemplaza el control autoritativo.
+- La UI debe ofrecer sugerencias privadas y consultivas sobre posibles errores
+  de ortografía, tono demasiado personal o formato raro, y recomendar un texto
+  breve, impersonal y con estilo de diccionario.
+- Las sugerencias no deben persistirse como contenido compartido, filtrar
+  información al progreso del grupo ni modificar automáticamente la definición.
+- El MVP no usa inteligencia artificial ni autocorrección semántica para esta
+  revisión.
 - El participante puede editar su definición hasta que la resolución comience.
 - La participación parcial es válida.
 - El contenido no se expone a otros participantes durante preparación.
@@ -97,6 +117,8 @@ Diccionario, no por similitud nominal.
 ### Inicio de resolución
 
 - La resolución requiere al menos dos participantes presentes.
+- Cada palabra debe tener al menos tres definiciones votables: la definición
+  real y dos definiciones inventadas de autores distintos.
 - Una persona presente puede proponer iniciar.
 - Otra persona presente distinta debe confirmar.
 - Al confirmar, las definiciones disponibles quedan congeladas.
@@ -117,6 +139,7 @@ Diccionario, no por similitud nominal.
 ### Votación
 
 - Sólo votan participantes presentes habilitados.
+- El conjunto de votantes se fija al entrar a votación para la palabra actual.
 - Cada persona vota una vez por palabra.
 - Nadie puede votar su propia definición inventada.
 - No se muestran resultados parciales.
@@ -137,16 +160,19 @@ Diccionario, no por similitud nominal.
 ### Pausa y reanudación
 
 - Una resolución pausada no reabre edición de definiciones.
+- Pausar requiere propuesta y confirmación de otra persona presente.
+- Reanudar requiere al menos dos presentes.
 - Al reanudar debe reconstruirse el estado autorizado de la palabra actual,
   avance de lectura, votos ya emitidos, resultados revelados y puntaje.
-- Quién puede pausar, cómo se confirma y qué ocurre si cambia el conjunto de
-  presentes sigue pendiente.
+- Las propuestas pendientes no expiran por tiempo en el MVP; se invalidan por
+  cambio de estado o guards.
 
 ### Cierre e historial
 
 - La partida se cierra cuando sus tres palabras fueron resueltas.
-- El historial mínimo debe permitir revisar palabras resueltas y definiciones
-  reveladas del Diccionario del grupo.
+- El historial mínimo debe permitir revisar palabras resueltas, definición real,
+  definiciones inventadas reveladas, autores, votos agregados, puntos y fecha de
+  resolución.
 - Rankings, estadísticas avanzadas y votación histórica no pertenecen al
   contrato inicial.
 
@@ -168,26 +194,26 @@ foreground, reconexión o pérdida de respuesta:
 Estado local efímero, como texto no guardado o un modal abierto, puede perderse
 si no fue aceptado por el backend.
 
-## Decisiones bloqueantes
+## Decisiones postergadas
 
-Antes de implementar, deben cerrarse al menos estas decisiones:
+Estas decisiones no bloquean el primer diseño técnico si se mantienen fuera del
+MVP:
 
-- fuente de palabras;
-- fuente y forma de la definición real;
-- criterio de palabra jugable;
-- mínimo de definiciones necesarias por palabra para iniciar o resolver;
-- comportamiento cuando una palabra tiene pocas o ninguna definición inventada;
-- política de pausa y reanudación;
-- política ante salida o desconexión de participantes presentes;
-- expiración, cancelación o reemplazo de propuestas pendientes;
-- moderación mínima de definiciones inválidas u ofensivas;
-- alcance exacto del historial inicial.
+- reciclaje de palabras después de una ventana larga de enfriamiento;
+- cancelación explícita o reemplazo manual de propuestas pendientes;
+- representación de palabras omitidas o anuladas;
+- abandono de una partida en curso;
+- moderación avanzada o revisión posterior al congelamiento;
+- garantía de anonimato perfecto frente a rasgos de autoría.
 
 ## Validación esperada
 
 Cuando se implemente, la validación deberá cubrir:
 
 - privacidad de definiciones durante preparación;
+- normalización determinista y validación autoritativa de definiciones;
+- privacidad de las sugerencias de revisión y ausencia de reescritura
+  semántica;
 - inclusión de definiciones de ausentes sin habilitarles voto;
 - propuesta y confirmación por personas distintas;
 - congelamiento de edición;
@@ -195,4 +221,5 @@ Cuando se implemente, la validación deberá cubrir:
 - ausencia de resultados parciales;
 - scoring idempotente;
 - recovery de preparación, resolución, voto, resultado y cierre;
-- límites entre plataforma, Diccionario e Impostor.
+- límites entre plataforma, Diccionario e Impostor;
+- selección sin repetición dentro del Group mientras haya cartas disponibles.

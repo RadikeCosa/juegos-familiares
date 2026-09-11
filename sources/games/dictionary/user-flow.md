@@ -35,14 +35,26 @@ Un Player reconocido entra a Diccionario desde la plataforma o desde el contexto
 del Group. Si no hay una partida activa, la experiencia debe explicar que el
 grupo necesita crear o recibir una nueva partida de tres palabras.
 
-La creación o asignación de palabras todavía depende de una decisión abierta:
-fuente de palabras, criterio de jugabilidad y eventual curaduría.
+La creación o asignación de palabras usa el catálogo propio curado con el
+formato editorial y los tamaños objetivo definidos para el MVP.
 
 ## Preparación asincrónica
 
 La pantalla de partida activa muestra las tres palabras y el progreso del grupo.
 Cada participante puede abrir una palabra, escribir su definición inventada,
 guardarla y editarla mientras la resolución no haya comenzado.
+
+El campo acepta texto plano y recomienda una definición breve, impersonal y con
+estilo de diccionario. Al guardar, la aplicación normaliza espacios, saltos de
+línea, signos repetidos y formato visual. Bloquea emojis, texto vacío, contenido
+demasiado corto o largo y texto compuesto sólo por ruido.
+
+La interfaz también ofrece a la persona autora sugerencias privadas para revisar
+ortografía, tono demasiado personal o formato raro. Son advertencias: no
+reescriben ni cambian semánticamente la definición. El MVP no usa inteligencia
+artificial ni autocorrección semántica. La interfaz debe explicar que estas
+ayudas reducen pistas accidentales de autoría, pero no garantizan anonimato
+perfecto.
 
 La UI debe permitir participación parcial sin presentar eso como error. Una
 persona puede completar una sola definición y volver después.
@@ -52,8 +64,8 @@ El grupo ve señales de avance, por ejemplo:
 - definiciones propias completadas;
 - cantidad de definiciones propias pendientes;
 - progreso de otros integrantes sin revelar contenido;
-- estado general de si la partida tiene aportes suficientes para proponer una
-  resolución, cuando esa regla se defina.
+- estado general de si las tres palabras tienen al menos dos definiciones
+  inventadas de autores distintos y la partida puede proponer una resolución.
 
 El contenido de definiciones ajenas no aparece en preparación.
 
@@ -115,8 +127,9 @@ Durante la resolución debe existir una forma de pausar y volver más tarde. Al
 reanudar, la UI reconstruye la palabra actual, el progreso de lectura, los votos
 o resultados ya cerrados y el marcador acumulado.
 
-La política exacta de quién puede pausar, cómo se confirma la pausa y qué pasa
-si cambia el conjunto de presentes sigue abierta.
+Una persona presente propone la pausa y otra persona presente la confirma.
+Reanudar requiere al menos dos presentes. Si la pausa ocurre durante una
+votación, se conserva el conjunto de votantes fijado al entrar a ese estado.
 
 ## Cierre e historial
 

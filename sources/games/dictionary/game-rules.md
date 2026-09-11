@@ -6,9 +6,10 @@ Estas reglas convierten la baseline de concepto v0 en un contrato jugable
 inicial. Todavía no constituyen una especificación técnica ni cierran todos los
 casos límite necesarios para implementar.
 
-La fuente de palabras, la definición real y los criterios de jugabilidad siguen
-abiertos. Esas decisiones deben cerrarse antes de construir el primer incremento
-funcional.
+Estas reglas cierran el primer conjunto de decisiones bloqueantes para avanzar
+hacia arquitectura e implementación. Las preguntas que permanecen abiertas no
+deben bloquear el primer incremento si se mantienen dentro del alcance definido
+acá.
 
 ## Participantes y partida
 
@@ -17,14 +18,53 @@ funcional.
 - Cada integrante puede participar en cero, una, dos o tres palabras.
 - Para cada palabra, un integrante puede enviar como máximo una definición
   inventada propia.
+- Cada palabra tiene una definición real curada antes de entrar a la partida.
 - La partida se resuelve cuando sus tres palabras fueron reveladas y puntuadas.
 - Después del cierre puede comenzar una nueva partida con otras tres palabras.
+
+## Fuente de palabras
+
+Diccionario usa un catálogo propio curado. Cada carta jugable contiene una
+palabra y una definición real breve preparada o verificada por el proyecto.
+
+El catálogo puede alimentarse desde lemarios abiertos, listas de frecuencia y
+consulta manual de diccionarios, pero no copia definiciones protegidas ni
+depende de una API externa durante la partida.
+
+Una palabra es jugable cuando:
+
+- permite inventar definiciones plausibles;
+- tiene una definición real breve;
+- no es demasiado obvia ni demasiado rara;
+- no es ofensiva ni incómoda para un contexto familiar;
+- no es una palabra funcional, auxiliar o puramente gramatical;
+- puede pronunciarse y leerse sin fricción razonable.
+
+La selección evita repetir palabras ya usadas por el Group mientras existan
+cartas disponibles. Si el catálogo del Group se agota, la aplicación debe
+bloquear una nueva partida y explicar que faltan palabras disponibles. El MVP
+no recicla palabras ya jugadas.
 
 ## Preparación asincrónica
 
 Durante la preparación, cada integrante puede escribir o editar sus definiciones
 propias. No necesita completar todas las palabras para que sus aportes sean
 válidos.
+
+Las definiciones se ingresan como texto plano. Antes de guardarlas, la
+aplicación normaliza espacios, saltos de línea, signos repetidos y cualquier
+formato visual extraño sin alterar intencionalmente el significado. No acepta
+emojis, texto vacío, contenido demasiado corto o largo ni respuestas compuestas
+sólo por ruido.
+
+La persona autora recibe sugerencias privadas para revisar posibles errores de
+ortografía, un tono demasiado personal o un formato raro. Estas sugerencias no
+revelan contenido al grupo ni reemplazan el texto automáticamente. Se recomienda
+una definición breve, impersonal y con estilo de diccionario.
+
+El MVP no usa inteligencia artificial ni autocorrección semántica para revisar
+o reescribir definiciones. Estas medidas buscan reducir pistas accidentales de
+autoría; no garantizan anonimato perfecto.
 
 El grupo puede conocer el progreso de cada participante, por ejemplo cuántas
 definiciones cargó. No puede leer el contenido de definiciones ajenas antes de
@@ -33,6 +73,11 @@ la resolución.
 La preparación termina cuando comienza la resolución presencial. Desde ese
 momento las definiciones disponibles quedan congeladas y ya no se editan para
 esa partida.
+
+Para iniciar la resolución, cada palabra debe tener al menos tres definiciones
+votables: la definición real y al menos dos definiciones inventadas de autores
+distintos. Si una palabra no alcanza ese mínimo, la partida sigue en
+preparación.
 
 ## Inicio de resolución presencial
 
@@ -108,19 +153,24 @@ El puntaje se acumula durante la partida activa de tres palabras.
 La resolución presencial puede pausarse y reanudarse más tarde. Al reanudar, la
 partida conserva lo ya congelado, leído, votado, revelado y puntuado.
 
+Cualquier persona presente puede proponer la pausa y otra persona presente debe
+confirmarla. Reanudar requiere el mismo criterio mínimo de dos presentes. El
+conjunto de votantes de una palabra se fija al entrar a la votación de esa
+palabra; si alguien se va después, su ausencia no reabre la preparación ni borra
+lo ya resuelto.
+
+Las propuestas de inicio, avance, revelación o pausa no tienen expiración
+automática en el MVP. Quedan válidas sólo mientras el estado y los participantes
+presentes sigan cumpliendo sus guards; si dejan de cumplirlos, la aplicación
+debe descartarlas al reconstruir el estado autorizado.
+
 La partida se cierra cuando las tres palabras fueron resueltas. Cada palabra
 resuelta pasa al historial o Diccionario del grupo.
 
 ## Preguntas abiertas para cerrar reglas
 
-- ¿Cuál es la fuente de palabras y definiciones reales?
 - ¿Se permiten palabras con más de una acepción jugable?
-- ¿Cuántas definiciones mínimas necesita una palabra para ser divertida o
-  resoluble?
-- ¿Qué ocurre si sólo hay una definición votable para una palabra?
-- ¿Qué ocurre si una persona presente es la única que cargó definición para una
-  palabra?
-- ¿Cómo se pausan y reanudan formalmente las resoluciones?
-- ¿Qué política aplica si una persona presente se va durante la resolución o
-  antes de votar?
-- ¿Cómo se manejan definiciones ofensivas, inválidas o accidentalmente reales?
+- ¿Cómo se manejan definiciones ofensivas o accidentalmente reales más allá de
+  la moderación mínima definida?
+- ¿Una versión futura necesita anular una palabra o abandonar una partida ya
+  iniciada?

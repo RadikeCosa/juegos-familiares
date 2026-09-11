@@ -65,7 +65,13 @@ recibe votos.
   en UI no sustituye una separación real de lectura cuando se implemente.
 - La presencia define quién puede votar en la resolución, no quién puede haber
   aportado contenido antes.
-- La fuente de palabras y el criterio de jugabilidad todavía no están definidos.
+- Las definiciones de participantes se ingresan como texto plano y reciben una
+  normalización visual mínima para reducir pistas accidentales de autoría. La
+  experiencia recomienda un tono breve, impersonal y de estilo diccionario,
+  pero no promete anonimato perfecto.
+- La fuente inicial de palabras jugables será un catálogo propio curado. Puede
+  alimentarse de lemarios abiertos y listas de frecuencia como pool de
+  candidatas, pero cada carta jugable requiere revisión humana.
 - Diccionario conserva su propio dominio. No se promueven conceptos de Impostor
   a plataforma ni se reutiliza su arquitectura sin evidencia concreta.
 
@@ -73,11 +79,12 @@ recibe votos.
 
 - arquitectura técnica o esquema de base de datos;
 - implementación de rutas, componentes o RPCs;
-- integración con RAE u otra fuente externa;
+- integración automática con RAE u otra fuente externa durante la partida;
 - rankings globales, estadísticas avanzadas o competencia pública;
 - moderación avanzada de definiciones;
+- corrección semántica automática o uso de inteligencia artificial para
+  generar o revisar palabras o definiciones;
 - votación histórica sobre palabras ya incorporadas;
-- inteligencia artificial para generar palabras o definiciones;
 - reutilización automática de Room, GameSession, Round, host o Presence de
   Impostor.
 
