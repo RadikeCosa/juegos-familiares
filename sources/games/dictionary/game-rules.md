@@ -57,14 +57,16 @@ formato visual extraño sin alterar intencionalmente el significado. No acepta
 emojis, texto vacío, contenido demasiado corto o largo ni respuestas compuestas
 sólo por ruido.
 
-La persona autora recibe sugerencias privadas para revisar posibles errores de
-ortografía, un tono demasiado personal o un formato raro. Estas sugerencias no
-revelan contenido al grupo ni reemplazan el texto automáticamente. Se recomienda
-una definición breve, impersonal y con estilo de diccionario.
+Durante la escritura, la persona autora puede abrir una ayuda privada desde un
+ícono de signo de pregunta. La ayuda ofrece una lista breve de aspectos para
+revisar, ejemplos de definiciones y la recomendación de usar el corrector
+ortográfico disponible en el teléfono o navegador. Recuerda evitar referencias
+personales y formatos raros, y recomienda una definición breve, impersonal y con
+estilo de diccionario. No analiza ni reemplaza el texto automáticamente.
 
-El MVP no usa inteligencia artificial ni autocorrección semántica para revisar
-o reescribir definiciones. Estas medidas buscan reducir pistas accidentales de
-autoría; no garantizan anonimato perfecto.
+El MVP no usa inteligencia artificial, un corrector propio ni autocorrección
+semántica para revisar o reescribir definiciones. Estas medidas buscan reducir
+pistas accidentales de autoría; no garantizan anonimato perfecto.
 
 El grupo puede conocer el progreso de cada participante, por ejemplo cuántas
 definiciones cargó. No puede leer el contenido de definiciones ajenas antes de

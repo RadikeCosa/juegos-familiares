@@ -95,13 +95,16 @@ Diccionario, no por similitud nominal.
 - El backend debe rechazar emojis, texto vacío, contenido fuera de los límites
   mínimo y máximo definidos y contenido compuesto sólo por ruido. La UI puede
   anticipar las mismas validaciones, pero no reemplaza el control autoritativo.
-- La UI debe ofrecer sugerencias privadas y consultivas sobre posibles errores
-  de ortografía, tono demasiado personal o formato raro, y recomendar un texto
-  breve, impersonal y con estilo de diccionario.
-- Las sugerencias no deben persistirse como contenido compartido, filtrar
-  información al progreso del grupo ni modificar automáticamente la definición.
-- El MVP no usa inteligencia artificial ni autocorrección semántica para esta
-  revisión.
+- La UI debe ofrecer una ayuda estática desde un control con ícono de signo de
+  pregunta y nombre accesible. Debe incluir una lista breve de aspectos para
+  revisar, ejemplos, la recomendación de usar el corrector ortográfico del
+  teléfono o navegador y la pauta de mantener un tono breve, impersonal y con
+  estilo de diccionario.
+- La ayuda no debe inspeccionar la definición ni producir sugerencias dinámicas.
+  No forma parte del estado durable ni del progreso compartido.
+- La aplicación no integra un servicio propio de corrección ni envía la
+  definición a un tercero para revisarla. El MVP no usa inteligencia artificial
+  ni autocorrección semántica para esta tarea.
 - El participante puede editar su definición hasta que la resolución comience.
 - La participación parcial es válida.
 - El contenido no se expone a otros participantes durante preparación.
@@ -212,8 +215,8 @@ Cuando se implemente, la validación deberá cubrir:
 
 - privacidad de definiciones durante preparación;
 - normalización determinista y validación autoritativa de definiciones;
-- privacidad de las sugerencias de revisión y ausencia de reescritura
-  semántica;
+- disponibilidad y accesibilidad de la ayuda estática sin exposición del texto
+  ni reescritura semántica;
 - inclusión de definiciones de ausentes sin habilitarles voto;
 - propuesta y confirmación por personas distintas;
 - congelamiento de edición;

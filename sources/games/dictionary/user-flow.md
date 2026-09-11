@@ -49,12 +49,16 @@ estilo de diccionario. Al guardar, la aplicación normaliza espacios, saltos de
 línea, signos repetidos y formato visual. Bloquea emojis, texto vacío, contenido
 demasiado corto o largo y texto compuesto sólo por ruido.
 
-La interfaz también ofrece a la persona autora sugerencias privadas para revisar
-ortografía, tono demasiado personal o formato raro. Son advertencias: no
-reescriben ni cambian semánticamente la definición. El MVP no usa inteligencia
-artificial ni autocorrección semántica. La interfaz debe explicar que estas
-ayudas reducen pistas accidentales de autoría, pero no garantizan anonimato
-perfecto.
+Un ícono clásico de signo de pregunta abre una ayuda privada durante la
+escritura. La ayuda incluye una lista breve de aspectos para revisar, ejemplos
+de definiciones con estilo de diccionario y la recomendación de usar el
+corrector ortográfico del teléfono o navegador. También recuerda evitar un tono
+demasiado personal o un formato raro.
+
+La ayuda es estática: no inspecciona, puntúa ni reescribe la definición. El MVP
+no usa inteligencia artificial, un corrector propio ni autocorrección semántica.
+La interfaz debe explicar que estas medidas reducen pistas accidentales de
+autoría, pero no garantizan anonimato perfecto.
 
 La UI debe permitir participación parcial sin presentar eso como error. Una
 persona puede completar una sola definición y volver después.

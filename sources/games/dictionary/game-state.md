@@ -201,8 +201,8 @@ resultado visible puede mostrar agregados por definición.
   visual no debe introducir cambios semánticos intencionales.
 - Una definición con emojis, vacía, demasiado corta o larga, o compuesta sólo
   por ruido no puede guardarse.
-- Las sugerencias de ortografía, tono personal o formato son privadas y
-  consultivas; no forman parte del contenido compartido ni lo reescriben.
+- La ayuda de escritura es estática y privada para la persona autora; no forma
+  parte del estado durable, no analiza el contenido ni lo reescribe.
 - Una palabra no puede resolverse con menos de tres definiciones votables:
   definición real y al menos dos inventadas de autores distintos.
 - Nadie puede leer definiciones ajenas durante preparación.

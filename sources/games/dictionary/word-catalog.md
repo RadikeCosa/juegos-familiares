@@ -121,9 +121,9 @@ enfriamiento, pero esa decisión queda fuera del contrato inicial.
 
 El MVP confía en grupos conocidos. Para las definiciones de participantes,
 aplica el contrato de texto plano, normalización visual, validaciones de
-contenido y sugerencias privadas definido en las reglas y requisitos técnicos.
-Estas medidas reducen pistas accidentales de autoría, pero no garantizan
-anonimato perfecto.
+contenido y ayuda privada de escritura definido en las reglas y requisitos
+técnicos. Estas medidas reducen pistas accidentales de autoría, pero no
+garantizan anonimato perfecto.
 
 Como mínimo bloquea:
 

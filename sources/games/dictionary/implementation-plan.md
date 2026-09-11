@@ -43,8 +43,8 @@ Decisiones ya cerradas para avanzar:
 - moderación mínima basada en validaciones de texto y confianza de grupo;
 - entrada de definiciones como texto plano, con normalización visual
   determinista y bloqueo de emojis, vacío, largo inválido o puro ruido;
-- sugerencias privadas de ortografía, tono personal o formato, con recomendación
-  de estilo breve, impersonal y de diccionario;
+- ayuda estática y privada desde un ícono de signo de pregunta, con checklist,
+  ejemplos y recomendación de usar el corrector del teléfono o navegador;
 - sin inteligencia artificial, autocorrección semántica ni garantía de anonimato
   perfecto en el MVP;
 - historial inicial con palabra, definición real, definiciones reveladas,
@@ -108,7 +108,7 @@ Capacidades:
 - editar definición propia antes de resolución;
 - normalizar texto plano antes de guardarlo;
 - bloquear emojis, vacío, largo inválido y puro ruido;
-- mostrar sugerencias privadas y consultivas de ortografía, tono y formato;
+- mostrar ayuda estática de ortografía, tono y formato sin analizar el texto;
 - ver progreso propio y progreso permitido del grupo;
 - impedir duplicados propios por palabra;
 - preservar participación parcial como estado válido.
@@ -120,8 +120,8 @@ Validación:
 - progreso no filtra contenido;
 - reintentos o taps rápidos no duplican definiciones;
 - la normalización es determinista y no reescribe el significado;
-- las sugerencias no filtran contenido, no bloquean por sí solas y no se exponen
-  a otros participantes;
+- la ayuda es accesible, no persiste estado, no analiza el contenido y no se
+  expone como progreso a otros participantes;
 - refresh reconstruye lo guardado.
 
 ## Incremento 3 — Inicio presencial y congelamiento
