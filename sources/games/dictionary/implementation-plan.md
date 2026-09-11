@@ -6,6 +6,9 @@ Este plan organiza el camino desde la baseline conceptual de Diccionario hasta
 un primer producto implementable. No autoriza implementación por sí solo ni
 decide arquitectura, base de datos o reutilización de piezas de Impostor.
 
+La propuesta previa a implementación vive en `architecture-plan.md`. Sus gates
+humanos deben resolverse antes del incremento que los necesita.
+
 El plan mantiene una regla de trabajo: cerrar decisiones de producto antes de
 convertirlas en migrations, RPCs, rutas o componentes.
 
@@ -229,7 +232,8 @@ Validación:
 
 ## Primer checkpoint recomendado
 
-El próximo trabajo debería ser diseñar la arquitectura inicial de Diccionario o
-preparar una muestra editorial pequeña de cartas curadas. Si una decisión nueva
-afecta reglas de juego, privacidad, presencia o UX presencial, debe quedar
-documentada como decisión de producto antes de implementar.
+El próximo trabajo debería resolver los gates del Incremento 1 identificados en
+`architecture-plan.md` y preparar, en un alcance separado, una muestra editorial
+pequeña de cartas curadas. Si una decisión nueva afecta reglas de juego,
+privacidad, presencia o UX presencial, debe quedar documentada como decisión de
+producto antes de implementar.
