@@ -73,13 +73,26 @@ another kind of utility; the roadmap does not decide that in advance.
 - A SessionPlayer who disconnects during a session remains in the frozen
   roster and can prevent completion of actions that require full participation,
   including voting.
-- If the host disappears during `playing`, host-only transitions can remain
-  blocked. Automatic host succession is currently implemented only in the
-  lobby.
+- Host succession during `playing` has documentation/code drift described
+  below; its deployed behavior has not been independently verified.
 
-These are known limitations, not an automatic backlog. Host succession during
-`playing` requires a product decision. Leaving during a session, timeout or a
-host override remain future exploration.
+These are known limitations or verification gaps, not an automatic backlog.
+Leaving during a session, timeout or a host override remain future exploration.
+
+### Host-succession documentation/code drift
+
+Earlier wording in the Impostor game-state and technical-requirements documents
+described automatic succession as lobby-only. The later
+`20260824120000_start_session_6_3.sql` definition of
+`reassign_room_host_if_stale()` also handles `playing`, restricts the successor
+to the current `session_players` roster, and the room UI invokes that RPC when
+the host appears missing without a lobby-only guard. This code is present in
+the documented production source baseline, but the deployed DB behavior was
+not independently checked during the Tutti Frutti architecture audit.
+
+Do not assume either lobby-only or working in-game succession until the live
+behavior and the intended product policy have been verified. No functional
+change or policy decision is implied by recording this drift.
 
 ## Future exploration
 

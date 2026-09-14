@@ -122,8 +122,10 @@ local: ejecuta un authoritative refetch y presenta el estado vigente.
   de 90 segundos.
 - Una pérdida de Presence no reasigna host. La sucesión exige que el backend
   compruebe staleness y elija determinísticamente entre participantes activos.
-- La sucesión automática implementada se limita a Rooms en `lobby`. No existe
-  una política automática equivalente durante `playing`.
+- El alcance de sucesión durante `playing` presenta drift documental: una RPC
+  posterior contempla ese estado con sucesor limitado al roster de
+  `session_players`. Consultar `sources/project-status.md`; el comportamiento
+  desplegado y la política prevista requieren verificación.
 
 ## Reconstrucción y recovery
 
@@ -170,9 +172,9 @@ no se reconstruye como Room activa.
 - Un SessionPlayer desconectado sigue perteneciendo al roster y contando para
   el quorum de voto. No hay timeout, expulsión ni reducción automática a quienes
   estén conectados.
-- La pérdida del host durante `playing` no tiene sucesión automática; puede
-  bloquear transiciones reservadas al host hasta que vuelva. Definir otra
-  política es una decisión de producto posterior, no recovery implícito.
+- La pérdida del host durante `playing` tiene alcance operativo no verificado
+  por el drift registrado en `sources/project-status.md`. No inferir una
+  política de recovery a partir de la documentación anterior ni de Presence.
 
 ## Límite PWA de Impostor
 

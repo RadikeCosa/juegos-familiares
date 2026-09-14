@@ -237,5 +237,9 @@ ocultamiento visual como sustituto de esta separación.
 - Una palabra normalizada no se repite en la misma GameSession.
 - Scoring, creación de ronda y cierre de tanda son transaccionales e idempotentes
   frente a reintentos previstos.
-- La sucesión automática de host usa liveness autoritativa y está acotada al
-  lobby; Presence por sí sola nunca cambia `rooms.host_player_id`.
+- La sucesión automática de host usa liveness autoritativa; Presence por sí
+  sola nunca cambia `rooms.host_player_id`. Existe drift documental respecto
+  de su alcance durante `playing`: la RPC posterior también contempla ese
+  estado y restringe el sucesor al roster de `session_players`. Consultar
+  `sources/project-status.md` antes de asumir el comportamiento desplegado o
+  una política de producto definitiva.
