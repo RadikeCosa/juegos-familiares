@@ -1,0 +1,1112 @@
+# Tutti Frutti — Game State Model
+
+## 1. Purpose
+
+This document defines the conceptual state model for Tutti Frutti.
+
+It describes:
+
+* game-level states;
+* round-level states;
+* legal transitions;
+* transition triggers;
+* player completion state;
+* answer state;
+* challenge state;
+* invariants;
+* recovery expectations.
+
+These are domain states.
+
+They do not imply a specific database schema, enum layout, RPC structure, or client implementation.
+
+---
+
+# 2. State Authority
+
+The multiplayer game should use authoritative shared state.
+
+Clients may optimistically update local input where appropriate, but transitions such as:
+
+* round start;
+* letter skip;
+* countdown start;
+* answer lock;
+* review start;
+* challenge resolution;
+* scoring;
+* game completion;
+
+must be determined by authoritative server-side state.
+
+Clients must not independently infer or advance the canonical game phase.
+
+---
+
+# 3. Game-Level Lifecycle
+
+Conceptual game states:
+
+```text
+LOBBY
+  ↓
+IN_PROGRESS
+  ↓
+FINISHED
+```
+
+Optional terminal state:
+
+```text
+CANCELLED
+```
+
+if the platform lifecycle requires it.
+
+## LOBBY
+
+The game session has not started.
+
+Allowed operations include:
+
+* join;
+* leave;
+* configure categories;
+* configure number of rounds;
+* start game.
+
+## IN_PROGRESS
+
+At least one round has started.
+
+Game configuration is frozen.
+
+The game contains an active or completed round.
+
+## FINISHED
+
+All configured rounds have been scored.
+
+Final ranking is available.
+
+No additional round may start within the same completed session.
+
+---
+
+# 4. Round Lifecycle
+
+Proposed conceptual round states:
+
+```text
+PREPARING
+  ↓
+LETTER_PENDING
+  ↓
+PLAYING
+  ↓
+FINAL_COUNTDOWN
+  ↓
+LOCKED
+  ↓
+REVIEWING
+  ↓
+SCORING
+  ↓
+RESULT
+```
+
+Alternative path:
+
+```text
+LETTER_PENDING
+  ↓
+LETTER_SKIPPED
+  ↓
+LETTER_PENDING
+```
+
+A skipped letter does not create a completed round.
+
+---
+
+# 5. PREPARING
+
+Purpose:
+
+* initialize the next round;
+* determine round number;
+* establish eligible players;
+* establish remaining letter pool;
+* prepare category references.
+
+Entry conditions:
+
+* game is `IN_PROGRESS`;
+* no unresolved prior round exists;
+* configured round count has not been reached.
+
+Exit:
+
+```text
+PREPARING
+  ↓
+LETTER_PENDING
+```
+
+---
+
+# 6. LETTER_PENDING
+
+A candidate letter has been selected but answer entry has not started.
+
+State contains conceptually:
+
+* selected letter;
+* current round number;
+* active-player snapshot or current active-player set;
+* skip-vote state;
+* optional skip decision deadline.
+
+Allowed actions:
+
+* vote/request skip;
+* accept/start round according to final product rule.
+
+Not allowed:
+
+* submit playable answers;
+* call Tutti Frutti;
+* challenge answers.
+
+---
+
+# 7. LETTER SKIP
+
+If skip threshold is reached:
+
+```text
+LETTER_PENDING
+  ↓
+discard selected letter
+  ↓
+select new unused letter
+  ↓
+LETTER_PENDING
+```
+
+The skipped letter becomes unavailable for the rest of the game.
+
+Invariants:
+
+* skipped letter does not increment round number;
+* skipped letter is never reused during the same game;
+* no answers are persisted for a skipped candidate letter.
+
+---
+
+# 8. PLAYING
+
+The letter has been accepted and answer entry is active.
+
+Each active player may:
+
+* enter answers;
+* edit their answers;
+* submit their latest values;
+* call Tutti Frutti if eligible.
+
+Other players' answers remain hidden.
+
+The round remains `PLAYING` until the first valid Tutti Frutti action.
+
+---
+
+# 9. Player Completion State
+
+Each participating player may conceptually have:
+
+```text
+ANSWERING
+FINISHED
+DISCONNECTED
+```
+
+These are not necessarily mutually exclusive persistence enums.
+
+For example, a player may be:
+
+```text
+completion = ANSWERING
+presence = DISCONNECTED
+```
+
+Completion and presence should remain separate concepts.
+
+This prevents presence recovery logic from corrupting game progress.
+
+---
+
+# 10. Tutti Frutti Eligibility
+
+Preferred initial invariant:
+
+```text
+player may call Tutti Frutti
+IFF
+all active category answers are non-empty
+```
+
+If confirmed, the server must validate this condition.
+
+The client disabling the button is not sufficient enforcement.
+
+---
+
+# 11. First Tutti Frutti Transition
+
+When the first eligible player calls Tutti Frutti:
+
+```text
+PLAYING
+  ↓
+FINAL_COUNTDOWN
+```
+
+The transition records conceptually:
+
+* calling player;
+* countdown start time;
+* countdown deadline.
+
+Example:
+
+```text
+countdown_started_at
+countdown_ends_at
+called_by_player_id
+```
+
+Exact representation is implementation-specific.
+
+---
+
+# 12. FINAL_COUNTDOWN
+
+The countdown has started.
+
+Initial duration hypothesis:
+
+```text
+45 seconds
+```
+
+During this state:
+
+* players may continue editing answers;
+* players may mark themselves finished;
+* the original countdown deadline does not change;
+* subsequent Tutti Frutti actions do not reset the timer.
+
+Possible exits:
+
+```text
+FINAL_COUNTDOWN
+  ↓
+deadline reached
+  ↓
+LOCKED
+```
+
+or:
+
+```text
+FINAL_COUNTDOWN
+  ↓
+all eligible active players finished
+  ↓
+LOCKED
+```
+
+---
+
+# 13. Countdown Authority
+
+The countdown must be derived from an authoritative timestamp.
+
+Clients should calculate visual remaining time from:
+
+```text
+countdown_ends_at
+```
+
+rather than each client maintaining an independent canonical timer.
+
+This avoids divergence when:
+
+* a client reconnects;
+* a tab sleeps;
+* device clocks vary;
+* network latency occurs.
+
+---
+
+# 14. LOCKED
+
+The round has stopped accepting answer changes.
+
+Invariant:
+
+> no answer mutation is legal after the round becomes locked.
+
+The system finalizes the submitted answer snapshot.
+
+Empty values remain empty.
+
+After the answer snapshot is stable:
+
+```text
+LOCKED
+  ↓
+REVIEWING
+```
+
+`LOCKED` may be a short-lived transition state rather than a user-visible screen.
+
+---
+
+# 15. Answer State
+
+Each answer conceptually contains:
+
+```text
+text
+normalized_value
+is_empty
+duplicate_group
+validation_status
+```
+
+Possible validation states:
+
+```text
+VALID
+CHALLENGED
+INVALID
+```
+
+Initially:
+
+```text
+non-empty → VALID
+empty → no valid answer / zero-score state
+```
+
+A non-empty answer remains valid unless challenged and invalidated.
+
+---
+
+# 16. Normalization
+
+Normalization is used for comparison, not display.
+
+The original input must remain preserved.
+
+Potential normalization pipeline:
+
+```text
+original text
+  ↓
+trim whitespace
+  ↓
+case normalization
+  ↓
+optional accent normalization
+  ↓
+comparison value
+```
+
+Exact normalization rules remain open.
+
+Normalization must be deterministic and identical for all players.
+
+---
+
+# 17. Duplicate Detection
+
+Duplicate detection occurs within:
+
+```text
+same round
++
+same category
+```
+
+Example:
+
+```text
+"Mono"
+"mono"
+" Mono "
+```
+
+may belong to the same duplicate group after normalization.
+
+A duplicate group affects scoring only if the corresponding answers remain valid.
+
+An invalidated answer should no longer contribute as a valid duplicate.
+
+This implies final scoring should occur after challenge resolution.
+
+---
+
+# 18. REVIEWING
+
+During review:
+
+* answers are visible;
+* duplicate status may be shown;
+* players may challenge eligible answers;
+* unresolved disputes must be resolved.
+
+Answers cannot be edited.
+
+The round remains `REVIEWING` until challenge processing is complete.
+
+---
+
+# 19. Challenge State Model
+
+A challenge may conceptually have:
+
+```text
+OPEN
+RESOLVED_VALID
+RESOLVED_INVALID
+```
+
+Flow:
+
+```text
+answer VALID
+  ↓ challenge created
+answer CHALLENGED
+
+challenge OPEN
+  ↓ vote resolution
+  ├─ RESOLVED_VALID
+  │      ↓
+  │   answer VALID
+  │
+  └─ RESOLVED_INVALID
+         ↓
+      answer INVALID
+```
+
+A resolved challenge must not remain open.
+
+---
+
+# 20. Challenge Eligibility
+
+Initial expected rules:
+
+* only non-empty answers may be challenged;
+* an answer already invalid cannot be challenged;
+* duplicate answers are challengeable individually if validity is disputed;
+* challenge author and answer author are distinct players.
+
+Whether the same answer may receive multiple simultaneous challenges should be avoided.
+
+Preferred model:
+
+> one open challenge per answer.
+
+---
+
+# 21. Challenge Voting
+
+Current working hypothesis:
+
+Eligible voters are:
+
+```text
+active players
+minus
+answer author
+```
+
+Votes:
+
+```text
+VALID
+INVALID
+```
+
+Resolution:
+
+```text
+invalid votes > valid votes
+    → INVALID
+
+otherwise
+    → VALID
+```
+
+This makes a tie remain valid.
+
+The exact quorum behavior must account for disconnected players.
+
+---
+
+# 22. Two-Player State Problem
+
+Two-player games expose a structural challenge.
+
+If:
+
+```text
+players = 2
+```
+
+then:
+
+```text
+eligible voters for an opponent's answer = 1
+```
+
+This allows a single opponent to invalidate any challenged answer.
+
+That may produce adversarial gameplay.
+
+The state model therefore marks two-player challenge resolution as:
+
+```text
+UNRESOLVED PRODUCT DECISION
+```
+
+Implementation must not silently adopt the multi-player vote rule without explicit approval.
+
+---
+
+# 23. Review Completion Invariant
+
+The round may leave `REVIEWING` only if:
+
+```text
+open_challenges == 0
+```
+
+and all answer validation states are final.
+
+Then:
+
+```text
+REVIEWING
+  ↓
+SCORING
+```
+
+---
+
+# 24. SCORING
+
+Scoring is calculated from immutable locked answers and final validation state.
+
+Initial scoring rules:
+
+```text
+empty              → 0
+invalid            → 0
+valid + unique     → 10
+valid + duplicated → 5
+```
+
+The scoring calculation must be authoritative and deterministic.
+
+Clients should display the result rather than independently calculate canonical scores.
+
+---
+
+# 25. Duplicate Recalculation After Invalidity
+
+Consider:
+
+```text
+Camila → Mono
+Pedro  → Mono
+Ramiro → Mamut
+```
+
+If both `Mono` answers remain valid:
+
+```text
+Camila = 5
+Pedro  = 5
+```
+
+If Pedro's `Mono` becomes invalid:
+
+```text
+Camila's Mono becomes unique
+```
+
+Therefore Camila should receive:
+
+```text
+10
+```
+
+not `5`.
+
+This produces an important invariant:
+
+> uniqueness must be determined from final valid answers, not from the original locked answer set.
+
+---
+
+# 26. RESULT
+
+Once scoring is complete:
+
+```text
+SCORING
+  ↓
+RESULT
+```
+
+Round result contains:
+
+* per-player round score;
+* cumulative game score;
+* current ranking.
+
+No further answer or challenge mutation is allowed.
+
+---
+
+# 27. Next Round Transition
+
+If:
+
+```text
+completed_rounds < configured_rounds
+```
+
+then:
+
+```text
+RESULT
+  ↓
+PREPARING
+```
+
+Otherwise:
+
+```text
+RESULT
+  ↓
+GAME FINISHED
+```
+
+---
+
+# 28. Game Completion
+
+When the configured number of rounds has been scored:
+
+```text
+game.state = FINISHED
+```
+
+Final state includes:
+
+* total player scores;
+* ranking;
+* winner or tied winners.
+
+No new round may be added to the same completed game session.
+
+A rematch should create or initialize a new game session according to the platform lifecycle.
+
+---
+
+# 29. Letter Pool State
+
+The game conceptually tracks:
+
+```text
+available_letters
+played_letters
+skipped_letters
+```
+
+Invariant:
+
+```text
+available ∩ played = ∅
+available ∩ skipped = ∅
+played ∩ skipped = ∅
+```
+
+When selected:
+
+```text
+available → candidate
+```
+
+If skipped:
+
+```text
+candidate → skipped
+```
+
+If played:
+
+```text
+candidate → played
+```
+
+A letter cannot return to `available` during the same game.
+
+---
+
+# 30. Category State
+
+Categories are created/configured before the game starts.
+
+Once:
+
+```text
+game.state = IN_PROGRESS
+```
+
+the category set becomes immutable.
+
+Invariant:
+
+```text
+round.categories == game.categories
+```
+
+for every round in the game.
+
+---
+
+# 31. Presence vs Participation
+
+Presence and participation must remain distinct.
+
+A player can be:
+
+```text
+participant = true
+presence = connected
+```
+
+or:
+
+```text
+participant = true
+presence = temporarily_disconnected
+```
+
+Temporary disconnect must not automatically erase:
+
+* answers;
+* score;
+* round participation;
+* voting history.
+
+---
+
+# 32. Disconnect During PLAYING
+
+If a participant disconnects:
+
+```text
+PLAYING
+  ↓
+player presence lost
+```
+
+The round itself remains active.
+
+The player may reconnect and continue if:
+
+```text
+round still in PLAYING
+or
+round still in FINAL_COUNTDOWN
+```
+
+Previously persisted answers must survive reconnect.
+
+---
+
+# 33. Disconnect During FINAL_COUNTDOWN
+
+A disconnected player's participation creates an important completion problem.
+
+If “all players finished” includes disconnected players forever, early close could become impossible.
+
+Therefore the eventual model must define one of:
+
+### Model A — snapshot participation
+
+All players active at round start count until timer expires.
+
+Pros:
+
+* stable.
+
+Cons:
+
+* disconnected player prevents early finish.
+
+### Model B — current active presence
+
+Disconnected players stop counting toward early finish after liveness timeout.
+
+Pros:
+
+* game continues smoothly.
+
+Cons:
+
+* presence state affects game mechanics.
+
+### Model C — abandonment state
+
+Player remains participant until explicitly marked abandoned/inactive by platform recovery logic.
+
+Likely the cleanest model if supported.
+
+This remains an implementation-design decision.
+
+The timer still guarantees eventual progress regardless.
+
+---
+
+# 34. Disconnect During REVIEWING
+
+A disconnected voter must not indefinitely prevent challenge resolution.
+
+The challenge model must therefore define:
+
+* eligible-voter snapshot;
+* dynamic eligible voters;
+* timeout behavior;
+* abstention behavior.
+
+This is intentionally unresolved in the conceptual model.
+
+---
+
+# 35. Host Succession
+
+Host identity is a platform-level responsibility.
+
+If host succession occurs during any active Tutti Frutti state:
+
+```text
+old host unavailable
+  ↓
+platform selects successor
+```
+
+The following must remain unchanged:
+
+* current round;
+* selected letter;
+* answers;
+* countdown;
+* review state;
+* scores.
+
+Only host-authorized lifecycle actions transfer to the successor.
+
+---
+
+# 36. Idempotency Expectations
+
+Network retries must not cause duplicated transitions.
+
+Examples:
+
+Multiple calls to:
+
+```text
+call_tutti_frutti()
+```
+
+must not create multiple countdowns.
+
+Multiple start-round actions must not create multiple rounds.
+
+Repeated challenge votes must not count twice for the same voter.
+
+Repeated scoring execution must not duplicate accumulated points.
+
+Server operations should therefore be designed as idempotent or transactionally guarded.
+
+---
+
+# 37. Transition Guards
+
+Conceptual guards include:
+
+## Start game
+
+Allowed only if:
+
+```text
+game = LOBBY
+configuration valid
+host authorized
+minimum players satisfied
+```
+
+## Call Tutti Frutti
+
+Allowed only if:
+
+```text
+round = PLAYING
+player participates
+completion requirements satisfied
+```
+
+## Edit answer
+
+Allowed only if:
+
+```text
+round = PLAYING or FINAL_COUNTDOWN
+player owns answer
+round not locked
+```
+
+## Challenge answer
+
+Allowed only if:
+
+```text
+round = REVIEWING
+answer non-empty
+answer currently VALID
+challenger != answer author
+```
+
+## Vote challenge
+
+Allowed only if:
+
+```text
+challenge = OPEN
+voter eligible
+voter has not already voted
+```
+
+## Score round
+
+Allowed only if:
+
+```text
+round = REVIEWING
+open challenges = 0
+```
+
+---
+
+# 38. Illegal Transitions
+
+Examples that must be rejected:
+
+```text
+LOBBY → REVIEWING
+
+PLAYING → RESULT
+
+FINAL_COUNTDOWN → PLAYING
+
+LOCKED → PLAYING
+
+RESULT → REVIEWING
+
+FINISHED → PREPARING
+```
+
+A client request must never override canonical state-machine rules.
+
+---
+
+# 39. Conceptual Full State Flow
+
+```text
+GAME: LOBBY
+   ↓ start
+
+GAME: IN_PROGRESS
+
+ROUND: PREPARING
+   ↓
+ROUND: LETTER_PENDING
+   ├─ skip approved
+   │     ↓
+   │   LETTER_PENDING with new letter
+   │
+   └─ letter accepted
+         ↓
+      PLAYING
+         ↓ first valid Tutti Frutti
+      FINAL_COUNTDOWN
+         ├─ all finished
+         └─ deadline reached
+               ↓
+             LOCKED
+               ↓
+            REVIEWING
+               ↓
+       resolve all challenges
+               ↓
+             SCORING
+               ↓
+              RESULT
+               ├─ rounds remain → PREPARING
+               └─ no rounds remain
+                       ↓
+                 GAME: FINISHED
+```
+
+---
+
+# 40. Open State-Model Decisions
+
+The following must be resolved before implementation contracts are finalized:
+
+1. minimum supported player count;
+2. two-player challenge rules;
+3. exact letter skip voting threshold;
+4. pre-round letter decision timeout;
+5. exact Tutti Frutti eligibility;
+6. whether finished players may continue editing during countdown;
+7. whether “finished” is reversible before lock;
+8. active-player semantics after disconnect;
+9. challenge voter eligibility when presence changes;
+10. whether challenge voting has a timeout;
+11. answer-normalization rules;
+12. review ordering;
+13. rematch/post-game transition;
+14. relationship between existing platform `game_sessions`, `rooms`, and the Tutti Frutti state machine.
+
+---
+
+# 41. Design Principle
+
+The Tutti Frutti state model should remain independent enough to express its own gameplay while reusing only platform concepts proven to be shared across games.
+
+The existence of Tutti Frutti as the second implemented game should be used to test and refine the existing boundary between:
+
+* platform room lifecycle;
+* shared multiplayer infrastructure;
+* game-specific domain state.
