@@ -1040,18 +1040,18 @@ These may be reconsidered after real usage.
 
 ---
 
-# 41. Current Working Parameters
+# 41. Current Parameters and Status
 
-The following values are useful defaults for design and implementation planning but remain tunable:
+The following parameters have different decision statuses:
 
 ```text
-Minimum players: 2
-Final countdown: 45 seconds
-Letter-skip window: 10 seconds
-Scoring: 10 / 5 / 0
+CONFIRMED: minimum players = 2
+CONFIRMED: scoring = 10 / 5 / 0 for the initial product
+WORKING HYPOTHESIS: final countdown = 45 seconds
+WORKING HYPOTHESIS: letter-skip window = 10 seconds
 ```
 
-These values should not be treated as irreversible architecture.
+The working durations are tunable; none of these values is a shared-platform rule.
 
 ---
 
@@ -1091,10 +1091,10 @@ The following details remain intentionally unresolved:
 
 ## Post-game lifecycle
 
-* play again;
-* return to the same room;
-* creation of a new session;
-* interaction with existing platform room lifecycle.
+* who may initiate the next match, including whether only the host may do so;
+* whether prior configuration is preselected as a UX convenience;
+* what happens when a participant leaves between matches;
+* the exact post-game lobby presentation and actions.
 
 These decisions should be resolved before the corresponding implementation increment, but they do not currently block the high-level product model.
 
@@ -1117,17 +1117,44 @@ The emerging Tutti Frutti design follows several broader principles:
 
 ---
 
-# 44. Next Design Step
+# 44. Related Design Artifacts
 
-With the product brief, user flow, game-state model, and product decisions documented, the next design step should be a conceptual data-model analysis.
+The player journey is in `user-flow.md`, the state model in
+`game-state-model.md`, the conceptual relationships in
+`conceptual-data-model.md`, and the proposed technical and physical contracts
+in `technical-requirements.md` and `physical-data-model.md`. These proposals
+must follow the product decisions here rather than forcing Tutti Frutti into
+the existing Impostor schema.
 
-That work should identify:
+---
 
-* which existing platform entities can be reused unchanged;
-* which existing entities require generalization;
-* which Tutti Frutti-specific entities are needed;
-* where game configuration lives;
-* how rounds, answers, completion state, challenges, votes, and scoring relate;
-* how reconnect and authoritative state interact with persistence.
+# 45. Finished Session Returns the Same Room to Lobby
 
-The conceptual model should be derived from the product rules rather than forcing Tutti Frutti into the existing Impostor schema.
+## Context
+
+Impostor currently finishes its session and closes its Room. Tutti Frutti needs
+to support another match among the same room participants without resetting a
+completed session or forcing everyone to enter a new Room.
+
+## Decision — CONFIRMED
+
+After the final configured round has been scored, the Tutti Frutti session
+becomes `FINISHED` and immutable. In the same authoritative lifecycle
+transition, its Room moves from `playing` back to `lobby`. The Room remains
+available to its participants. Ending a session does not close that Room.
+
+A rematch in that Room creates a distinct Tutti Frutti session with a new
+configuration snapshot and roster. Previous configuration values may be
+offered as a UX convenience, but the completed session and its gameplay records
+are neither reset nor reused. Closing the Room is a separate action.
+
+This decision applies to Tutti Frutti. Impostor retains its current behavior:
+its session completion closes its Room until a separate product decision
+changes that contract.
+
+## Open Follow-ups
+
+* who may initiate a rematch and whether that action is host-only;
+* whether previous configuration values appear preselected;
+* what happens when a participant leaves between matches;
+* the exact post-game lobby presentation and actions.

@@ -1,5 +1,8 @@
 # Tutti Frutti — Product Brief
 
+`product-decisions.md` is the current decision log where earlier hypotheses in
+this brief conflict with later decisions.
+
 ## 1. Purpose
 
 Tutti Frutti is a synchronous multiplayer word game for the Juegos Familia platform.
@@ -62,9 +65,8 @@ Initial assumptions:
 * the host should not become a permanent referee;
 * validation decisions should preferably be distributed among participants.
 
-Minimum player count remains to be confirmed.
-
-Two-player support is desirable, but some validation rules may need specific behavior when only two players are present.
+`CONFIRMED`: the game supports a minimum of two players. Challenges use a
+specific mutual-agreement rule when only two players participate.
 
 ---
 
@@ -218,21 +220,10 @@ A skipped letter:
 * is replaced by another random letter;
 * does not count as a played round.
 
-The decision mechanism remains open.
-
-Current preferred direction:
-
-> skipping should be a group decision rather than an unrestricted host action.
-
-Candidate rule:
-
-* majority vote among active players.
-
-Alternative:
-
-* host proposes skipping and the remaining players confirm.
-
-This should be resolved during user-flow and state-model design.
+`CONFIRMED`: skipping is a group decision by simple majority; with exactly two
+players, both must agree. Voter eligibility when presence changes remains
+`OPEN`. A short pre-round window is confirmed, with 10 seconds as a
+`WORKING HYPOTHESIS`.
 
 ---
 
@@ -284,9 +275,10 @@ Camila finished.
 
 During the countdown:
 
-* unfinished players may continue entering answers;
-* completed players may still review or modify their own answers unless the state model later establishes otherwise;
+* all players, including the first caller, may continue editing their own answers until the shared lock;
 * all players see the remaining time.
+
+The countdown cannot be cancelled, restarted, or extended by later calls.
 
 When the timer expires:
 
@@ -299,9 +291,7 @@ If all active players finish before the timer expires, the round should close im
 
 ## 12. Eligibility to Call “Tutti Frutti”
 
-This remains an open decision.
-
-Preferred initial direction:
+`WORKING HYPOTHESIS` (preferred product rule, pending gameplay validation):
 
 > the button is enabled only when the player has entered a non-empty answer in every active category.
 
@@ -313,7 +303,8 @@ Advantages:
 
 However, empty answers during the countdown remain valid game outcomes for players who do not finish in time.
 
-This rule should be confirmed during state-model design.
+If adopted, the server must enforce this rule; disabling the button in the UI
+is insufficient.
 
 ---
 
@@ -411,7 +402,7 @@ The application should organize the decision but should not attempt to resolve s
 
 ## 17. Resolving Challenges
 
-Current preferred direction:
+`CONFIRMED` for three or more players:
 
 * players vote whether the challenged answer is valid;
 * the author of the challenged answer does not vote on their own answer;
@@ -426,7 +417,9 @@ This can be expressed informally as:
 
 > when in doubt, it counts.
 
-Exact behavior for two-player games remains unresolved and must be designed explicitly.
+`CONFIRMED` for two players: invalidation requires mutual agreement; without
+agreement the answer remains valid. The interaction and persistence mechanism
+remain `OPEN`.
 
 ---
 
@@ -486,7 +479,12 @@ The final screen should show:
 * total points per player;
 * winner or tied winners.
 
-A new game may later be started from the same social context, but the exact post-game lifecycle should be aligned with the existing platform model during implementation planning.
+`CONFIRMED`: after final scoring, the Tutti Frutti session becomes `FINISHED`
+and immutable and the same Room returns from `playing` to `lobby`. Participants
+may remain in that Room. A rematch creates a new session there; closing the
+Room is a separate action. Impostor's current finish-and-close behavior is
+unchanged. The exact post-game lobby presentation and who may initiate a
+rematch remain open.
 
 ---
 
@@ -585,7 +583,7 @@ The following decisions are currently considered established:
 6. Preset category selection belongs in the initial scope.
 7. Simple game-local custom categories should also be targeted for the initial scope.
 8. The first player to complete their answers activates a final countdown rather than immediately ending the round.
-9. The initial countdown hypothesis is 45 seconds.
+9. The first valid call starts one irreversible countdown; 45 seconds is a working duration hypothesis.
 10. If all active players finish before the countdown ends, the round closes immediately.
 11. Semantic answer validity is not automatically determined by the system.
 12. Answers are valid by default unless challenged.
@@ -594,6 +592,14 @@ The following decisions are currently considered established:
 15. No speed bonus is awarded for calling “Tutti Frutti” first.
 16. Players should be able to skip unsuitable letters.
 17. Skipped and previously played letters should not reappear during the same game.
+18. Two players are sufficient to start a game.
+19. Skipping requires a simple majority, with both votes required for two players.
+20. Invalidation of a challenged answer requires mutual agreement with two players.
+21. Every player may edit answers until the shared lock, including the first caller.
+22. Disconnect does not erase round participation or previously persisted answers.
+23. The latest persisted answers are used if a player does not reconnect before lock.
+24. A finished Tutti Frutti session is immutable and returns its Room to lobby.
+25. A rematch creates a new session in that same Room; closing the Room is separate.
 
 ---
 
@@ -603,11 +609,7 @@ The following are preferred directions but should still be validated during deta
 
 * “Tutti Frutti” can only be called after all category fields contain an answer.
 * the countdown lasts 45 seconds;
-* letter skipping uses a majority decision;
-* challenges are resolved by majority vote;
-* the answer author does not participate in the vote on their own answer;
-* a tied challenge leaves the answer valid;
-* scoring uses 10 / 5 / 0;
+* the letter-skip window lasts 10 seconds;
 * preset round counts may initially be 3, 5, and 10.
 
 ---
@@ -618,9 +620,8 @@ The next design phase should resolve:
 
 ### Players
 
-* What is the minimum player count?
-* How should answer challenges work with exactly two players?
-* How are disconnected players treated during an active round?
+* How should mutual agreement be captured for a two-player challenge?
+* Who is eligible for early close when presence changes during the countdown?
 
 ### Categories
 
@@ -633,14 +634,13 @@ The next design phase should resolve:
 
 * What is the initial Spanish letter pool?
 * Which difficult letters are excluded by default?
-* Does skipping require majority, unanimity, or host proposal plus confirmation?
-* How long does the group have to decide whether to skip?
+* Who is eligible to vote on a skip when presence changes?
+* What exact duration should the short skip window use after gameplay validation?
 
 ### Playing
 
-* Must every field be non-empty before calling “Tutti Frutti”?
-* Can the player who triggered the countdown continue editing answers?
-* Should a player have an explicit “finished” action during the countdown?
+* Does the preferred all-fields-complete rule work well in gameplay validation?
+* How should individual completion be indicated or revised before lock?
 
 ### Review
 
@@ -648,25 +648,20 @@ The next design phase should resolve:
 * Can several answers be challenged before voting begins?
 * Are challenges resolved sequentially or in parallel?
 * How should normalization treat accents, punctuation, plurals, and minor spelling variants?
+* How do voter eligibility, timeout, and abstention work when presence changes?
 
 ### Recovery
 
-* What happens if a player disconnects while entering answers?
-* Can they reconnect and continue before the round closes?
-* How should the game distinguish temporarily disconnected players from abandoned participants?
+* How should the game distinguish temporarily disconnected players from abandoned participants for voting eligibility?
+* Who may initiate a rematch and is it host-only?
+* Are previous configuration values preselected?
+* What happens when someone leaves between matches?
+* What exact actions and result view appear in the post-game lobby?
 
 ---
 
-## 27. Next Design Artifacts
+## 27. Related Contracts
 
-This product brief should serve as the basis for:
-
-1. `user-flow.md`
-2. `game-state-model.md`
-3. `product-decisions.md`
-4. conceptual data-model analysis
-5. technical requirements
-6. implementation increments
-
-The next phase should focus on converting the product rules into explicit user flows and game states before implementation begins.
-
+The current decision record is `product-decisions.md`. The player journey is
+`user-flow.md`, the state model is `game-state-model.md`, and conceptual data
+relationships are described in `conceptual-data-model.md`.

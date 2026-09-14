@@ -200,6 +200,11 @@ REVIEWING
 
 Those are game-domain states, not room states.
 
+`CONFIRMED` for Tutti Frutti: after final scoring, its Session becomes
+`FINISHED` and immutable while the same Room returns from `playing` to
+`lobby`. A later match in that Room uses a new Session. Closing the Room is a
+separate action. Impostor retains its existing finish-and-close behavior.
+
 ---
 
 # 10. Room Participant
@@ -275,7 +280,8 @@ Impostor Session
 Tutti Frutti Session
 ```
 
-A new Tutti Frutti match should correspond to a distinct session rather than mutating a previously finished one indefinitely.
+Each Tutti Frutti match in a Room has a distinct session identity. Finishing
+one does not close the Room or reuse its session identity for the next match.
 
 ---
 
@@ -1183,64 +1189,35 @@ Some future games may also have rounds or scores, but similar names do not autom
 
 ---
 
-# 54. Existing Impostor Model Audit Questions
+# 54. Existing Impostor Model Audit Findings
 
-Before implementation, the existing code and database should be inspected to answer:
+The read-only repository audit found:
 
-1. Is `rooms` already capable of expressing multiple game types?
-2. Does `rooms.status` contain Impostor-specific assumptions?
-3. Is `game_sessions` truly generic or effectively an Impostor session table?
-4. Are `session_players` generic enough for Tutti Frutti?
-5. Does room creation currently assume Impostor?
-6. Does `get_my_active_room()` assume one game?
-7. Does reconnect bootstrap assume Impostor state?
-8. Is host succession game-agnostic?
-9. Is presence scoped to room or game session?
-10. Can multiple game-specific state models coexist without changing shared lifecycle semantics?
+* `rooms` has no explicit game type; its `lobby`, `playing`, and `closed` states
+  are plausible shared coordination states, while creation and navigation
+  currently assume Impostor;
+* `get_my_active_room()` returns a single active room and its participants but
+  no game identity;
+* the current `game_sessions.state` contains Impostor phases and one session is
+  allowed per room; `session_players` contains Impostor scoring data;
+* Presence and liveness are room-scoped but the Presence topic and client
+  adapter are named for Impostor;
+* reconnect routing and private state loading assume Impostor;
+* host succession during `playing` has documentation/code drift recorded in
+  `sources/project-status.md` and must not be treated as verified platform
+  behavior.
 
-These questions should be answered from the real repository before schema changes are proposed.
-
----
-
-# 55. Possible Architectural Outcomes
-
-The audit may produce one of several valid outcomes.
-
-## Outcome A — Existing shared model is sufficient
-
-```text
-rooms
-game_sessions
-session_players
-```
-
-remain mostly unchanged and Tutti Frutti adds only game-specific persistence.
-
-This is the ideal case if existing abstractions are genuinely generic.
+These findings describe source code and migrations, not a verified remote DB.
 
 ---
 
-## Outcome B — Small generalization required
+# 55. Architectural Consequence
 
-Example:
-
-```text
-rooms.game_type
-```
-
-or equivalent may need to be introduced.
-
-Existing infrastructure remains largely intact.
-
-This is likely acceptable if the change is clearly justified by the second game.
-
----
-
-## Outcome C — Existing abstraction is Impostor-specific
-
-Some apparently shared structures may need to be renamed, split, or moved.
-
-This should be handled deliberately rather than hiding Tutti Frutti-specific exceptions inside shared code.
+Room coordination needs an explicit game identity and game-aware discovery.
+The current `game_sessions` and `session_players` must not be reused as-is for
+Tutti Frutti. A minimal shared session identity is a design candidate, while
+each game's phases, rounds, participants' game data, and scoring remain in its
+own domain. The physical representation is not decided here.
 
 ---
 
@@ -1418,18 +1395,21 @@ Once the Tutti Frutti session reaches `FINISHED`:
 * scores remain immutable.
 
 A rematch should create a new session rather than reset history in place.
+The same Room returns to `lobby` after the finished session's final scoring;
+Room closure is a separate operation.
 
 ---
 
 # 66. Open Conceptual Questions
 
-The following still require design or repository analysis:
+The following still require design:
 
 ## Shared architecture
 
-* whether current `game_sessions` is actually generic;
-* whether room status needs any generalization;
-* whether session participation can reuse `session_players` unchanged.
+* how a minimal shared session identity coexists with the current Impostor tables;
+* how the confirmed `playing → lobby` transition is enforced atomically for
+  Tutti Frutti while Impostor retains `playing → closed`;
+* how a shared roster identity avoids Impostor-specific `session_players` data.
 
 ## Categories
 
@@ -1462,31 +1442,11 @@ The following still require design or repository analysis:
 
 The next step should not yet be schema implementation.
 
-First perform an architecture audit against the actual repository, focusing on:
-
-```text
-rooms
-room players / participants
-game_sessions
-session_players
-active-room discovery
-session bootstrap
-presence
-liveness
-host succession
-reconnect
-```
-
-The goal is to classify each existing concept as:
-
-```text
-REUSABLE AS-IS
-REUSABLE WITH SMALL GENERALIZATION
-IMPOSTOR-SPECIFIC
-NOT RELEVANT
-```
-
-Only after that audit should the Tutti Frutti physical data model and migrations be designed.
+The repository audit, Room/Session boundary design, and post-game lifecycle
+decision are complete. `technical-requirements.md` and
+`physical-data-model.md` propose the next technical contract. An incremental
+implementation plan should precede any physical schema change; this
+conceptual document does not prescribe migrations.
 
 ---
 

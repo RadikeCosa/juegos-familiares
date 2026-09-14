@@ -234,11 +234,9 @@ Skip threshold reached?
 
 A skipped letter does not count as a completed round.
 
-The exact voting rule remains to be confirmed.
-
-Current preferred hypothesis:
-
-> simple majority of active players.
+`CONFIRMED`: skipping requires a simple majority. With exactly two players,
+both must agree. The exact eligible-voter set when presence changes remains
+`OPEN`.
 
 Example:
 
@@ -355,8 +353,7 @@ Camila finished.
 
 During the countdown:
 
-* players who have not finished may continue entering answers;
-* players may still edit their own answers until the round locks;
+* all players, including the first caller, may continue editing their own answers until the round locks;
 * the countdown is authoritative and shared;
 * new calls to Tutti Frutti do not restart or extend the countdown.
 
@@ -484,7 +481,7 @@ A challenge does not immediately invalidate the answer.
 
 # 19. Challenge Voting
 
-Current preferred rule:
+`CONFIRMED` for sessions with three or more players:
 
 * the answer author cannot vote on their own answer;
 * other active players vote valid or invalid;
@@ -514,42 +511,17 @@ Guiding rule:
 
 # 20. Two-Player Challenge Case
 
-This remains explicitly unresolved.
+`CONFIRMED`: disputed answers stay valid unless both players agree to
+invalidate them. The interaction and persistence mechanism remain `OPEN`.
 
 With exactly two active players:
 
 * one player owns the answer;
 * only one other player could vote.
 
-That would give the opponent unilateral authority over validity.
-
-Possible future rules include:
-
-### Option A
-
-Challenge author decides alone.
-
-Simple, but strategically weak.
-
-### Option B
-
-All disputed answers remain valid in two-player games unless both players agree they are invalid.
-
-Socially safe, but difficult to enforce when the answer author disagrees.
-
-### Option C
-
-Host acts as tie-breaker when not the answer author.
-
-Not always possible.
-
-### Option D
-
-Two-player games use no formal challenge vote and rely on mutual agreement.
-
-Likely the most natural fallback.
-
-This must be resolved before implementation.
+Giving that opponent a deciding vote would allow unilateral invalidation, so
+the multi-player vote rule does not apply. If they do not agree, the answer
+remains valid.
 
 ---
 
@@ -664,13 +636,16 @@ Final result
 3. Pedro     215
 ```
 
-Possible post-game actions may include:
+`CONFIRMED`: after the final round has been scored, this session becomes
+`FINISHED` and immutable while the same Room returns from `playing` to `lobby`.
+The Room remains available to its participants. The result may still be shown
+from the finished session; returning to the lobby does not erase it.
 
-* play again;
-* return to room;
-* return to game list.
-
-Exact lifecycle should be aligned with the existing platform room/session model.
+A rematch in that Room starts a new session with a new roster and configuration
+snapshot. Previous configuration values may be offered as a convenience, but
+no gameplay record from the finished session is reset or reused. Closing the
+Room is a separate action. Who initiates the rematch, the exact lobby
+presentation, and behavior when someone leaves between matches remain `OPEN`.
 
 ---
 
@@ -784,16 +759,22 @@ Final result
 
 # 32. Decisions Still Required
 
-Before implementation, confirm:
+`CONFIRMED`: minimum of two players, mutual agreement for two-player challenge
+invalidation, simple-majority letter skipping (both votes with two players),
+editing by every player until lock, one irreversible countdown, and preserved
+participation and persisted answers across disconnects.
 
-* minimum player count;
-* exact two-player challenge behavior;
+`WORKING HYPOTHESIS`: 10-second letter-skip window, 45-second final countdown,
+and all active categories non-empty before calling Tutti Frutti.
+
+`OPEN` before the corresponding implementation increment:
+
 * default letter pool;
-* exact skip-vote threshold;
-* duration of pre-round skip window;
-* whether all fields must be completed to call Tutti Frutti;
-* whether the first finisher may continue editing during countdown;
 * review layout;
 * whether challenges are resolved sequentially or in parallel;
-* active-player semantics during disconnects;
-* exact post-game room behavior.
+* eligibility and timeout during challenge voting when presence changes;
+* early-close eligibility when presence changes;
+* who may initiate a rematch and whether that action is host-only;
+* whether previous configuration is preselected;
+* what happens when someone leaves between matches;
+* exact post-game lobby presentation and actions.

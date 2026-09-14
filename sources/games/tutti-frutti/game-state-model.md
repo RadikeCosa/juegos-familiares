@@ -45,15 +45,19 @@ Clients must not independently infer or advance the canonical game phase.
 
 # 3. Game-Level Lifecycle
 
-Conceptual game states:
+Conceptual flow across Room setup and one Session:
 
 ```text
-LOBBY
+ROOM: LOBBY (no active Session)
   ↓
-IN_PROGRESS
+SESSION: IN_PROGRESS / ROOM: PLAYING
   ↓
-FINISHED
+SESSION: FINISHED / ROOM: LOBBY
 ```
+
+`LOBBY` belongs to Room coordination and configuration before a Session
+starts, and again after a Tutti Frutti Session finishes. `FINISHED` belongs to
+that Session and never changes back to `IN_PROGRESS` for a rematch.
 
 Optional terminal state:
 
@@ -61,9 +65,9 @@ Optional terminal state:
 CANCELLED
 ```
 
-if the platform lifecycle requires it.
+if the platform lifecycle requires it; this remains `OPEN`.
 
-## LOBBY
+## LOBBY (Room)
 
 The game session has not started.
 
@@ -75,7 +79,7 @@ Allowed operations include:
 * configure number of rounds;
 * start game.
 
-## IN_PROGRESS
+## IN_PROGRESS (Session)
 
 At least one round has started.
 
@@ -83,7 +87,7 @@ Game configuration is frozen.
 
 The game contains an active or completed round.
 
-## FINISHED
+## FINISHED (Session)
 
 All configured rounds have been scored.
 
@@ -165,12 +169,12 @@ State contains conceptually:
 * current round number;
 * active-player snapshot or current active-player set;
 * skip-vote state;
-* optional skip decision deadline.
+* a pre-round skip decision deadline (`WORKING HYPOTHESIS`: 10 seconds).
 
 Allowed actions:
 
 * vote/request skip;
-* accept/start round according to final product rule.
+* start answer entry automatically if the skip threshold is not reached before the deadline.
 
 Not allowed:
 
@@ -195,6 +199,9 @@ LETTER_PENDING
 ```
 
 The skipped letter becomes unavailable for the rest of the game.
+
+`CONFIRMED`: skipping requires a simple majority; with exactly two players,
+both must agree. The precise voter set when presence changes remains `OPEN`.
 
 Invariants:
 
@@ -223,15 +230,13 @@ The round remains `PLAYING` until the first valid Tutti Frutti action.
 
 # 9. Player Completion State
 
-Each participating player may conceptually have:
+Completion and presence are separate dimensions. A participating player may
+conceptually have:
 
 ```text
-ANSWERING
-FINISHED
-DISCONNECTED
+completion = ANSWERING or FINISHED
+presence = CONNECTED or DISCONNECTED
 ```
-
-These are not necessarily mutually exclusive persistence enums.
 
 For example, a player may be:
 
@@ -248,7 +253,7 @@ This prevents presence recovery logic from corrupting game progress.
 
 # 10. Tutti Frutti Eligibility
 
-Preferred initial invariant:
+`WORKING HYPOTHESIS` (preferred product rule, pending gameplay validation):
 
 ```text
 player may call Tutti Frutti
@@ -256,7 +261,7 @@ IFF
 all active category answers are non-empty
 ```
 
-If confirmed, the server must validate this condition.
+If adopted for implementation, the server must validate this condition.
 
 The client disabling the button is not sufficient enforcement.
 
@@ -302,10 +307,10 @@ Initial duration hypothesis:
 
 During this state:
 
-* players may continue editing answers;
+* all players, including the first caller, may continue editing answers (`CONFIRMED`);
 * players may mark themselves finished;
-* the original countdown deadline does not change;
-* subsequent Tutti Frutti actions do not reset the timer.
+* the original countdown deadline cannot be cancelled or changed (`CONFIRMED`);
+* subsequent Tutti Frutti actions do not reset or extend the timer (`CONFIRMED`).
 
 Possible exits:
 
@@ -525,12 +530,10 @@ Preferred model:
 
 # 21. Challenge Voting
 
-Current working hypothesis:
-
-Eligible voters are:
+`CONFIRMED` for sessions with three or more players: eligible voters are:
 
 ```text
-active players
+eligible players
 minus
 answer author
 ```
@@ -552,9 +555,11 @@ otherwise
     → VALID
 ```
 
-This makes a tie remain valid.
+This makes a tie remain valid. For two players, invalidation instead requires
+mutual agreement; without agreement the answer remains valid (`CONFIRMED`).
 
-The exact quorum behavior must account for disconnected players.
+The exact voter eligibility and quorum behavior when presence changes remain
+`OPEN`.
 
 ---
 
@@ -574,17 +579,10 @@ then:
 eligible voters for an opponent's answer = 1
 ```
 
-This allows a single opponent to invalidate any challenged answer.
-
-That may produce adversarial gameplay.
-
-The state model therefore marks two-player challenge resolution as:
-
-```text
-UNRESOLVED PRODUCT DECISION
-```
-
-Implementation must not silently adopt the multi-player vote rule without explicit approval.
+The multi-player rule would allow a single opponent to invalidate the answer,
+so it does not apply. `CONFIRMED`: both players must agree to invalidate a
+disputed answer; otherwise it stays valid. The exact interaction and persistence
+mechanism remain `OPEN`.
 
 ---
 
@@ -726,7 +724,17 @@ Final state includes:
 
 No new round may be added to the same completed game session.
 
-A rematch should create or initialize a new game session according to the platform lifecycle.
+`CONFIRMED`: session completion and Room lifecycle are distinct. After final
+scoring, the Tutti Frutti session becomes `FINISHED` and immutable, and its
+Room returns from `playing` to `lobby` as one authoritative, consistent
+transition. The Room remains available to its participants; it is not closed
+by session completion.
+
+A rematch in the same Room creates a new session, with a new roster and
+configuration snapshot. It does not reset the finished session or its rounds.
+Closing the Room is a separate action. Who may initiate the rematch and the
+exact post-game lobby behavior remain `OPEN`. Impostor's current close-on-finish
+contract is unaffected.
 
 ---
 
@@ -960,7 +968,8 @@ Conceptual guards include:
 Allowed only if:
 
 ```text
-game = LOBBY
+room = LOBBY
+no active session
 configuration valid
 host authorized
 minimum players satisfied
@@ -1037,16 +1046,18 @@ FINISHED → PREPARING
 ```
 
 A client request must never override canonical state-machine rules.
+The last transition is illegal within one session; a rematch creates another
+session while the Room is in `lobby`.
 
 ---
 
 # 39. Conceptual Full State Flow
 
 ```text
-GAME: LOBBY
+ROOM: LOBBY
    ↓ start
 
-GAME: IN_PROGRESS
+SESSION: IN_PROGRESS / ROOM: PLAYING
 
 ROUND: PREPARING
    ↓
@@ -1075,29 +1086,42 @@ ROUND: LETTER_PENDING
                ├─ rounds remain → PREPARING
                └─ no rounds remain
                        ↓
-                 GAME: FINISHED
+                 SESSION: FINISHED / ROOM: LOBBY
 ```
 
 ---
 
-# 40. Open State-Model Decisions
+# 40. Decision Status
 
-The following must be resolved before implementation contracts are finalized:
+`CONFIRMED` by `product-decisions.md`:
 
-1. minimum supported player count;
-2. two-player challenge rules;
-3. exact letter skip voting threshold;
-4. pre-round letter decision timeout;
-5. exact Tutti Frutti eligibility;
-6. whether finished players may continue editing during countdown;
-7. whether “finished” is reversible before lock;
-8. active-player semantics after disconnect;
-9. challenge voter eligibility when presence changes;
-10. whether challenge voting has a timeout;
-11. answer-normalization rules;
-12. review ordering;
-13. rematch/post-game transition;
-14. relationship between existing platform `game_sessions`, `rooms`, and the Tutti Frutti state machine.
+* minimum of two players;
+* simple majority to skip a letter, with agreement from both players in a two-player game;
+* two-player challenge invalidation only by mutual agreement;
+* the first valid Tutti Frutti call starts one irreversible countdown;
+* all players may edit until the shared lock, including the first caller;
+* disconnect does not remove round participation or persisted answers;
+* the authoritative countdown guarantees progress even if a player disconnects;
+* the latest persisted answers are used if the player does not reconnect before lock.
+* a finished Tutti Frutti session is immutable, its Room returns to `lobby`,
+  and a rematch in that Room creates a new session; closing the Room is separate.
+
+`WORKING HYPOTHESIS`:
+
+* 10-second letter-skip window and 45-second final countdown;
+* all active category answers must be non-empty to call Tutti Frutti, pending gameplay validation;
+* proposed 3/5/10 round-count presets.
+
+`OPEN` before the corresponding implementation increment:
+
+* exact letter pool and category catalog or limits;
+* eligibility for early close when presence changes, without removing participation;
+* challenge voter eligibility, quorum, timeout or abstention during disconnect;
+* whether an individual completion indication can be reversed before lock (the countdown cannot);
+* normalization details and review ordering;
+* who may initiate a rematch, optional configuration preselection, participant
+  departure between matches, and exact post-game lobby behavior;
+* relationship between existing `game_sessions`, `rooms`, and the Tutti Frutti state machine.
 
 ---
 
