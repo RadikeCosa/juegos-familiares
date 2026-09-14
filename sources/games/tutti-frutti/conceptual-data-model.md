@@ -1203,11 +1203,13 @@ The read-only repository audit found:
 * Presence and liveness are room-scoped but the Presence topic and client
   adapter are named for Impostor;
 * reconnect routing and private state loading assume Impostor;
-* host succession during `playing` has documentation/code drift recorded in
-  `sources/project-status.md` and must not be treated as verified platform
-  behavior.
+* host succession during `playing` has a versioned Impostor code path using
+  `session_players`; the deployed DB behavior remains unverified as recorded
+  in `sources/project-status.md`.
 
 These findings describe source code and migrations, not a verified remote DB.
+The product/architecture policy for succession during `playing` was
+subsequently confirmed in `product-decisions.md`.
 
 ---
 

@@ -236,7 +236,7 @@ delete answers or roster membership.
 | Vote / resolution | Duplicate vote or changing quorum. | Unique challenge/voter key, authorized eligibility policy, locked challenge; resolve once. Disconnect policy remains `OPEN`. |
 | Score | Retry double-awards points. | Require locked answers and zero open challenges; lock round; apply immutable points once and mark `scored_at` in one transaction. |
 | Finish / return lobby | Session and Room diverge. | Lock Room then session; mark finish and set `lobby` atomically; retry returns prior result. |
-| Host succession | Two callers choose different successors. | Lock Room and host liveness; choose deterministically from Room members and, in `playing`, frozen session roster. Verify drift/policy before implementation. |
+| Host succession | Two callers choose different successors. | Lock Room and host liveness; choose deterministically from Room members and, in `playing`, the frozen session roster under the confirmed policy. Verify the deployed RPC before implementation. |
 
 ## Validation before implementation
 

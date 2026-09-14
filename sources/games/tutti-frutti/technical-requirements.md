@@ -11,9 +11,9 @@ flow is in `game-state-model.md`.
 
 The current repository implements Impostor only. Its `rooms` table has no game
 type; `game_sessions.state` and `session_players` contain Impostor rules. The
-source baseline and the documentation/code drift about host succession are
-recorded in `sources/project-status.md`. No remote database was inspected for
-this design.
+source baseline and the distinction between confirmed host-succession policy,
+versioned Impostor code, and unverified deploy are recorded in
+`sources/project-status.md`. No remote database was inspected for this design.
 
 ## Shared coordination requirements
 
@@ -142,13 +142,20 @@ membership checks. Realtime should notify or invalidate Room and game reads;
 private answers are loaded through authorized game-specific reads, not
 published before review. Polling or explicit refetch must cover lost events.
 
-Host ownership remains on Room. Lobby succession may select an active
-RoomParticipant. In `playing`, a successor must also belong to the frozen
-active-session roster. A shared roster is the recommended input, rather than
-Impostor-specific `session_players` fields. Only host authority transfers;
-session phase, answers, countdown, and score do not change. The deployed and
-intended policy for succession during `playing` requires verification because
-of the drift in `sources/project-status.md`.
+Host ownership remains on Room. **CONFIRMED:** in `lobby`, a liveness-valid
+RoomParticipant may succeed a stale host without a session-roster check. In
+`playing`, the successor must also belong to the frozen active-session roster.
+The server checks staleness and candidate liveness with its clock and selects
+deterministically. Presence may prompt a check but does not transfer authority.
+The future shared guard must use the minimal shared roster, not
+Impostor-specific `session_players` fields. Succession changes only
+`rooms.host_player_id`; it does not alter roster, roles, round, letter,
+answers, votes, countdown, challenges, review phase, or score, including
+during `FINAL_COUNTDOWN`, `REVIEWING`, and `RESULT`. The former host does not
+automatically regain authority after reconnect; without an eligible successor
+no transfer occurs and host-only actions may wait. The versioned Impostor RPC
+uses `session_players` today; its deployed behavior remains unverified as
+recorded in `sources/project-status.md`.
 
 Reconnect follows Auth → Player/Group → active Room with game type → that
 game's authorized loader. Tutti Frutti's loader reconstructs session, phase,

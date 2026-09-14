@@ -58,7 +58,8 @@ El servidor o la base de datos decide y persiste:
 - elegibilidad y comparación del intento final;
 - ganador de ronda, scoring y permisos del marcador;
 - ganador o ganadores finales e historial mínimo;
-- host actual y, en lobby, su sucesión por staleness.
+- host actual y su sucesión por staleness en `lobby` o `playing`, con roster
+  de tanda exigido sólo durante `playing`.
 
 El cliente sólo envía intenciones acotadas, como un código, un target de voto o
 el texto del intento. Después de una respuesta, un error ambiguo o una
@@ -122,10 +123,14 @@ local: ejecuta un authoritative refetch y presenta el estado vigente.
   de 90 segundos.
 - Una pérdida de Presence no reasigna host. La sucesión exige que el backend
   compruebe staleness y elija determinísticamente entre participantes activos.
-- El alcance de sucesión durante `playing` presenta drift documental: una RPC
-  posterior contempla ese estado con sucesor limitado al roster de
-  `session_players`. Consultar `sources/project-status.md`; el comportamiento
-  desplegado y la política prevista requieren verificación.
+- La política **CONFIRMED** permite sucesión en `playing` sólo hacia un
+  RoomParticipant con liveness activa que figure en el roster congelado de
+  `session_players`; la selección es determinista. En `lobby` no se exige
+  roster de sesión. El backend usa su reloj y actualiza sólo
+  `rooms.host_player_id`. El host reemplazado no recupera autoridad al volver;
+  sin sucesor elegible no hay transferencia. La RPC versionada implementa
+  esencialmente este comportamiento, pero el deploy no fue verificado:
+  consultar `sources/project-status.md`.
 
 ## Reconstrucción y recovery
 
@@ -172,9 +177,12 @@ no se reconstruye como Room activa.
 - Un SessionPlayer desconectado sigue perteneciendo al roster y contando para
   el quorum de voto. No hay timeout, expulsión ni reducción automática a quienes
   estén conectados.
-- La pérdida del host durante `playing` tiene alcance operativo no verificado
-  por el drift registrado en `sources/project-status.md`. No inferir una
-  política de recovery a partir de la documentación anterior ni de Presence.
+- La pérdida del host durante `playing` puede transferir sólo su autoridad
+  cuando el backend comprueba staleness y elegibilidad del sucesor. Un corte
+  breve de Presence no basta si `last_seen_at` sigue vigente; al volver tras
+  un reemplazo, el host anterior reconoce al host persistido. Sin candidato
+  elegible, las acciones host-only pueden quedar bloqueadas. El deploy aún no
+  fue verificado según `sources/project-status.md`.
 
 ## Límite PWA de Impostor
 

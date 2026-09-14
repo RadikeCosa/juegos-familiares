@@ -73,26 +73,34 @@ another kind of utility; the roadmap does not decide that in advance.
 - A SessionPlayer who disconnects during a session remains in the frozen
   roster and can prevent completion of actions that require full participation,
   including voting.
-- Host succession during `playing` has documentation/code drift described
-  below; its deployed behavior has not been independently verified.
+- Host succession during `playing` has a confirmed product/architecture policy
+  and a matching versioned Impostor code path described below; its deployed
+  behavior has not been independently verified.
 
 These are known limitations or verification gaps, not an automatic backlog.
 Leaving during a session, timeout or a host override remain future exploration.
 
-### Host-succession documentation/code drift
+### Host succession during `playing`: policy, code, and deploy evidence
 
 Earlier wording in the Impostor game-state and technical-requirements documents
 described automatic succession as lobby-only. The later
 `20260824120000_start_session_6_3.sql` definition of
 `reassign_room_host_if_stale()` also handles `playing`, restricts the successor
-to the current `session_players` roster, and the room UI invokes that RPC when
-the host appears missing without a lobby-only guard. This code is present in
-the documented production source baseline, but the deployed DB behavior was
-not independently checked during the Tutti Frutti architecture audit.
+to a liveness-valid RoomParticipant in the current `session_players` roster,
+and the room UI invokes that RPC without a lobby-only guard. The policy is now
+**CONFIRMED**: after authoritative server liveness marks the current host
+stale, select a liveness-valid RoomParticipant from the active session's frozen
+roster deterministically and transfer only `rooms.host_player_id`. Presence
+may prompt evaluation but does not transfer authority. The former host does
+not automatically regain authority on return; without an eligible successor
+there is no transfer. In `lobby`, no session roster restricts candidates.
+Future shared coordination must use the minimal shared session roster, not
+Impostor-specific `session_players` columns.
 
-Do not assume either lobby-only or working in-game succession until the live
-behavior and the intended product policy have been verified. No functional
-change or policy decision is implied by recording this drift.
+This versioned code belongs to the documented production source baseline.
+The deployed DB definition and live behavior were **not independently
+verified** during the audit; do not claim production matches the versioned
+code until that check is performed. No functional change is implied here.
 
 ## Future exploration
 

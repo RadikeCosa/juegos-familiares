@@ -80,11 +80,16 @@ absence of another active session. The game validates its own prerequisites
 and creates its own state. Roster freeze, game-state creation, active-session
 association, and `lobby → playing` must be transactionally consistent.
 
-Host ownership belongs to Room. In `playing`, any successor must also belong
-to the active session roster, without making Room code depend on Impostor's
-`session_players` columns. The code path for succession during `playing` has
-documentation/code drift recorded in `sources/project-status.md`; its deployed
-behavior and intended product policy still require verification.
+Host ownership belongs to Room. **CONFIRMED:** in `lobby`, a liveness-valid
+RoomParticipant may succeed a stale host. In `playing`, the successor must
+also belong to the active session's frozen roster. The server verifies stale
+host and candidate liveness, then chooses deterministically and changes only
+Room host authority. Presence cannot decide the transfer. The old host does
+not automatically regain authority on reconnect; if no candidate qualifies,
+host-only actions may wait. The future shared guard must use the minimal
+shared roster rather than Impostor's `session_players`. The versioned Impostor
+RPC already uses that game-specific roster, but its deployed behavior remains
+unverified; see `sources/project-status.md`.
 
 Reconnect follows Auth → Player/Group → active Room → game type → authorized
 game-specific state loader. Room changes, membership, and host changes may

@@ -946,23 +946,40 @@ Validation is a group responsibility.
 
 # 37. Host Succession Reuses Platform Behavior
 
-## Decision
+## Decision — CONFIRMED
 
-If the host disconnects or becomes unavailable, Tutti Frutti should rely on the platform's existing host-succession mechanism where possible.
+In `lobby`, a successor may be any eligible RoomParticipant with valid
+authoritative liveness; no session roster exists yet. In `playing`, when the
+current host becomes stale according to server-checked liveness, the successor
+must simultaneously be a current RoomParticipant, a member of the active
+session's frozen roster, and liveness-valid. The server selects among eligible
+successors deterministically. Presence may trigger an evaluation, but never
+transfers authority by itself. A brief Presence loss need not make the host
+stale while `last_seen_at` remains within its active window.
 
-Changing host must not reset:
+Succession changes only Room host authority (`rooms.host_player_id` in the
+current schema). It does not change session participation, roles, current
+round, selected letter, answers, votes, countdown, challenges, review state,
+or scores. During `PLAYING`, `FINAL_COUNTDOWN`, `REVIEWING`, or `RESULT`, only
+the actor permitted to perform host-only actions changes; the Tutti Frutti
+state machine does not advance or reset because of succession.
 
-* the game;
-* current round;
-* selected letter;
-* answers;
-* countdown;
-* review;
-* score.
+If the former host returns after replacement, they remain a participant but
+do not automatically regain host authority. If no successor is eligible,
+there is no transfer; host-only actions may wait for an eligible host. This
+does not remove absent players from the frozen roster or change voting quorum.
+
+The versioned Impostor RPC implements the `playing` roster check using
+`session_players`; its deployed behavior has not been independently verified.
+When shared session infrastructure exists, the Room succession guard must
+consult the minimal shared session roster instead of Impostor-specific
+columns. This decision does not promote Impostor gameplay into shared state.
 
 ## Rationale
 
-Host ownership is a platform lifecycle concern, not a Tutti Frutti gameplay state.
+Host ownership is a Room lifecycle concern, not a Tutti Frutti gameplay state.
+Restricting a successor to the active roster prevents a Room member who is not
+playing the current session from acquiring its host-only authority.
 
 ---
 
