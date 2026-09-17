@@ -51,6 +51,11 @@ const singleParticipantRow = {
     participant_joined_at: "2026-08-19T12:00:00.000Z"
 };
 
+const activeRoomParticipantRow = {
+    ...singleParticipantRow,
+    room_game_type: "impostor"
+};
+
 const startSessionRow = {
     started: true,
     already_started: false,
@@ -664,13 +669,47 @@ describe("joinRoomByCode", () => {
 });
 
 describe("getMyActiveRoom", () => {
+    it("rejects an explicit null game identity", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...activeRoomParticipantRow, room_game_type: null }],
+                error: null
+            }))
+        };
+
+        await expect(getMyActiveRoom(supabase)).rejects.toThrow(
+            "No pudimos confirmar tu sala activa."
+        );
+    });
+
+    it("rejects a missing or unsupported game identity", async () => {
+        for (const row of [singleParticipantRow, { ...activeRoomParticipantRow, room_game_type: "other" }]) {
+            const supabase = { rpc: vi.fn(async () => ({ data: [row], error: null })) };
+            await expect(getMyActiveRoom(supabase)).rejects.toThrow(
+                "No pudimos confirmar tu sala activa."
+            );
+        }
+    });
+
+    it("accepts a Tutti Frutti identity without exposing gameplay", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...activeRoomParticipantRow, room_game_type: "tutti_frutti" }],
+                error: null
+            }))
+        };
+        const lobby = await getMyActiveRoom(supabase);
+        expect(lobby?.room.gameType).toBe("tutti_frutti");
+        expect(Object.keys(lobby ?? {})).toEqual(["room", "participants"]);
+    });
+
     it("calls the authoritative RPC without room, player or group arguments", async () => {
         const supabase = {
             rpc: vi.fn(async (_fn: string) => {
                 void _fn;
 
                 return {
-                    data: [singleParticipantRow],
+                    data: [activeRoomParticipantRow],
                     error: null
                 };
             })
@@ -680,7 +719,8 @@ describe("getMyActiveRoom", () => {
             room: {
                 id: "11111111-1111-4111-8111-111111111111",
                 code: "AB7KQ2M4",
-                status: "lobby"
+                status: "lobby",
+                gameType: "impostor"
             },
             participants: [{ playerId: "player-1", nickname: "Ramiro", isHost: true, isSelf: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
         });
@@ -703,7 +743,7 @@ describe("getMyActiveRoom", () => {
     it("does not expose internal identifiers in the returned lobby", async () => {
         const supabase = {
             rpc: vi.fn(async () => ({
-                data: [singleParticipantRow],
+                data: [activeRoomParticipantRow],
                 error: null
             }))
         };
@@ -748,7 +788,7 @@ describe("getMyActiveRoom", () => {
 
     it("rejects lobby rows without participant_is_self", async () => {
         const { participant_is_self: _participantIsSelf, ...rowWithoutSelf } =
-            singleParticipantRow;
+            activeRoomParticipantRow;
         void _participantIsSelf;
         const supabase = {
             rpc: vi.fn(async () => ({
@@ -765,7 +805,7 @@ describe("getMyActiveRoom", () => {
     it("rejects lobby rows with null participant_is_self", async () => {
         const supabase = {
             rpc: vi.fn(async () => ({
-                data: [{ ...singleParticipantRow, participant_is_self: null }],
+                data: [{ ...activeRoomParticipantRow, participant_is_self: null }],
                 error: null
             }))
         };
@@ -778,7 +818,7 @@ describe("getMyActiveRoom", () => {
     it("rejects a lobby with no self participant", async () => {
         const supabase = {
             rpc: vi.fn(async () => ({
-                data: [{ ...singleParticipantRow, participant_is_self: false }],
+                data: [{ ...activeRoomParticipantRow, participant_is_self: false }],
                 error: null
             }))
         };
@@ -792,9 +832,9 @@ describe("getMyActiveRoom", () => {
         const supabase = {
             rpc: vi.fn(async () => ({
                 data: [
-                    singleParticipantRow,
+                    activeRoomParticipantRow,
                     {
-                        ...singleParticipantRow,
+                        ...activeRoomParticipantRow,
                         participant_player_id: "player-2",
                         participant_nickname: "Pedro",
                         participant_is_host: false

@@ -11,10 +11,13 @@ does not describe an implemented multi-game platform or prescribe SQL.
 
 ## Evidence from the current repository
 
-`rooms` has `group_id`, `join_code`, `host_player_id`, and
-`lobby | playing | closed`, but no game type. `player_active_room_slots` permits
-one active Room per Player. `get_my_active_room()` returns a room and its
-participants without a game identity. The current `game_sessions.state` holds
+`rooms` has `group_id`, `join_code`, `host_player_id`, immutable `game_type`, and
+`lobby | playing | closed`. Historical Rooms are backfilled as `impostor`, and
+the legacy zero-argument create still creates Impostor Rooms.
+`player_active_room_slots` permits one active Room per Player.
+`get_my_active_room()` returns the authorized Room's game identity with its
+coordination fields and participants. Tutti Frutti create/join and routing are
+not implemented yet. The current `game_sessions.state` holds
 Impostor phases and permits only one session per Room; `session_players`
 includes Impostor scoring data. Impostor's `end_session()` closes its Room.
 These facts come from the current migrations and client, not a verified remote

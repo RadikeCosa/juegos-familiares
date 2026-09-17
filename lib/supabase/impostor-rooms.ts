@@ -425,6 +425,7 @@ type RoomLobbyRow = {
     room_id?: string;
     room_join_code: string;
     room_status: string;
+    room_game_type?: string;
     participant_player_id: string;
     participant_nickname: string;
     participant_is_host: boolean;
@@ -447,6 +448,12 @@ export type RoomLobby = {
         status: string;
     };
     participants: RoomLobbyParticipant[];
+};
+
+export type RoomGameType = "impostor" | "tutti_frutti";
+
+export type ActiveRoomLobby = RoomLobby & {
+    room: RoomLobby["room"] & { gameType: RoomGameType };
 };
 
 type StartSessionRow = {
@@ -2403,7 +2410,7 @@ export async function joinRoomByCode(
 
 export async function getMyActiveRoom(
     supabase: ImpostorRoomsClient
-): Promise<RoomLobby | null> {
+): Promise<ActiveRoomLobby | null> {
     const result = await supabase.rpc("get_my_active_room");
 
     if (result.error) {
@@ -2416,11 +2423,17 @@ export async function getMyActiveRoom(
         return null;
     }
 
-    if (!rows.every(isRoomLobbyRow)) {
+    if (!rows.every(isRoomLobbyRow) ||
+        !rows.every((row) => row.room_game_type === "impostor" || row.room_game_type === "tutti_frutti") ||
+        !rows.every((row) => row.room_game_type === rows[0].room_game_type)) {
         throw new Error("No pudimos confirmar tu sala activa.");
     }
 
-    return toRoomLobby(rows, "No pudimos confirmar tu sala activa.");
+    const lobby = toRoomLobby(rows, "No pudimos confirmar tu sala activa.");
+    return {
+        ...lobby,
+        room: { ...lobby.room, gameType: rows[0].room_game_type as RoomGameType }
+    };
 }
 
 export function createJoinRoomByCodeController() {

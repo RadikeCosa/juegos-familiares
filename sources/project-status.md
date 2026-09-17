@@ -119,6 +119,14 @@ already owned by the roadmap above.
 
 ## Current improvement work
 
+El Incremento 0 de la arquitectura multi-game está implementado y validado
+solo en la rama `codex/tutti-frutti-increment-0` y Supabase local. Añade
+identidad de juego inmutable a Room y la expone en discovery; no habilita
+creación ni gameplay de Tutti Frutti. La regresión automatizada de Impostor y
+el smoke local de creación, recuperación e inicio pasaron. El cierre visual
+multidispositivo queda pendiente de revisión; la baseline productiva indicada
+arriba no cambió.
+
 Only observations confirmed against the current product should become active
 improvement work. Historical UX findings are evidence to revalidate, not an
 automatic backlog. No additional detailed post-beta UX/UI backlog is established

@@ -34,22 +34,29 @@ Estado autoritativo
 - `AuthIdentity`;
 - `Player`;
 - `Group` y el contexto de pertenencia;
+- `Room` y `RoomParticipant` para identidad de juego, Group, host,
+  membership y lifecycle compartidos;
 - navegación compartida y `/grupo`;
 - shell mobile-first y capacidades PWA;
 - adaptadores comunes de acceso a Supabase cuando corresponde.
 
 ### Impostor
 
-- `Room` y `RoomParticipant`;
 - `GameSession` y `SessionPlayer`;
 - rondas, roles, palabras y asignaciones privadas;
 - votos, resultados, puntuación e historial del juego;
-- host, liveness, reconexión y transiciones de gameplay;
+- coordinación actual de liveness y reconexión y transiciones de gameplay;
 - uso de Realtime y Presence para su experiencia sincronizada.
 
-Un concepto específico de Impostor no se promueve a plataforma sólo porque su
-implementación pueda reutilizar infraestructura común. No existe actualmente
-un motor genérico de juegos, salas, rondas, puntajes ni Realtime.
+Cada Room persiste un `game_type` inmutable (`impostor` o `tutti_frutti`). Las
+Rooms históricas se identifican como Impostor y la creación actual sin
+argumentos continúa creando Impostor. `get_my_active_room()` devuelve ese tipo
+junto con la coordinación autorizada; todavía no hay creación, join ni rutas
+Tutti Frutti. `player_active_room_slots` sigue imponiendo una sola Room activa
+por Player en toda la plataforma.
+
+El gameplay permanece en cada juego. No existe un motor genérico de juegos,
+rondas, puntajes ni Realtime.
 
 ## Identidad y autorización
 

@@ -158,13 +158,13 @@ describe("renderPlatformHomeContext", () => {
     const lobby = inspect(
       renderPlatformHomeContext(state, {
         status: "success",
-        room: { id: "room-1", code: "AB7KQ2M4", status: "lobby" }
+        room: { id: "room-1", code: "AB7KQ2M4", status: "lobby", gameType: "impostor" }
       })
     );
     const playing = inspect(
       renderPlatformHomeContext(state, {
         status: "success",
-        room: { id: "room-1", code: "PLAY1234", status: "playing" }
+        room: { id: "room-1", code: "PLAY1234", status: "playing", gameType: "impostor" }
       })
     );
 

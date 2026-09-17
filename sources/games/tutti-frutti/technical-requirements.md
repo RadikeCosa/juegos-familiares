@@ -9,8 +9,11 @@ system. `CONFIRMED` means a product decision in `product-decisions.md`;
 representation and alternatives are in `physical-data-model.md`; the domain
 flow is in `game-state-model.md`.
 
-The current repository implements Impostor only. Its `rooms` table has no game
-type; `game_sessions.state` and `session_players` contain Impostor rules. The
+The current repository implements Impostor gameplay only. Its `rooms` table now
+persists an immutable game type and active-Room discovery returns it; the
+zero-argument create path remains Impostor-only. Tutti Frutti create/join and
+routing are still future increments. `game_sessions.state` and
+`session_players` contain Impostor rules. The
 source baseline and the distinction between confirmed host-succession policy,
 versioned Impostor code, and unverified deploy are recorded in
 `sources/project-status.md`. No remote database was inspected for this design.

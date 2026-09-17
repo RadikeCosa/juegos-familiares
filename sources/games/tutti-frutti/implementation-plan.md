@@ -5,9 +5,19 @@
 Introducir Tutti Frutti como segundo juego jugable de Juegos Familiares, desde
 selección de juego hasta revancha en la misma Room, con estado autoritativo,
 recuperación y privacidad por actor, sin alterar las reglas ni el cierre actual
-de Impostor. Este documento organiza trabajo futuro; no describe
-funcionalidades ya implementadas ni autoriza por sí mismo migrations remotas,
-deploys o cambios de producto.
+de Impostor. Este documento organiza los cortes y registra su progreso; los
+cortes futuros no describen funcionalidades ya implementadas ni autorizan por
+sí mismos migrations remotas, deploys o cambios de producto.
+
+**Estado del Incremento 0 en la rama `codex/tutti-frutti-increment-0`:**
+implementación local preparada para auditoría. La migration se aplicó a
+Supabase local con 11 Rooms y 10 sesiones previas, sin reset; backfill,
+restricciones, lectura autorizada y regresión Impostor pasaron. El smoke en
+navegador cubrió create, recuperación e inicio/reload en partida. El cierre
+completo se validó con RPCs locales existentes, pero no con tres navegadores
+independientes; esa parte del smoke visual queda pendiente de revisión humana.
+Producción y cualquier DB remota permanecen sin cambios ni verificación de
+este incremento.
 
 Las decisiones de producto vigentes están en `product-decisions.md`; fases en
 `game-state-model.md`; límites en `room-session-boundary.md`; requisitos en
@@ -22,12 +32,14 @@ este plan. La política de sucesión en `playing` está **CONFIRMED** en
 
 ## Baseline técnica comprobada en el repositorio
 
-- `rooms` conserva Group, host, miembros y `lobby | playing | closed`, sin
-  `game_type`. `player_active_room_slots` impone una Room activa por Player en
+- `rooms` conserva Group, host, miembros y `lobby | playing | closed`; en la
+  rama del Incremento 0 incorpora `game_type` inmutable.
+  `player_active_room_slots` impone una Room activa por Player en
   toda la plataforma; `lobby` y `playing` son activos. Al volver de `playing`
   a `lobby`, el slot debe permanecer.
-- `create_room()` no recibe juego; `join_room_by_code(text)` y
-  `get_my_active_room()` tampoco identifican juego. Los adaptadores y rutas
+- `create_room()` no recibe juego y `join_room_by_code(text)` aún no verifica
+  un juego esperado. `get_my_active_room()` devuelve el tipo en la rama del
+  Incremento 0. Los adaptadores y rutas
   actuales (`lib/supabase/impostor-rooms.ts`, `app/impostor/`) se orientan a
   Impostor. La entrada activa y el bootstrap necesitarán ruteo por tipo.
 - `game_sessions` tiene `unique(room_id)` y fases de Impostor;

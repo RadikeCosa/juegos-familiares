@@ -318,6 +318,7 @@ async function main() {
   assert(!activeRowsA.error, "get_my_active_room should reconstruct playing Room.");
   assertEqual(activeRowsA.data[0].room_id, roomAId, "Reconstructed Room id mismatch.");
   assertEqual(activeRowsA.data[0].room_status, "playing", "Reconstructed Room status mismatch.");
+  assertEqual(activeRowsA.data[0].room_game_type, "impostor", "Reconstructed playing Room game type mismatch.");
   assertEqual(activeRowsA.data.length, 2, "Reconstructed playing Room should include memberships.");
   assert(activeRowsA.data.some((row) => row.participant_is_host), "Reconstruction should include host.");
 

@@ -5,7 +5,7 @@ import { createBrowserSupabaseClient } from "../../lib/supabase/browser-client";
 import {
   getMyActiveRoom,
   type ImpostorRoomsClient,
-  type RoomLobby,
+  type ActiveRoomLobby,
 } from "../../lib/supabase/impostor-rooms";
 import type { PlatformBootstrapState } from "../../lib/supabase/platform-bootstrap";
 
@@ -13,10 +13,10 @@ export type ActiveRoomContextState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "absent" }
-  | { status: "success"; room: RoomLobby["room"] }
+  | { status: "success"; room: ActiveRoomLobby["room"] }
   | { status: "error"; message: string };
 
-type LoadActiveRoomContext = () => Promise<RoomLobby | null>;
+type LoadActiveRoomContext = () => Promise<ActiveRoomLobby | null>;
 
 type ActiveRoomContextControllerOptions = {
   loadActiveRoom: LoadActiveRoomContext;

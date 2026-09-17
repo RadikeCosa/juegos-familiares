@@ -1191,7 +1191,7 @@ Some future games may also have rounds or scores, but similar names do not autom
 
 # 54. Existing Impostor Model Audit Findings
 
-The read-only repository audit found:
+The read-only repository audit, taken before Increment 0, found:
 
 * `rooms` has no explicit game type; its `lobby`, `playing`, and `closed` states
   are plausible shared coordination states, while creation and navigation
