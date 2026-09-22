@@ -54,7 +54,8 @@ describe("active Room awareness", () => {
             room: {
                 id: "room-1",
                 code: "ABC123XY",
-                status: "lobby"
+                status: "lobby",
+                gameType: "impostor"
             }
         });
 
@@ -71,7 +72,8 @@ describe("active Room awareness", () => {
             room: {
                 id: "room-1",
                 code: "PLAY1234",
-                status: "playing"
+                status: "playing",
+                gameType: "impostor"
             }
         });
 
@@ -80,6 +82,15 @@ describe("active Room awareness", () => {
         expect(markup).toContain("href=\"/impostor/sala/PLAY1234\"");
         expect(markup).not.toContain("Crear sala");
         expect(markup).not.toContain("Unirme a una sala");
+    });
+
+    it("sends a Tutti Frutti Room to its own route", () => {
+        const markup = renderWithActiveRoomState({
+            status: "success",
+            room: { id: "room-2", code: "TUTT1234", status: "lobby", gameType: "tutti_frutti" }
+        });
+        expect(markup).toContain('href="/tutti-frutti/sala/TUTT1234"');
+        expect(markup).not.toContain('href="/impostor/sala/TUTT1234"');
     });
 
     it("blocks create and join actions when active Room lookup fails", () => {

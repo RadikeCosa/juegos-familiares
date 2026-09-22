@@ -17,8 +17,9 @@ import {
 } from "../../../lib/supabase/impostor-group-words";
 import {
   getMyActiveRoom,
+  roomPath,
   type ImpostorRoomsClient,
-  type RoomLobby,
+  type ActiveRoomLobby,
 } from "../../../lib/supabase/impostor-rooms";
 import {
   bootstrapPlatformContext,
@@ -50,7 +51,7 @@ export type ActiveRoomState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "absent" }
-  | { status: "success"; room: RoomLobby["room"] }
+  | { status: "success"; room: ActiveRoomLobby["room"] }
   | { status: "error"; message: string };
 
 function createPlatformBootstrapClient(): PlatformBootstrapClient {
@@ -255,7 +256,7 @@ export function renderImpostorGroupContext(
             <p>{isPlayingRoom ? "Partida en curso" : "Sala activa"}</p>
             <Link
               className="impostor-action impostor-action--primary"
-              href={`/impostor/sala/${encodeURIComponent(activeRoomState.room.code)}`}
+              href={roomPath(activeRoomState.room.gameType, activeRoomState.room.code)}
             >
               {isPlayingRoom ? "Volver a la partida" : "Volver a la sala"}
             </Link>

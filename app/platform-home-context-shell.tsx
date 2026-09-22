@@ -12,6 +12,7 @@ import {
   type PlatformBootstrapClient,
   type PlatformBootstrapState,
 } from "../lib/supabase/platform-bootstrap";
+import { roomPath } from "../lib/supabase/impostor-rooms";
 
 function createPlatformBootstrapClient(): PlatformBootstrapClient {
   return createBrowserSupabaseClient() as unknown as PlatformBootstrapClient;
@@ -71,14 +72,14 @@ export function renderPlatformHomeContext(
 
     const activeRoomHref =
       roomState.status === "success"
-        ? `/impostor/sala/${encodeURIComponent(roomState.room.code)}`
+        ? roomPath(roomState.room.gameType, roomState.room.code)
         : undefined;
     const isPlayingRoom =
       roomState.status === "success" && roomState.room.status === "playing";
 
     let cardContent: ReactNode;
 
-    if (roomState.status === "success" && activeRoomHref) {
+    if (roomState.status === "success" && activeRoomHref && roomState.room.gameType === "impostor") {
       cardContent = (
         <>
           <p className="game-entry__status">
@@ -92,6 +93,13 @@ export function renderPlatformHomeContext(
               Ver Impostor
             </Link>
           </div>
+        </>
+      );
+    } else if (roomState.status === "success") {
+      cardContent = (
+        <>
+          <p>Encontrá al impostor sin revelar demasiado.</p>
+          <Link className="game-entry__cta" href="/impostor">Ver Impostor</Link>
         </>
       );
     } else if (roomState.status === "error") {
@@ -138,6 +146,20 @@ export function renderPlatformHomeContext(
       <>
         {identity}
         {renderImpostorGameEntry(cardContent)}
+        <section className="game-entry" aria-labelledby="tutti-frutti-entry-title">
+          <div className="game-entry__content">
+            <p className="game-entry__label">Juegos</p>
+            <h2 id="tutti-frutti-entry-title">Tutti Frutti</h2>
+            {roomState.status === "success" && roomState.room.gameType === "tutti_frutti" && activeRoomHref ? (
+              <>
+                <p className="game-entry__status">{isPlayingRoom ? "Partida en curso" : "Sala activa"}</p>
+                <Link className="game-entry__cta" href={activeRoomHref}>Volver a la sala</Link>
+              </>
+            ) : (
+              <Link className="game-entry__cta" href="/tutti-frutti">Ir a Tutti Frutti</Link>
+            )}
+          </div>
+        </section>
       </>
     );
   }

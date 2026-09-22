@@ -33,8 +33,8 @@ function mustReject(sql, code, label) {
   throw new Error(`${label} unexpectedly succeeded.`);
 }
 
-assert(psql("select count(*) from public.rooms where game_type is null or game_type <> 'impostor'") === "0",
-  "Historical Rooms were not all backfilled to Impostor.");
+assert(psql("select count(*) from public.rooms where game_type is null or game_type not in ('impostor', 'tutti_frutti')") === "0",
+  "A Room has no valid game identity.");
 assert(psql("select count(*) from public.game_sessions gs join public.rooms r on r.id = gs.room_id where r.game_type <> 'impostor'") === "0",
   "Historical Impostor sessions changed game identity.");
 assert(psql("select attnotnull from pg_attribute where attrelid = 'public.rooms'::regclass and attname = 'game_type'") === "t",

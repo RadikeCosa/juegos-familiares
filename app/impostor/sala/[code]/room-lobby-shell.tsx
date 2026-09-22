@@ -20,6 +20,7 @@ import {
   getConnectedRoomParticipantIds,
   getMyGameState,
   getMyActiveRoom,
+  roomPath,
   refreshMyRoomLiveness,
   endSession,
   submitImpostorGuess,
@@ -2389,9 +2390,9 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
           return;
         }
 
-        if (activeLobby.room.code !== roomCode) {
+        if (activeLobby.room.gameType !== "impostor" || activeLobby.room.code !== roomCode) {
           router.replace(
-            `/impostor/sala/${encodeURIComponent(activeLobby.room.code)}`,
+            roomPath(activeLobby.room.gameType, activeLobby.room.code),
           );
 
           return;

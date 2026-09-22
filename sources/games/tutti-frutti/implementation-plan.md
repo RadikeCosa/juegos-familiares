@@ -9,15 +9,17 @@ de Impostor. Este documento organiza los cortes y registra su progreso; los
 cortes futuros no describen funcionalidades ya implementadas ni autorizan por
 sí mismos migrations remotas, deploys o cambios de producto.
 
-**Estado del Incremento 0 en la rama `codex/tutti-frutti-increment-0`:**
-implementación local preparada para auditoría. La migration se aplicó a
-Supabase local con 11 Rooms y 10 sesiones previas, sin reset; backfill,
-restricciones, lectura autorizada y regresión Impostor pasaron. El smoke en
-navegador cubrió create, recuperación e inicio/reload en partida. El cierre
-completo se validó con RPCs locales existentes, pero no con tres navegadores
-independientes; esa parte del smoke visual queda pendiente de revisión humana.
-Producción y cualquier DB remota permanecen sin cambios ni verificación de
-este incremento.
+**Estado del Incremento 0:** implementado y commiteado en
+`codex/tutti-frutti-increment-0` (`9cbe941`). La regresión automatizada pasó
+y el usuario confirmó el smoke manual de Impostor con tres identidades.
+
+**Estado del Incremento 1 en `codex/tutti-frutti-increment-1`:** create/join
+con tipo y ruteo mínimo implementados en la rama y aplicados sólo a Supabase
+local. Los tests automáticos y validadores focales pasan. La suite DB agregada
+requiere una base vacía y no corrió más allá de su precondición porque la DB
+local contiene fixtures previos; no se reseteó. El usuario confirmó que completó
+el smoke manual indicado para este corte. No se hizo push, deploy ni migration
+remota. Producción mantiene su baseline anterior.
 
 Las decisiones de producto vigentes están en `product-decisions.md`; fases en
 `game-state-model.md`; límites en `room-session-boundary.md`; requisitos en
@@ -37,11 +39,11 @@ este plan. La política de sucesión en `playing` está **CONFIRMED** en
   `player_active_room_slots` impone una Room activa por Player en
   toda la plataforma; `lobby` y `playing` son activos. Al volver de `playing`
   a `lobby`, el slot debe permanecer.
-- `create_room()` no recibe juego y `join_room_by_code(text)` aún no verifica
-  un juego esperado. `get_my_active_room()` devuelve el tipo en la rama del
-  Incremento 0. Los adaptadores y rutas
-  actuales (`lib/supabase/impostor-rooms.ts`, `app/impostor/`) se orientan a
-  Impostor. La entrada activa y el bootstrap necesitarán ruteo por tipo.
+- Las firmas antiguas `create_room()` y `join_room_by_code(text)` permanecen
+  exclusivas de Impostor. Las nuevas firmas reciben intención de juego y
+  verifican tipo, Group, lobby y slot global; `get_my_active_room()` devuelve
+  el tipo y las rutas actuales recuperan el juego correspondiente. Tutti
+  Frutti aún no tiene lobby completo ni gameplay.
 - `game_sessions` tiene `unique(room_id)` y fases de Impostor;
   `session_players` incluye datos propios de ese juego. `start_session()` crea
   roster, estado y primera ronda de Impostor; `end_session()` termina la

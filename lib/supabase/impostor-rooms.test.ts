@@ -335,6 +335,14 @@ const submitImpostorGuessRow = {
 };
 
 describe("createRoom", () => {
+    it("sends an explicit Tutti Frutti game intent and reports an active other-game conflict", async () => {
+        const supabase = { rpc: vi.fn(async () => ({ data: [singleParticipantRow], error: null })) };
+        await createRoom(supabase, "tutti_frutti");
+        expect(supabase.rpc).toHaveBeenCalledWith("create_room", { requested_game_type: "tutti_frutti" });
+
+        const conflictClient = { rpc: vi.fn(async () => ({ data: null, error: { code: "P0029" } })) };
+        await expect(createRoom(conflictClient, "tutti_frutti")).rejects.toThrow("Ya tenés una sala activa de otro juego.");
+    });
     it("calls the authoritative RPC without ownership arguments", async () => {
         const supabase = {
             rpc: vi.fn(async (_fn: string) => {
@@ -564,6 +572,16 @@ describe("one-shot room intents", () => {
 });
 
 describe("joinRoomByCode", () => {
+    it("sends the expected Tutti Frutti game and reports a same-group code for another game", async () => {
+        const supabase = { rpc: vi.fn(async () => ({ data: [singleParticipantRow], error: null })) };
+        await joinRoomByCode(supabase, " ab7kq2m4 ", "tutti_frutti");
+        expect(supabase.rpc).toHaveBeenCalledWith("join_room_by_code", {
+            room_code: "AB7KQ2M4", expected_game_type: "tutti_frutti"
+        });
+
+        const wrongGameClient = { rpc: vi.fn(async () => ({ data: null, error: { code: "P0030" } })) };
+        await expect(joinRoomByCode(wrongGameClient, "AB7KQ2M4", "tutti_frutti")).rejects.toThrow("Ese código pertenece a otro juego.");
+    });
     it("sends only the normalized room_code as product input", async () => {
         const supabase = {
             rpc: vi.fn(async (

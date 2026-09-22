@@ -2541,7 +2541,7 @@ describe("renderRoomLobbyContent", () => {
 
         expect(source).toContain("activeLobby.room.code !== roomCode");
         expect(source).toContain("router.replace(");
-        expect(source).toContain("encodeURIComponent(activeLobby.room.code)");
+        expect(source).toContain("roomPath(activeLobby.room.gameType, activeLobby.room.code)");
     });
 
     it("keeps the Realtime subscription stable across lobby refetches for the same Room", () => {

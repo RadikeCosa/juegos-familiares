@@ -105,7 +105,7 @@ describe("renderPlatformHomeContext", () => {
     expect(page.text).not.toContain("Jugar a Impostor");
     expect(page.text).not.toContain("Volver a la sala");
     expect(page.text).not.toContain("Volver a la partida");
-    expect(page.hrefs).toEqual(["/grupo"]);
+    expect(page.hrefs).toEqual(["/grupo", "/tutti-frutti"]);
   });
 
   it("links the complete compact group context and the Impostor CTA when no active Room exists", () => {
@@ -134,7 +134,7 @@ describe("renderPlatformHomeContext", () => {
     expect(markup).toContain(">Ramiro</strong><span>(Familia)</span>");
     expect(page.text).toContain("Encontrá al impostor sin revelar demasiado.");
     expect(page.text).toContain("Jugar a Impostor");
-    expect(page.hrefs).toEqual(["/grupo", "/impostor"]);
+    expect(page.hrefs).toEqual(["/grupo", "/impostor", "/tutti-frutti"]);
     expect(markup).toContain('aria-label="Abrir el grupo actual: Familia"');
   });
 
@@ -174,7 +174,7 @@ describe("renderPlatformHomeContext", () => {
     expect(lobby.text).toContain("Volver a la sala");
     expect(lobby.text).toContain("Ver Impostor");
     expect(lobby.text).not.toContain("Jugar a Impostor");
-    expect(lobby.hrefs).toEqual(["/grupo", "/impostor/sala/AB7KQ2M4", "/impostor"]);
+    expect(lobby.hrefs).toEqual(["/grupo", "/impostor/sala/AB7KQ2M4", "/impostor", "/tutti-frutti"]);
 
     expect(playing.text).toContain("Familia");
     expect(playing.text).toContain("Ramiro");
@@ -182,7 +182,22 @@ describe("renderPlatformHomeContext", () => {
     expect(playing.text).toContain("Volver a la partida");
     expect(playing.text).toContain("Ver Impostor");
     expect(playing.text).not.toContain("Jugar a Impostor");
-    expect(playing.hrefs).toEqual(["/grupo", "/impostor/sala/PLAY1234", "/impostor"]);
+    expect(playing.hrefs).toEqual(["/grupo", "/impostor/sala/PLAY1234", "/impostor", "/tutti-frutti"]);
+  });
+
+  it("routes an active Tutti Frutti Room by its persisted game identity", () => {
+    const state: PlatformBootstrapState = {
+      status: "recognized",
+      player: { id: "player-1", groupId: "group-1", nickname: "Ramiro", createdAt: "2026-08-14T12:00:00.000Z" },
+      group: { id: "group-1", name: "Familia", adminPlayerId: "player-1", createdAt: "2026-08-14T12:00:00.000Z" }
+    };
+    const page = inspect(renderPlatformHomeContext(state, {
+      status: "success",
+      room: { id: "room-2", code: "TUTT1234", status: "lobby", gameType: "tutti_frutti" }
+    }));
+
+    expect(page.hrefs).toContain("/tutti-frutti/sala/TUTT1234");
+    expect(page.hrefs).not.toContain("/impostor/sala/TUTT1234");
   });
 
   it("shows retry and a safe navigation to Impostor when active Room lookup fails", () => {
@@ -215,7 +230,7 @@ describe("renderPlatformHomeContext", () => {
     expect(page.text).toContain("Ver Impostor");
     expect(page.text).toContain("Familia");
     expect(page.text).not.toContain("Jugar a Impostor");
-    expect(page.hrefs).toEqual(["/grupo", "/impostor"]);
+    expect(page.hrefs).toEqual(["/grupo", "/impostor", "/tutti-frutti"]);
   });
 
   it("keeps loading state focused on checking the group without showing stale data", () => {

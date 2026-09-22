@@ -20,6 +20,7 @@ import {
   type RecognizedPlatformContext
 } from "../../lib/supabase/platform-bootstrap";
 import { createGetMyActiveGroupInvitationController } from "../../lib/supabase/platform-groups";
+import { roomPath } from "../../lib/supabase/impostor-rooms";
 import { shareInvitation } from "./admin-invitation-panel";
 import { ImpostorAnonymousOnboardingActions } from "./anonymous-onboarding-actions";
 
@@ -213,7 +214,7 @@ function ImpostorRecognizedContext({
           </p>
           <Link
             className="impostor-action impostor-action--primary"
-            href={`/impostor/sala/${encodeURIComponent(roomState.room.code)}`}
+            href={roomPath(roomState.room.gameType, roomState.room.code)}
           >
             {roomState.room.status === "playing"
               ? "Volver a la partida"

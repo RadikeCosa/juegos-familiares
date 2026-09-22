@@ -27,6 +27,13 @@ export type ImpostorRoomsClient = {
     ) => PromiseLike<SupabaseRpcResult<unknown>>;
 };
 
+type GameAwareRoomEntryClient = {
+    rpc: (
+        fn: "create_room" | "join_room_by_code",
+        params: { requested_game_type: RoomGameType } | { room_code: string; expected_game_type: RoomGameType }
+    ) => PromiseLike<SupabaseRpcResult<unknown>>;
+};
+
 type RealtimeChannelStatus =
     | "SUBSCRIBED"
     | "TIMED_OUT"
@@ -217,6 +224,8 @@ const MISSING_PLAYER_ROOM_ERROR =
     "No pudimos reconocer tu jugador para crear la sala.";
 const GENERIC_CREATE_ROOM_ERROR =
     "No pudimos crear la sala. Intentá de nuevo.";
+const OTHER_GAME_ACTIVE_ROOM_ERROR =
+    "Ya tenés una sala activa de otro juego. Volvé a esa sala antes de crear otra.";
 
 const UNAUTHENTICATED_JOIN_ROOM_ERROR =
     "Necesitás entrar a tu grupo antes de unirte a una sala.";
@@ -225,6 +234,7 @@ const MISSING_PLAYER_JOIN_ROOM_ERROR =
 const ROOM_NOT_FOUND_ERROR =
     "No encontramos esa sala. Revisá el código e intentá de nuevo.";
 const ROOM_CLOSED_ERROR = "Esta sala ya no está disponible.";
+const WRONG_GAME_ROOM_ERROR = "Ese código pertenece a otro juego.";
 const ALREADY_IN_ANOTHER_ROOM_ERROR = "Ya estás en otra sala.";
 const GENERIC_JOIN_ROOM_ERROR =
     "No pudimos unirte a la sala. Intentá de nuevo.";
@@ -451,6 +461,11 @@ export type RoomLobby = {
 };
 
 export type RoomGameType = "impostor" | "tutti_frutti";
+
+export function roomPath(gameType: RoomGameType, code: string): string {
+    const prefix = gameType === "impostor" ? "/impostor" : "/tutti-frutti";
+    return `${prefix}/sala/${encodeURIComponent(code)}`;
+}
 
 export type ActiveRoomLobby = RoomLobby & {
     room: RoomLobby["room"] & { gameType: RoomGameType };
@@ -791,6 +806,10 @@ function getCreateRoomErrorMessage(error: unknown) {
         if (error.code === "P0002") {
             return MISSING_PLAYER_ROOM_ERROR;
         }
+
+        if (error.code === "P0029") {
+            return OTHER_GAME_ACTIVE_ROOM_ERROR;
+        }
     }
 
     return GENERIC_CREATE_ROOM_ERROR;
@@ -816,6 +835,10 @@ function getJoinRoomErrorMessage(error: unknown) {
 
         if (error.code === "P0012") {
             return ALREADY_IN_ANOTHER_ROOM_ERROR;
+        }
+
+        if (error.code === "P0030") {
+            return WRONG_GAME_ROOM_ERROR;
         }
     }
 
@@ -2345,9 +2368,12 @@ export function startRoomHostSuccessionRecheck(
 }
 
 export async function createRoom(
-    supabase: ImpostorRoomsClient
+    supabase: ImpostorRoomsClient,
+    gameType: RoomGameType = "impostor"
 ): Promise<RoomLobby> {
-    const result = await supabase.rpc("create_room");
+    const result = gameType === "impostor"
+        ? await supabase.rpc("create_room")
+        : await (supabase as unknown as GameAwareRoomEntryClient).rpc("create_room", { requested_game_type: gameType });
 
     if (result.error) {
         throw new Error(getCreateRoomErrorMessage(result.error));
@@ -2366,12 +2392,12 @@ export function createCreateRoomController() {
     let activeRequest: Promise<RoomLobby> | null = null;
 
     return {
-        submit(supabase: ImpostorRoomsClient): Promise<RoomLobby> {
+        submit(supabase: ImpostorRoomsClient, gameType: RoomGameType = "impostor"): Promise<RoomLobby> {
             if (activeRequest) {
                 return activeRequest;
             }
 
-            activeRequest = createRoom(supabase);
+            activeRequest = createRoom(supabase, gameType);
 
             activeRequest.then(
                 () => {
@@ -2389,11 +2415,13 @@ export function createCreateRoomController() {
 
 export async function joinRoomByCode(
     supabase: ImpostorRoomsClient,
-    roomCode: string
+    roomCode: string,
+    gameType: RoomGameType = "impostor"
 ): Promise<RoomLobby> {
-    const result = await supabase.rpc("join_room_by_code", {
-        room_code: normalizeRoomJoinCode(roomCode)
-    });
+    const room_code = normalizeRoomJoinCode(roomCode);
+    const result = gameType === "impostor"
+        ? await supabase.rpc("join_room_by_code", { room_code })
+        : await (supabase as unknown as GameAwareRoomEntryClient).rpc("join_room_by_code", { room_code, expected_game_type: gameType });
 
     if (result.error) {
         throw new Error(getJoinRoomErrorMessage(result.error));
@@ -2440,12 +2468,12 @@ export function createJoinRoomByCodeController() {
     let activeRequest: Promise<RoomLobby> | null = null;
 
     return {
-        submit(supabase: ImpostorRoomsClient, roomCode: string): Promise<RoomLobby> {
+        submit(supabase: ImpostorRoomsClient, roomCode: string, gameType: RoomGameType = "impostor"): Promise<RoomLobby> {
             if (activeRequest) {
                 return activeRequest;
             }
 
-            activeRequest = joinRoomByCode(supabase, roomCode);
+            activeRequest = joinRoomByCode(supabase, roomCode, gameType);
 
             activeRequest.then(
                 () => {

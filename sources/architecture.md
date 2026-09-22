@@ -49,10 +49,13 @@ Estado autoritativo
 - uso de Realtime y Presence para su experiencia sincronizada.
 
 Cada Room persiste un `game_type` inmutable (`impostor` o `tutti_frutti`). Las
-Rooms históricas se identifican como Impostor y la creación actual sin
-argumentos continúa creando Impostor. `get_my_active_room()` devuelve ese tipo
-junto con la coordinación autorizada; todavía no hay creación, join ni rutas
-Tutti Frutti. `player_active_room_slots` sigue imponiendo una sola Room activa
+Rooms históricas se identifican como Impostor y la creación sin
+argumentos continúa creando Impostor. Las RPCs con intención de juego validan
+create/join, rechazan una Room activa de otro juego y mantienen opaco el código
+de otro Group. `get_my_active_room()` devuelve el tipo junto con la coordinación
+autorizada; la navegación recupera la ruta del juego. Tutti Frutti tiene una
+entrada y ruta de sala mínimas, sin lobby completo ni gameplay.
+`player_active_room_slots` sigue imponiendo una sola Room activa
 por Player en toda la plataforma.
 
 El gameplay permanece en cada juego. No existe un motor genérico de juegos,
