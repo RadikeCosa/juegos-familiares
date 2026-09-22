@@ -26,7 +26,7 @@ Tutti Frutti implementado en la rama y validado con Supabase local. Muestra
 host y miembros desde `get_my_active_room()`, Presence sólo como indicador,
 refetch al reconectar y acciones de salir/cerrar. El tópico Presence propio
 comprueba membresía, juego y estado. Pasaron tests y validadores focales;
-el smoke visual con dos identidades aisladas aún está pendiente. No se aplicó
+el usuario confirmó el smoke visual con dos identidades aisladas. No se aplicó
 ninguna migration remota ni se agregó gameplay.
 
 Las decisiones de producto vigentes están en `product-decisions.md`; fases en
