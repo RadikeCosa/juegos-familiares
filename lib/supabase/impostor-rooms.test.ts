@@ -944,6 +944,13 @@ function createDeferred<T>() {
 }
 
 describe("subscribeToRoomChanges", () => {
+    it("uses a separate invalidation channel for a Tutti Frutti Room", () => {
+        const channel = { on: vi.fn(() => channel), subscribe: vi.fn(() => channel) };
+        const supabase = { channel: vi.fn(() => channel), removeChannel: vi.fn(async () => "ok") };
+        subscribeToRoomChanges(supabase, "11111111-1111-4111-8111-111111111111", vi.fn(), "tutti_frutti");
+        expect(supabase.channel).toHaveBeenCalledWith("tutti-frutti-room:11111111-1111-4111-8111-111111111111");
+    });
+
     it("subscribes only to the current Room membership inserts/deletes and Room updates", () => {
         const callbacks: Array<(payload: unknown) => void> = [];
         const channel = {
@@ -3254,6 +3261,24 @@ describe("getConnectedRoomParticipantIds", () => {
 });
 
 describe("subscribeToRoomPresence", () => {
+    it("uses a separate private Presence topic for Tutti Frutti", async () => {
+        const channel = {
+            on: vi.fn(() => channel), presenceState: vi.fn(() => ({})),
+            subscribe: vi.fn(() => channel), track: vi.fn(async () => "ok"),
+            untrack: vi.fn(async () => "ok")
+        };
+        const supabase = { channel: vi.fn(() => channel), removeChannel: vi.fn(async () => "ok") };
+        const subscription = subscribeToRoomPresence(supabase, {
+            roomId: "11111111-1111-4111-8111-111111111111", currentPlayerId: "player-1",
+            gameType: "tutti_frutti", onSync: vi.fn()
+        });
+        expect(supabase.channel).toHaveBeenCalledWith(
+            "tutti-frutti-room-presence:11111111-1111-4111-8111-111111111111",
+            expect.objectContaining({ config: expect.objectContaining({ private: true }) })
+        );
+        await subscription.unsubscribe();
+    });
+
     it("uses a private Presence channel scoped by roomId and tracks only the current player id", async () => {
         const callbacks: Array<() => void> = [];
         const channel = {

@@ -11,9 +11,10 @@ flow is in `game-state-model.md`.
 
 The current repository implements Impostor gameplay only. Its `rooms` table now
 persists an immutable game type and active-Room discovery returns it; the
-zero-argument create path remains Impostor-only. Typed create/join RPCs and
-minimal Tutti Frutti entry/routing now exist on the local implementation branch;
-its lobby and gameplay remain future increments. `game_sessions.state` and
+zero-argument create path remains Impostor-only. Typed create/join RPCs,
+game-aware routing, and a Tutti Frutti coordination lobby now exist on local
+implementation branches; configuration and gameplay remain future increments.
+`game_sessions.state` and
 `session_players` contain Impostor rules. The
 source baseline and the distinction between confirmed host-succession policy,
 versioned Impostor code, and unverified deploy are recorded in
@@ -140,11 +141,13 @@ cross-group access, cross-game access, and non-roster RoomParticipants.
 
 Room Presence is an ephemeral visual signal. `last_seen_at` and its heartbeat
 are remote evidence of recent activity; neither is session participation.
-The existing `impostor-room-presence:` topic and its authorization require a
-game-aware adaptation or a separate Tutti Frutti topic without weakening
-membership checks. Realtime should notify or invalidate Room and game reads;
+The local lobby implementation uses a separate `tutti-frutti-room-presence:`
+topic. Its backend authorization checks Auth, Room membership, game identity,
+and active Room status; the existing Impostor topic remains game-scoped.
+Realtime notifies or invalidates Room reads, while a periodic refetch covers
+missed events. Future game reads must use authorized game-specific loaders;
 private answers are loaded through authorized game-specific reads, not
-published before review. Polling or explicit refetch must cover lost events.
+published before review.
 
 Host ownership remains on Room. **CONFIRMED:** in `lobby`, a liveness-valid
 RoomParticipant may succeed a stale host without a session-roster check. In

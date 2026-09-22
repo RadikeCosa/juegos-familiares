@@ -16,9 +16,10 @@ does not describe an implemented multi-game platform or prescribe SQL.
 the legacy zero-argument create still creates Impostor Rooms.
 `player_active_room_slots` permits one active Room per Player.
 `get_my_active_room()` returns the authorized Room's game identity with its
-coordination fields and participants. The local Increment 1 branch adds typed
-create/join and minimal game-aware routing; Tutti Frutti lobby and gameplay
-are not implemented yet. The current `game_sessions.state` holds
+coordination fields and participants. Local implementation branches add typed
+create/join, game-aware routing, and a Tutti Frutti coordination lobby with
+member-only Presence; configuration and gameplay are not implemented yet.
+The current `game_sessions.state` holds
 Impostor phases and permits only one session per Room; `session_players`
 includes Impostor scoring data. Impostor's `end_session()` closes its Room.
 These facts come from the current migrations and client, not a verified remote

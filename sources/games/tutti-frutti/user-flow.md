@@ -21,6 +21,11 @@ It focuses on:
 
 It intentionally avoids defining persistence or database implementation details.
 
+Current local implementation reaches the lobby: players can see the code,
+members, host, and visual connection indicators, recover on refresh, leave,
+or close as host. Configuration, start, and all gameplay steps below describe
+planned later increments.
+
 ---
 
 # 2. Entry Point

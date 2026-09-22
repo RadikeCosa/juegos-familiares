@@ -21,6 +21,14 @@ local contiene fixtures previos; no se reseteó. El usuario confirmó que comple
 el smoke manual indicado para este corte. No se hizo push, deploy ni migration
 remota. Producción mantiene su baseline anterior.
 
+**Estado del Incremento 2 en `codex/tutti-frutti-increment-2`:** lobby
+Tutti Frutti implementado en la rama y validado con Supabase local. Muestra
+host y miembros desde `get_my_active_room()`, Presence sólo como indicador,
+refetch al reconectar y acciones de salir/cerrar. El tópico Presence propio
+comprueba membresía, juego y estado. Pasaron tests y validadores focales;
+el smoke visual con dos identidades aisladas aún está pendiente. No se aplicó
+ninguna migration remota ni se agregó gameplay.
+
 Las decisiones de producto vigentes están en `product-decisions.md`; fases en
 `game-state-model.md`; límites en `room-session-boundary.md`; requisitos en
 `technical-requirements.md`; el esquema de `physical-data-model.md` es una
@@ -48,8 +56,9 @@ este plan. La política de sucesión en `playing` está **CONFIRMED** en
   `session_players` incluye datos propios de ese juego. `start_session()` crea
   roster, estado y primera ronda de Impostor; `end_session()` termina la
   sesión y cierra la Room. Esas tablas y RPCs siguen siendo de Impostor.
-- Presence usa el tópico `impostor-room-presence:` y liveness persistida en
-  `room_participants.last_seen_at`. La UI relee estado autorizado al cargar,
+- Presence usa tópicos separados `impostor-room-presence:` y
+  `tutti-frutti-room-presence:`, autorizados por juego y membresía, y liveness
+  persistida en `room_participants.last_seen_at`. La UI relee estado autorizado al cargar,
   volver al foreground, recuperar red y recibir cambios; Realtime invalida,
   no autoriza. El RPC de sucesión tiene rama `playing` ligada al roster de
   `session_players`; esto es evidencia de código versionado, no de despliegue.

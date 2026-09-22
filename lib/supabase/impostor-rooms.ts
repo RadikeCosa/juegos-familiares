@@ -2054,6 +2054,7 @@ export function subscribeToRoomPresence(
     options: {
         roomId: string;
         currentPlayerId: string;
+        gameType?: RoomGameType;
         onSync: (presenceState: RoomPresenceState) => void;
         onSubscribed?: () => void;
         onError?: (error: unknown) => void;
@@ -2062,7 +2063,7 @@ export function subscribeToRoomPresence(
     let isDisposed = false;
     let activeTrackRequest: Promise<void> | null = null;
     const channel = supabase
-        .channel(`impostor-room-presence:${options.roomId}`, {
+        .channel(`${options.gameType === "tutti_frutti" ? "tutti-frutti" : "impostor"}-room-presence:${options.roomId}`, {
             config: {
                 private: true,
                 presence: {
@@ -2762,12 +2763,13 @@ export type RoomChangesSubscription = {
 export function subscribeToRoomChanges(
     supabase: ImpostorRoomChangesClient,
     roomId: string,
-    onInvalidate: () => void
+    onInvalidate: () => void,
+    gameType: RoomGameType = "impostor"
 ): RoomChangesSubscription {
     let lastStatus: RealtimeChannelStatus | null = null;
     const encodedRoomId = roomId.replaceAll(",", "%2C");
     const channel = supabase
-        .channel(`impostor-room:${roomId}`)
+        .channel(`${gameType === "tutti_frutti" ? "tutti-frutti" : "impostor"}-room:${roomId}`)
         .on(
             "postgres_changes",
             {

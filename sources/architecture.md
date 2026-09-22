@@ -54,7 +54,8 @@ argumentos continúa creando Impostor. Las RPCs con intención de juego validan
 create/join, rechazan una Room activa de otro juego y mantienen opaco el código
 de otro Group. `get_my_active_room()` devuelve el tipo junto con la coordinación
 autorizada; la navegación recupera la ruta del juego. Tutti Frutti tiene una
-entrada y ruta de sala mínimas, sin lobby completo ni gameplay.
+entrada y lobby de coordinación con un tópico Presence propio autorizado por
+membresía, sin configuración ni gameplay.
 `player_active_room_slots` sigue imponiendo una sola Room activa
 por Player en toda la plataforma.
 

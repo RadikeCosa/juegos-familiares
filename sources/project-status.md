@@ -125,7 +125,10 @@ manual completo de Impostor. El Incremento 1 está implementado sólo en la rama
 local `codex/tutti-frutti-increment-1` y Supabase local: create/join validan
 el tipo de juego, la entrada distingue ambos juegos y discovery recupera la
 ruta correspondiente. El usuario confirmó el smoke manual de este incremento;
-no hay gameplay de Tutti Frutti. La baseline productiva indicada arriba no cambió.
+no hay gameplay de Tutti Frutti. El Incremento 2 agrega en la rama local
+`codex/tutti-frutti-increment-2` un lobby con host, miembros, Presence visual
+y salida/cierre; tests y validadores DB locales pasaron, y el smoke visual de
+dos identidades sigue pendiente. La baseline productiva indicada arriba no cambió.
 
 Only observations confirmed against the current product should become active
 improvement work. Historical UX findings are evidence to revalidate, not an
