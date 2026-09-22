@@ -136,6 +136,8 @@ describe("renderPlatformHomeContext", () => {
     expect(page.text).toContain("Jugar a Impostor");
     expect(page.hrefs).toEqual(["/grupo", "/impostor", "/tutti-frutti"]);
     expect(markup).toContain('aria-label="Abrir el grupo actual: Familia"');
+    expect(markup).toContain('class="game-entry__art game-entry__art--tutti-frutti"');
+    expect(markup).toContain('<svg viewBox="0 0 96 96"');
   });
 
   it("links directly to active lobby and playing Rooms while keeping identity and a secondary Impostor link", () => {

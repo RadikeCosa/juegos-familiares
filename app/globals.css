@@ -320,6 +320,17 @@ body {
   background: var(--accent);
 }
 
+.game-entry__art--tutti-frutti {
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  color: var(--primary-foreground);
+}
+
+.game-entry__art--tutti-frutti svg {
+  width: 100%;
+  height: 100%;
+}
+
 .game-entry__content {
   display: grid;
   align-content: center;

@@ -147,6 +147,14 @@ export function renderPlatformHomeContext(
         {identity}
         {renderImpostorGameEntry(cardContent)}
         <section className="game-entry" aria-labelledby="tutti-frutti-entry-title">
+          <div className="game-entry__art game-entry__art--tutti-frutti" aria-hidden="true">
+            <svg viewBox="0 0 96 96" fill="none" focusable="false">
+              <path d="M48 27c2-10 8-15 17-16" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+              <path d="M53 24c6-9 15-12 24-9-4 9-12 14-24 9Z" fill="var(--accent)" />
+              <circle cx="48" cy="56" r="28" fill="currentColor" />
+              <path d="M48 37v38M29 56h38M35 43l26 26M61 43 35 69" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" />
+            </svg>
+          </div>
           <div className="game-entry__content">
             <p className="game-entry__label">Juegos</p>
             <h2 id="tutti-frutti-entry-title">Tutti Frutti</h2>
