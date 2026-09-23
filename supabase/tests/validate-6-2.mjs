@@ -420,6 +420,42 @@ async function main() {
     where room_id = ${sqlString(roomAId)}::uuid
       and player_id = ${sqlString(playerBId)}::uuid;
   `);
+  const playingGameSessionId = psql(`
+    select id
+    from public.game_sessions
+    where room_id = ${sqlString(roomAId)}::uuid
+      and group_id = ${sqlString(groupA.group_id)}::uuid
+    order by started_at desc, id desc
+    limit 1;
+  `);
+  psql(`
+    insert into public.room_sessions (
+      id,
+      room_id,
+      group_id,
+      game_type,
+      started_at,
+      finished_at,
+      impostor_game_session_id
+    )
+    select
+      game_sessions.id,
+      game_sessions.room_id,
+      game_sessions.group_id,
+      'impostor',
+      game_sessions.started_at,
+      game_sessions.finished_at,
+      game_sessions.id
+    from public.game_sessions
+    where game_sessions.id = ${sqlString(playingGameSessionId)}::uuid;
+
+    insert into public.room_session_participants (session_id, group_id, player_id)
+    select session_players.game_session_id,
+           session_players.group_id,
+           session_players.player_id
+    from public.session_players
+    where session_players.game_session_id = ${sqlString(playingGameSessionId)}::uuid;
+  `);
   const { data: successionRows, error: successionError } =
     await playerB.client.rpc("reassign_room_host_if_stale");
   assert(!successionError, "Host succession should run in playing.");

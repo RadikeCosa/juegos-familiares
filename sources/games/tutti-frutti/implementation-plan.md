@@ -40,6 +40,21 @@ locales detectó dos sesiones Impostor abiertas en Rooms `closed`; se reseteó l
 base local controlada, se reaplicaron todas las migrations y el validador de
 schema/RLS/backfill pasó sin fixtures cargados.
 
+**Estado del Incremento 4 en `codex/tutti-frutti-increment-4`:** `start_session()`
+y `end_session()` conservan sus contratos y state machine de Impostor, y ahora
+espejan sesiones y roster neutral dentro de la misma transacción. Los
+validadores locales de inicio y fin, la igualdad de IDs/rosters y los
+timestamps compartidos pasan. No se aplicó ninguna migration remota ni se
+consume `room_sessions` desde la aplicación.
+
+La migration del Incremento 5 agrega la compatibilidad legacy necesaria para
+sesiones iniciadas antes del espejo y distingue sus errores de consistencia
+mediante mensajes/`DETAIL` específicos, manteniendo `P0022`. La RPC de
+sucesión local ahora usa `room_session_participants` durante `playing`, con
+selección determinista por `joined_at` y `player_id`, liveness autoritativa y
+fallo explícito ante ausencia o divergencia del espejo. El validador local de
+sucesión pasa; producción y la definición desplegada siguen sin verificarse.
+
 Las decisiones de producto vigentes están en `product-decisions.md`; fases en
 `game-state-model.md`; límites en `room-session-boundary.md`; requisitos en
 `technical-requirements.md`; el esquema de `physical-data-model.md` es una

@@ -141,6 +141,20 @@ se aplicó correctamente; el validador de schema/RLS/backfill pasó con la base
 sin fixtures cargados. Las dos inconsistencias pertenecían a los fixtures
 anteriores y no fueron corregidas automáticamente.
 
+El Incremento 4 está implementado en la rama local
+`codex/tutti-frutti-increment-4`: las RPC de inicio y fin de Impostor
+mantienen sus contratos y espejan atómicamente `room_sessions` y
+`room_session_participants`. Los validadores locales de inicio/fin y las
+invariantes de igualdad pasan. Producción no fue modificada y la aplicación
+todavía no consume el modelo compartido.
+
+El Incremento 5 está implementado localmente sobre esa base: la compatibilidad
+legacy de inicio/fin crea el espejo sólo con identidad y roster exactos, y la
+sucesión durante `playing` consulta el roster neutral con selección
+determinista. Los errores de espejo y cardinalidad usan `P0022` con `DETAIL`
+distinto por causa. La validación remota de la RPC desplegada sigue pendiente;
+no se modificó producción.
+
 Only observations confirmed against the current product should become active
 improvement work. Historical UX findings are evidence to revalidate, not an
 automatic backlog. No additional detailed post-beta UX/UI backlog is established
