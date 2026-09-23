@@ -130,6 +130,17 @@ no hay gameplay de Tutti Frutti. El Incremento 2 agrega en la rama local
 y salida/cierre; tests y validadores DB locales pasaron, y el smoke visual de
 dos identidades fue confirmado por el usuario. La baseline productiva indicada arriba no cambió.
 
+El Incremento 3 está implementado en la rama local
+`codex/tutti-frutti-increment-3`: agrega identidad neutral de sesión y roster
+con backfill local transaccional, sin cambiar los escritores de Impostor ni
+consumir `room_sessions`. El preflight remoto no pudo realizarse por falta de
+un proyecto Supabase autenticado y confirmado; producción no fue inspeccionada
+ni modificada. El espejo transaccional de nuevas sesiones queda para el
+Incremento 4. La base local fue reseteada de forma controlada y la migration
+se aplicó correctamente; el validador de schema/RLS/backfill pasó con la base
+sin fixtures cargados. Las dos inconsistencias pertenecían a los fixtures
+anteriores y no fueron corregidas automáticamente.
+
 Only observations confirmed against the current product should become active
 improvement work. Historical UX findings are evidence to revalidate, not an
 automatic backlog. No additional detailed post-beta UX/UI backlog is established

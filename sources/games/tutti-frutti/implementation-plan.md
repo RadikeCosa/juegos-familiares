@@ -29,6 +29,17 @@ comprueba membresía, juego y estado. Pasaron tests y validadores focales;
 el usuario confirmó el smoke visual con dos identidades aisladas. No se aplicó
 ninguna migration remota ni se agregó gameplay.
 
+**Estado del Incremento 3 en `codex/tutti-frutti-increment-3`:** identidad
+neutral de sesión y roster Impostor implementados en una migration local con
+backfill transaccional, vínculo formal a `game_sessions`, RLS cerrada y sin
+Realtime nuevo. El preflight remoto quedó bloqueado porque no hay un proyecto
+Supabase autenticado y confirmado disponible en el entorno; no se inspeccionó
+ni modificó producción. `room_sessions` no se consume y las escrituras de
+Impostor no se espejan hasta el Incremento 4. El preflight de los fixtures
+locales detectó dos sesiones Impostor abiertas en Rooms `closed`; se reseteó la
+base local controlada, se reaplicaron todas las migrations y el validador de
+schema/RLS/backfill pasó sin fixtures cargados.
+
 Las decisiones de producto vigentes están en `product-decisions.md`; fases en
 `game-state-model.md`; límites en `room-session-boundary.md`; requisitos en
 `technical-requirements.md`; el esquema de `physical-data-model.md` es una

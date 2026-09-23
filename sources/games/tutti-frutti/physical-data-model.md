@@ -9,6 +9,12 @@ decisions are in `product-decisions.md`; shared/game ownership is in
 `technical-requirements.md`. `OPEN` items must not be silently decided by a
 migration.
 
+The Increment 3 local migration applies the recommended minimal session
+identity and Impostor backfill with explicit linkage, atomic retry checks, and
+closed-by-default access. It is not a production baseline: remote preflight
+was unavailable, new writers are not mirrored until Increment 4, and the
+application does not consume `room_sessions` yet.
+
 The design must allow multiple sequential Tutti Frutti sessions in one Room,
 preserve one active Room per Player, prevent simultaneous sessions in one
 Room, and keep the current Impostor session and close-on-finish behavior.

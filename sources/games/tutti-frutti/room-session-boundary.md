@@ -25,6 +25,12 @@ includes Impostor scoring data. Impostor's `end_session()` closes its Room.
 These facts come from the current migrations and client, not a verified remote
 database.
 
+Increment 3 adds the neutral `room_sessions` and
+`room_session_participants` tables locally and backfills existing Impostor
+sessions with an explicit `game_sessions` link. The tables are not consumed by
+the application and do not mirror new writes until Increment 4; production was
+not inspected or modified.
+
 ## Ownership
 
 | Concept | Owns | Does not own |
