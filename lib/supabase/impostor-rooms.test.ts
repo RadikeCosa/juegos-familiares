@@ -945,11 +945,31 @@ function createDeferred<T>() {
 
 describe("subscribeToRoomChanges", () => {
     it("uses a separate invalidation channel for a Tutti Frutti Room", () => {
-        const channel = { on: vi.fn(() => channel), subscribe: vi.fn(() => channel) };
-        const supabase = { channel: vi.fn(() => channel), removeChannel: vi.fn(async () => "ok") };
-        subscribeToRoomChanges(supabase, "11111111-1111-4111-8111-111111111111", vi.fn(), "tutti_frutti");
-        expect(supabase.channel).toHaveBeenCalledWith("tutti-frutti-room:11111111-1111-4111-8111-111111111111");
-    });
+    const channel = { on: vi.fn(() => channel), subscribe: vi.fn(() => channel) };
+    const supabase = { channel: vi.fn(() => channel), removeChannel: vi.fn(async () => "ok") };
+    subscribeToRoomChanges(supabase, "11111111-1111-4111-8111-111111111111", vi.fn(), "tutti_frutti");
+    expect(supabase.channel).toHaveBeenCalledWith("tutti-frutti-room:11111111-1111-4111-8111-111111111111");
+    expect(channel.on).toHaveBeenCalledWith(
+        "postgres_changes",
+        {
+            event: "INSERT",
+            schema: "public",
+            table: "tutti_frutti_room_setup",
+            filter: "room_id=eq.11111111-1111-4111-8111-111111111111"
+        },
+        expect.any(Function)
+    );
+    expect(channel.on).toHaveBeenCalledWith(
+        "postgres_changes",
+        {
+            event: "UPDATE",
+            schema: "public",
+            table: "tutti_frutti_room_setup",
+            filter: "room_id=eq.11111111-1111-4111-8111-111111111111"
+        },
+        expect.any(Function)
+    );
+  });
 
     it("subscribes only to the current Room membership inserts/deletes and Room updates", () => {
         const callbacks: Array<(payload: unknown) => void> = [];

@@ -46,7 +46,7 @@ type RealtimeChannel = {
         filter: {
             event: "INSERT" | "UPDATE" | "DELETE";
             schema: "public";
-            table: "room_participants" | "rooms";
+            table: "room_participants" | "rooms" | "tutti_frutti_room_setup";
             filter: string;
         },
         callback: (payload: unknown) => void
@@ -2768,7 +2768,7 @@ export function subscribeToRoomChanges(
 ): RoomChangesSubscription {
     let lastStatus: RealtimeChannelStatus | null = null;
     const encodedRoomId = roomId.replaceAll(",", "%2C");
-    const channel = supabase
+    const roomChannel = supabase
         .channel(`${gameType === "tutti_frutti" ? "tutti-frutti" : "impostor"}-room:${roomId}`)
         .on(
             "postgres_changes",
@@ -2799,8 +2799,33 @@ export function subscribeToRoomChanges(
                 filter: `id=eq.${encodedRoomId}`
             },
             () => onInvalidate()
-        )
-        .subscribe((status) => {
+        );
+
+    const setupChannel = gameType === "tutti_frutti"
+        ? roomChannel
+            .on(
+                "postgres_changes",
+                {
+                    event: "INSERT",
+                    schema: "public",
+                    table: "tutti_frutti_room_setup",
+                    filter: `room_id=eq.${encodedRoomId}`
+                },
+                () => onInvalidate()
+            )
+            .on(
+                "postgres_changes",
+                {
+                    event: "UPDATE",
+                    schema: "public",
+                    table: "tutti_frutti_room_setup",
+                    filter: `room_id=eq.${encodedRoomId}`
+                },
+                () => onInvalidate()
+            )
+        : roomChannel;
+
+    const channel = setupChannel.subscribe((status) => {
             if (status === "SUBSCRIBED" && lastStatus && lastStatus !== "SUBSCRIBED") {
                 onInvalidate();
             }
