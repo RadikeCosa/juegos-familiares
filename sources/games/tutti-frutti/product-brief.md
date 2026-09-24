@@ -96,13 +96,13 @@ Object: Mesa
 
 The number of rounds should be configured before the game starts.
 
-Initial candidate presets:
+Available presets:
 
 * 3 rounds
 * 5 rounds
 * 10 rounds
 
-The exact presets remain an implementation-level decision.
+The available presets are 3, 5, and 10 rounds. The initial selection is 5.
 
 ---
 
@@ -115,6 +115,10 @@ Configuration includes at minimum:
 * number of rounds;
 * active categories;
 * custom categories, if any.
+
+The host saves the complete configuration explicitly while the Room is in the
+lobby. Before its first save, all Room members see the same suggested defaults
+without a persisted configuration row.
 
 Once the game begins, the configuration should remain fixed for all rounds.
 
@@ -130,7 +134,7 @@ This avoids inconsistencies between players and keeps scoring comparable through
 
 The game should provide a useful predefined category pool.
 
-Initial candidates include:
+The initial preset catalog is:
 
 * Name
 * Animal
@@ -143,9 +147,10 @@ Initial candidates include:
 * Famous person
 * Movie or series
 
-The final initial catalog does not need to be large.
-
 Players should be able to select which preset categories are active for a particular game.
+
+Each game uses between 3 and 6 categories total, including custom categories.
+The initial selection suggests Name, Animal, Food, Place, and Object.
 
 ---
 
@@ -600,6 +605,12 @@ The following decisions are currently considered established:
 23. The latest persisted answers are used if a player does not reconnect before lock.
 24. A finished Tutti Frutti session is immutable and returns its Room to lobby.
 25. A rematch creates a new session in that same Room; closing the Room is separate.
+26. The initial preset catalog contains Name, Animal, Food, Place, Object, Country, City, Profession, Famous person, and Movie or series, in that order.
+27. A game uses 3 to 6 active categories total; the suggested five are Name, Animal, Food, Place, and Object.
+28. Custom category names are game-local, trimmed and normalized to NFC, and must contain 1–40 printable Unicode characters without control characters.
+29. Category names are unique ignoring case and surrounding whitespace, including against every preset in the catalog; accent differences remain distinct.
+30. The round-count options are 3, 5, and 10, with 5 selected initially.
+31. Lobby defaults are visible to all members before the host's first explicit save and do not create a persisted row.
 
 ---
 
@@ -610,7 +621,6 @@ The following are preferred directions but should still be validated during deta
 * “Tutti Frutti” can only be called after all category fields contain an answer.
 * the countdown lasts 45 seconds;
 * the letter-skip window lasts 10 seconds;
-* preset round counts may initially be 3, 5, and 10.
 
 ---
 
@@ -622,13 +632,6 @@ The next design phase should resolve:
 
 * How should mutual agreement be captured for a two-player challenge?
 * Who is eligible for early close when presence changes during the countdown?
-
-### Categories
-
-* What is the initial preset category catalog?
-* Is there a maximum number of active categories?
-* Is there a maximum number of custom categories?
-* Are duplicate custom category names allowed?
 
 ### Letters
 

@@ -157,6 +157,23 @@ The initial product should support:
 * selectable preset categories;
 * simple custom categories defined for the current game.
 
+The initial preset catalog is Name, Animal, Food, Place, Object, Country,
+City, Profession, Famous person, and Movie or series, in that order. A game
+uses 3–6 active categories total, including custom categories, and initially
+suggests Name, Animal, Food, Place, and Object.
+
+Custom names are game-local, trimmed and normalized to NFC, and contain 1–40
+printable Unicode characters without control characters. Names are unique
+ignoring case and surrounding whitespace against every preset and every other
+custom name; comparisons distinguish accents. There is no separate custom
+category allowance beyond the six-category total.
+
+Before the host's first explicit save, the defaults are visible to all Room
+members without creating a persisted row. The host can save only in `lobby`;
+members can read the last confirmed configuration after the Room leaves lobby.
+Realtime changes invalidate server state. An unsaved local draft remains
+visible and is marked stale until the host reloads or saves successfully.
+
 ## Rationale
 
 Category choice is central to the identity of Tutti Frutti.
@@ -242,15 +259,15 @@ Each round uses:
 
 The host selects the number of rounds before starting.
 
-## Current Hypothesis
+## Decision
 
-Candidate presets:
+Available presets:
 
 * 3 rounds;
 * 5 rounds;
 * 10 rounds.
 
-The exact preset options are not yet considered a critical product decision.
+The initial selection is 5 rounds.
 
 ---
 
@@ -1080,13 +1097,6 @@ The following details remain intentionally unresolved:
 
 * exact Spanish default letter set;
 * treatment of difficult letters.
-
-## Categories
-
-* final preset category catalog;
-* maximum active category count;
-* maximum custom category count;
-* duplicate category-name handling.
 
 ## Review UX
 

@@ -119,41 +119,34 @@ already owned by the roadmap above.
 
 ## Current improvement work
 
-El Incremento 0 de la arquitectura multi-game está commiteado en
-`codex/tutti-frutti-increment-0` (`9cbe941`); el usuario confirmó el smoke
-manual completo de Impostor. El Incremento 1 está implementado sólo en la rama
-local `codex/tutti-frutti-increment-1` y Supabase local: create/join validan
-el tipo de juego, la entrada distingue ambos juegos y discovery recupera la
-ruta correspondiente. El usuario confirmó el smoke manual de este incremento;
-no hay gameplay de Tutti Frutti. El Incremento 2 agrega en la rama local
-`codex/tutti-frutti-increment-2` un lobby con host, miembros, Presence visual
-y salida/cierre; tests y validadores DB locales pasaron, y el smoke visual de
-dos identidades fue confirmado por el usuario. La baseline productiva indicada arriba no cambió.
+El `main` local integra los Incrementos 0–6 de Tutti Frutti y el traslado de
+la gestión de grupos a la portada. Este estado de código local no equivale a
+una publicación: la baseline productiva indicada arriba no cambió y no se
+aplicaron migrations remotas.
 
-El Incremento 3 está implementado en la rama local
-`codex/tutti-frutti-increment-3`: agrega identidad neutral de sesión y roster
-con backfill local transaccional, sin cambiar los escritores de Impostor ni
-consumir `room_sessions`. El preflight remoto no pudo realizarse por falta de
-un proyecto Supabase autenticado y confirmado; producción no fue inspeccionada
-ni modificada. El espejo transaccional de nuevas sesiones queda para el
-Incremento 4. La base local fue reseteada de forma controlada y la migration
-se aplicó correctamente; el validador de schema/RLS/backfill pasó con la base
-sin fixtures cargados. Las dos inconsistencias pertenecían a los fixtures
-anteriores y no fueron corregidas automáticamente.
+Los Incrementos 0–4 introducen el tipo de juego, create/join y lobby Tutti,
+identidad y roster neutral, y el espejo transaccional de inicio/fin Impostor.
+Sus migrations están en la historia local de `main`; el smoke de Impostor y
+las pruebas focalizadas descritas en los cortes fueron confirmados en sus
+respectivos incrementos.
 
-El Incremento 4 está implementado en la rama local
-`codex/tutti-frutti-increment-4`: las RPC de inicio y fin de Impostor
-mantienen sus contratos y espejan atómicamente `room_sessions` y
-`room_session_participants`. Los validadores locales de inicio/fin y las
-invariantes de igualdad pasan. Producción no fue modificada y la aplicación
-todavía no consume el modelo compartido.
+El Incremento 5 implementa localmente la compatibilidad de sesiones legacy y
+sucesión de host en `playing` contra el roster neutral. Su validación remota
+de la RPC desplegada sigue pendiente; no se inspeccionó ni modificó
+producción. Esta verificación continúa siendo una brecha antes de atribuir el
+comportamiento al despliegue.
 
-El Incremento 5 está implementado localmente sobre esa base: la compatibilidad
-legacy de inicio/fin crea el espejo sólo con identidad y roster exactos, y la
-sucesión durante `playing` consulta el roster neutral con selección
-determinista. Los errores de espejo y cardinalidad usan `P0022` con `DETAIL`
-distinto por causa. La validación remota de la RPC desplegada sigue pendiente;
-no se modificó producción.
+El Incremento 6 agrega una configuración Tutti por Room, guardada como un
+borrador JSONB atómico, con lectura de defaults sin fila persistida, escritura
+autorizada sólo para el host en lobby, validación en DB y actualización por
+Realtime. El código y la migration están integrados en el `main` local. El
+usuario confirmó la comprobación manual completa con dos identidades. No se
+aplicó la migration fuera de Supabase local.
+
+La portada local ahora gestiona creación y unión al grupo, integrantes e
+invitación de administración; Impostor conserva sus salas y su banco de
+palabras. Las pruebas automatizadas focalizadas, TypeScript y lint pasaron
+para ese cambio; no se hizo una comprobación visual manual en dos navegadores.
 
 Only observations confirmed against the current product should become active
 improvement work. Historical UX findings are evidence to revalidate, not an

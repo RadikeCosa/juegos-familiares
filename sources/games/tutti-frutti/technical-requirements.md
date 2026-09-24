@@ -2,18 +2,18 @@
 
 ## Purpose and authority
 
-This document is a proposed implementation contract, not an implemented
-system. `CONFIRMED` means a product decision in `product-decisions.md`;
-`RECOMMENDED` means a technical design choice to review before migrations;
-`OPEN` means an unresolved product or policy question. The proposed physical
-representation and alternatives are in `physical-data-model.md`; the domain
-flow is in `game-state-model.md`.
+This document specifies requirements for the Tutti Frutti gameplay that is
+still to be implemented. `CONFIRMED` means a product decision in
+`product-decisions.md`; `RECOMMENDED` means a technical design choice to review
+before migrations; `OPEN` means an unresolved product or policy question. The
+proposed physical representation and alternatives are in
+`physical-data-model.md`; the domain flow is in `game-state-model.md`.
 
-The current repository implements Impostor gameplay only. Its `rooms` table now
-persists an immutable game type and active-Room discovery returns it; the
-zero-argument create path remains Impostor-only. Typed create/join RPCs,
-game-aware routing, and a Tutti Frutti coordination lobby now exist on local
-implementation branches; configuration and gameplay remain future increments.
+The current local `main` implements Impostor gameplay, game-aware Room
+routing, a Tutti Frutti coordination lobby, and shared lobby configuration.
+The `rooms` table persists an immutable game type and active-Room discovery
+returns it; the zero-argument create path remains Impostor-only. Tutti Frutti
+session start and gameplay remain future increments.
 `game_sessions.state` and
 `session_players` contain Impostor rules. The
 source baseline and the distinction between confirmed host-succession policy,
@@ -78,8 +78,9 @@ product decision, not an implied result of multi-session Rooms.
 1. A Room-level draft configuration may be edited in `lobby`; the game start
    copies its round count, ordered categories, custom labels, and playable
    letter pool into an immutable session snapshot. Session data never depends
-   on later app defaults or on mutable lobby configuration. Exact category
-   catalog and limits remain `OPEN`.
+   on later app defaults or on mutable lobby configuration. The initial
+   category catalog, 3–6 active-category limit, custom-name validation, and
+   3/5/10 round options are confirmed in `product-decisions.md`.
 2. One round number represents one scored letter cycle. Skipping candidate
    letters does not increment that number. Every played or skipped letter is
    excluded from future selection within that session. A server-chosen
@@ -194,8 +195,8 @@ authorization and destination confirmation.
 `OPEN`: who initiates a rematch, whether it is host-only, configuration
 preselection, departure between matches, and post-game lobby UI; challenge
 voter eligibility and timeout/abstention on disconnect; early-close
-eligibility under changing Presence; exact category and letter catalog and
-limits; normalization beyond trim/case; review ordering; and the precise
+eligibility under changing Presence; exact letter pool; normalization beyond
+trim/case; review ordering; and the precise
 individual-completion interaction. These must be resolved before implementing
 the transitions they govern. They do not change the confirmed Session-finish
 and Room-return lifecycle.

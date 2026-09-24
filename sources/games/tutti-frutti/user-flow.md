@@ -21,10 +21,11 @@ It focuses on:
 
 It intentionally avoids defining persistence or database implementation details.
 
-Current local implementation reaches the lobby: players can see the code,
-members, host, and visual connection indicators, recover on refresh, leave,
-or close as host. Configuration, start, and all gameplay steps below describe
-planned later increments.
+Current local implementation reaches the shared lobby and configuration:
+players can see the code, members, host, and visual connection indicators,
+recover on refresh, leave, or close as host. The host can configure and save
+rounds and categories; members see the last confirmed configuration. Starting
+the game and all later gameplay steps below describe planned increments.
 
 ---
 
@@ -119,14 +120,16 @@ Expected flow:
 ```text
 Lobby
   ↓
-Host configures game
+Host reviews shared defaults or edits configuration
   ↓
-Configuration saved
+If edited, host explicitly saves and members see the confirmed configuration
   ↓
-Host starts game
+Host starts with a valid configuration
 ```
 
-The game cannot start until configuration is valid.
+Before the first save, all members see the same defaults without a persisted
+configuration row. Reading those defaults does not write the draft. The game
+cannot start until its effective configuration is valid.
 
 ---
 
@@ -134,9 +137,14 @@ The game cannot start until configuration is valid.
 
 The host configures:
 
-* number of rounds;
-* active preset categories;
-* custom categories.
+* 3, 5, or 10 rounds (5 selected initially);
+* 3–6 active categories total, including custom categories;
+* preset or game-local custom categories.
+
+The preset catalog, validation rules, and selected defaults are defined in
+`product-decisions.md`. A successful save adopts the server response. Realtime
+invalidates the displayed state for other members; an unsaved host draft is
+kept and marked stale until the host reloads or saves successfully.
 
 Example:
 

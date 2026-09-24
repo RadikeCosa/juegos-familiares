@@ -1105,16 +1105,18 @@ ROUND: LETTER_PENDING
 * the latest persisted answers are used if the player does not reconnect before lock.
 * a finished Tutti Frutti session is immutable, its Room returns to `lobby`,
   and a rematch in that Room creates a new session; closing the Room is separate.
+* the initial category catalog and 3–6 category limit, custom-name rules, and
+  3/5/10 round options with 5 selected initially are confirmed in
+  `product-decisions.md`.
 
 `WORKING HYPOTHESIS`:
 
 * 10-second letter-skip window and 45-second final countdown;
 * all active category answers must be non-empty to call Tutti Frutti, pending gameplay validation;
-* proposed 3/5/10 round-count presets.
 
 `OPEN` before the corresponding implementation increment:
 
-* exact letter pool and category catalog or limits;
+* exact letter pool;
 * eligibility for early close when presence changes, without removing participation;
 * challenge voter eligibility, quorum, timeout or abstention during disconnect;
 * whether an individual completion indication can be reversed before lock (the countdown cannot);

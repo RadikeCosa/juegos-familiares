@@ -109,11 +109,16 @@ added after backfill. No historical migration is rewritten.
 
 ## Tutti Frutti entity candidates
 
+Increment 6 implements `tutti_frutti_room_setup` locally as one Room-scoped
+JSONB row, with atomic replacement, host-only writes in `lobby`, member reads,
+and defaults returned without persisting a row. The session and gameplay
+entities below remain design candidates for later increments.
+
 | Candidate | Persist or derive? | Relationships and invariant |
 | --- | --- | --- |
-| `tutti_frutti_room_setup` | Persist a Room-scoped lobby draft. A small ordered category list can be JSON here because it is editable draft input, not history or an authorization boundary. | One draft per Tutti Frutti Room; editable only by authorized actor under the eventual product rule while Room is `lobby`. Store round count and selected/custom category labels. Prior-value preselection remains `OPEN`. |
+| `tutti_frutti_room_setup` | Implemented in Increment 6 as one Room-scoped JSONB draft. | One row per Tutti Frutti Room; host-only writes while Room is `lobby`; member reads remain available later. Each save atomically replaces rounds and ordered preset/custom categories. Defaults are returned without a row. Prior-value preselection remains `OPEN`. |
 | `tutti_frutti_sessions` | Persist one game-specific snapshot keyed by the shared `room_sessions.id`. | Immutable configured round count, letter-pool snapshot, scoring/normalization rule version, and any game-specific configuration. No Impostor phase. |
-| `tutti_frutti_session_categories` | Persist ordered snapshot rows. | Belong to one Tutti Frutti session; immutable after start; unique position per session. Store display label and optional preset source key so later catalog edits cannot alter history. Limits and duplicate-name policy remain `OPEN`. |
+| `tutti_frutti_session_categories` | Persist ordered snapshot rows at game start. | Belong to one Tutti Frutti session; immutable after start; unique position per session. Store display label and optional preset source key so later catalog edits cannot alter history. Category limits and duplicate-name validation are confirmed in `product-decisions.md`. |
 | `tutti_frutti_rounds` | Persist one row per scored letter cycle, created when preparing its first candidate. | Unique `(session_id, number)` and at most one unresolved round per session. Owns game-specific phase, deadline, lock time, scoring time, and accepted letter reference. Skipping a letter leaves the same round number. |
 | `tutti_frutti_letter_candidates` | Persist one row per selected candidate letter. | FK to session and round; unique `(session_id, letter)` across played and skipped letters, plus at most one pending candidate per round. Candidate status moves to skipped or accepted; letters never return to available. |
 | `tutti_frutti_letter_skip_votes` | Persist votes for a pending candidate. | Unique `(candidate_id, player_id)` and roster membership; only the candidate's open window accepts votes. Majority is authoritative, with both votes required for a two-player session. |

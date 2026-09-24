@@ -9,51 +9,27 @@ de Impostor. Este documento organiza los cortes y registra su progreso; los
 cortes futuros no describen funcionalidades ya implementadas ni autorizan por
 sí mismos migrations remotas, deploys o cambios de producto.
 
-**Estado del Incremento 0:** implementado y commiteado en
-`codex/tutti-frutti-increment-0` (`9cbe941`). La regresión automatizada pasó
-y el usuario confirmó el smoke manual de Impostor con tres identidades.
+**Estado de los Incrementos 0–4:** integrados en el `main` local. Incluyen el
+tipo de juego y el ruteo, el lobby Tutti Frutti, la identidad/roster neutral y
+el espejo transaccional de las sesiones Impostor. Las validaciones y smokes de
+cada corte se registraron al implementarlos. No se aplicaron migrations
+remotas.
 
-**Estado del Incremento 1 en `codex/tutti-frutti-increment-1`:** create/join
-con tipo y ruteo mínimo implementados en la rama y aplicados sólo a Supabase
-local. Los tests automáticos y validadores focales pasan. La suite DB agregada
-requiere una base vacía y no corrió más allá de su precondición porque la DB
-local contiene fixtures previos; no se reseteó. El usuario confirmó que completó
-el smoke manual indicado para este corte. No se hizo push, deploy ni migration
-remota. Producción mantiene su baseline anterior.
+**Estado del Incremento 5:** integrado en el `main` local. La compatibilidad
+legacy mantiene el espejo neutral y la sucesión durante `playing` usa el
+roster neutral, liveness autoritativa y selección determinista. Sus validadores
+locales pasan. La definición desplegada de la RPC sigue sin verificarse; esta
+brecha no se presenta como comportamiento confirmado en producción.
 
-**Estado del Incremento 2 en `codex/tutti-frutti-increment-2`:** lobby
-Tutti Frutti implementado en la rama y validado con Supabase local. Muestra
-host y miembros desde `get_my_active_room()`, Presence sólo como indicador,
-refetch al reconectar y acciones de salir/cerrar. El tópico Presence propio
-comprueba membresía, juego y estado. Pasaron tests y validadores focales;
-el usuario confirmó el smoke visual con dos identidades aisladas. No se aplicó
-ninguna migration remota ni se agregó gameplay.
+**Estado del Incremento 6:** integrado en el `main` local. La Room Tutti
+Frutti tiene un borrador JSONB atómico, lectura de defaults sin fila
+persistida, guardado host-only y sólo en lobby, validación en DB y lectura
+compartida por Realtime. El usuario confirmó el smoke manual completo con dos
+identidades. No se aplicó la migration remotamente.
 
-**Estado del Incremento 3 en `codex/tutti-frutti-increment-3`:** identidad
-neutral de sesión y roster Impostor implementados en una migration local con
-backfill transaccional, vínculo formal a `game_sessions`, RLS cerrada y sin
-Realtime nuevo. El preflight remoto quedó bloqueado porque no hay un proyecto
-Supabase autenticado y confirmado disponible en el entorno; no se inspeccionó
-ni modificó producción. `room_sessions` no se consume y las escrituras de
-Impostor no se espejan hasta el Incremento 4. El preflight de los fixtures
-locales detectó dos sesiones Impostor abiertas en Rooms `closed`; se reseteó la
-base local controlada, se reaplicaron todas las migrations y el validador de
-schema/RLS/backfill pasó sin fixtures cargados.
-
-**Estado del Incremento 4 en `codex/tutti-frutti-increment-4`:** `start_session()`
-y `end_session()` conservan sus contratos y state machine de Impostor, y ahora
-espejan sesiones y roster neutral dentro de la misma transacción. Los
-validadores locales de inicio y fin, la igualdad de IDs/rosters y los
-timestamps compartidos pasan. No se aplicó ninguna migration remota ni se
-consume `room_sessions` desde la aplicación.
-
-La migration del Incremento 5 agrega la compatibilidad legacy necesaria para
-sesiones iniciadas antes del espejo y distingue sus errores de consistencia
-mediante mensajes/`DETAIL` específicos, manteniendo `P0022`. La RPC de
-sucesión local ahora usa `room_session_participants` durante `playing`, con
-selección determinista por `joined_at` y `player_id`, liveness autoritativa y
-fallo explícito ante ausencia o divergencia del espejo. El validador local de
-sucesión pasa; producción y la definición desplegada siguen sin verificarse.
+El cambio de plataforma que lleva la gestión de grupos a la portada también
+está integrado en el `main` local; la baseline de producción descrita en
+`sources/project-status.md` permanece sin cambios.
 
 Las decisiones de producto vigentes están en `product-decisions.md`; fases en
 `game-state-model.md`; límites en `room-session-boundary.md`; requisitos en
@@ -77,7 +53,8 @@ este plan. La política de sucesión en `playing` está **CONFIRMED** en
   exclusivas de Impostor. Las nuevas firmas reciben intención de juego y
   verifican tipo, Group, lobby y slot global; `get_my_active_room()` devuelve
   el tipo y las rutas actuales recuperan el juego correspondiente. Tutti
-  Frutti aún no tiene lobby completo ni gameplay.
+  Frutti ya tiene lobby, presencia y configuración compartida; todavía no
+  tiene inicio de sesión ni gameplay.
 - `game_sessions` tiene `unique(room_id)` y fases de Impostor;
   `session_players` incluye datos propios de ese juego. `start_session()` crea
   roster, estado y primera ronda de Impostor; `end_session()` termina la
@@ -128,13 +105,13 @@ revalidan contra las migrations y datos del destino antes de ejecutarse.
 2, 7–16 → 17 recuperación y cierre MVP
 ```
 
-El corte 6 puede avanzar mientras se valida el backfill del 3. La política de
-sucesión en `playing` ya está confirmada; el 5 requiere aún implementar y
-validar el roster compartido, así como comprobar el deploy actual antes de
-atribuirle comportamiento. El 7 no se libera como flujo jugable sin ese guard.
-Los cortes 8 y 9 pueden diseñarse en paralelo después del 7, pero sólo se
-integran respetando las fases. El 17 completa la verificación de una
-recuperación construida desde cada corte.
+Los Incrementos 0–6 están integrados en el `main` local. La política de
+sucesión en `playing` está implementada en el código del 5, pero falta verificar
+la definición desplegada antes de atribuirla a producción. El Incremento 7
+puede desarrollarse localmente y depende de 4, 5 y 6; la decisión exacta del
+pool de letras sigue abierta. Los cortes 8 y 9 pueden diseñarse en paralelo
+después del 7, pero sólo se integran respetando las fases. El 17 completa la
+verificación de recuperación construida desde cada corte.
 
 ## Incrementos
 
@@ -325,6 +302,9 @@ recuperación construida desde cada corte.
 - **Does not depend on:** configuración Tutti (6).
 
 ### 6. Configuración de lobby Tutti
+
+**Estado:** implementado y fusionado en el `main` local. El usuario confirmó
+el smoke manual de dos identidades; no hay migration remota aplicada.
 
 - **Goal:** host guarda un borrador válido de rondas y categorías que todos
   pueden reconocer antes de iniciar.
