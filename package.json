@@ -15,6 +15,7 @@
     "test:db:12.2": "node supabase/tests/validate-12-2.mjs",
     "test:db:12.3": "node supabase/tests/validate-12-3.mjs",
     "test:db:12.5": "node supabase/tests/validate-12-5.mjs",
+    "test:db:tutti-frutti-6": "node supabase/tests/validate-tutti-frutti-6.mjs",
     "test:db:round-starting-player": "node supabase/tests/validate-round-starting-player.mjs",
     "local:make-platform-admin": "node supabase/scripts/local-make-platform-admin.mjs",
     "supabase:reset": "supabase db reset",

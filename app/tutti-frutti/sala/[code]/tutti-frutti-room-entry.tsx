@@ -5,6 +5,14 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createBrowserSupabaseClient } from "../../../../lib/supabase/browser-client";
 import {
+  getTuttiFruttiRoomConfiguration,
+  saveTuttiFruttiRoomConfiguration,
+  type SavedTuttiFruttiRoomConfiguration,
+  type TuttiFruttiRoomConfiguration,
+  type TuttiFruttiRoomSetupClient
+} from "../../../../lib/supabase/tutti-frutti-room-setup";
+import { TuttiFruttiRoomSetup } from "./tutti-frutti-room-setup";
+import {
   closeRoom, getConnectedRoomParticipantIds, getMyActiveRoom, joinRoomByCode,
   leaveRoom, normalizeRoomJoinCode, reassignRoomHostIfStale,
   refreshMyRoomLiveness, roomPath, startRoomLivenessHeartbeat,
@@ -19,6 +27,20 @@ type RoomState =
   | { status: "absent" }
   | { status: "error"; message: string }
   | { status: "ready"; lobby: ActiveRoomLobby };
+
+type SetupState =
+  | { status: "loading"; roomId: string }
+  | { status: "error"; roomId: string; message: string }
+  | {
+      status: "ready";
+      roomId: string;
+      server: SavedTuttiFruttiRoomConfiguration;
+      draft: TuttiFruttiRoomConfiguration;
+      stale: boolean;
+      saving: boolean;
+      error: string | null;
+      notice: string | null;
+    };
 
 function roomsClient(): ImpostorRoomsClient {
   return createBrowserSupabaseClient() as unknown as ImpostorRoomsClient;
@@ -74,27 +96,83 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [connection, setConnection] = useState<"online" | "offline" | "reconnecting">("online");
+  const [setupState, setSetupState] = useState<SetupState | null>(null);
   const actionInFlight = useRef(false);
   const requestSequence = useRef(0);
+  const setupRequestSequence = useRef(0);
   const roomPresenceRef = useRef<RoomPresenceSubscription | null>(null);
   const normalizedCode = normalizeRoomJoinCode(code);
+
+  const refreshSetup = useCallback(async (roomId: string, forceAdopt = false) => {
+    const request = ++setupRequestSequence.current;
+    try {
+      const snapshot = await getTuttiFruttiRoomConfiguration(
+        createBrowserSupabaseClient() as unknown as TuttiFruttiRoomSetupClient,
+        roomId
+      );
+      if (request !== setupRequestSequence.current) return;
+
+      setSetupState((current) => {
+        if (!current || current.roomId !== roomId || current.status !== "ready" || forceAdopt) {
+          return {
+            status: "ready", roomId, server: snapshot, draft: snapshot.configuration,
+            stale: false, saving: false, error: null, notice: null
+          };
+        }
+
+        const hasLocalEdits = JSON.stringify(current.draft) !== JSON.stringify(current.server.configuration);
+        const serverChanged = current.server.updatedAt !== snapshot.updatedAt
+          || JSON.stringify(current.server.configuration) !== JSON.stringify(snapshot.configuration);
+        if (hasLocalEdits && serverChanged) {
+          return { ...current, server: snapshot, stale: true, notice: null };
+        }
+
+        return {
+          ...current,
+          server: snapshot,
+          draft: serverChanged ? snapshot.configuration : current.draft,
+          stale: current.stale && hasLocalEdits,
+          error: null
+        };
+      });
+    } catch (error) {
+      if (request === setupRequestSequence.current) {
+        setSetupState({
+          status: "error", roomId,
+          message: error instanceof Error ? error.message : "No pudimos recuperar la configuración."
+        });
+      }
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     const request = ++requestSequence.current;
     try {
       const lobby = await getMyActiveRoom(roomsClient());
       if (request !== requestSequence.current) return;
-      if (!lobby) setState({ status: "absent" });
+      if (!lobby) {
+        setState({ status: "absent" });
+        setSetupState(null);
+      }
       else if (lobby.room.gameType !== "tutti_frutti" || lobby.room.code !== normalizedCode) {
         router.replace(roomPath(lobby.room.gameType, lobby.room.code));
-      } else setState({ status: "ready", lobby });
+      } else if (!lobby.room.id) {
+        setState({ status: "error", message: "No pudimos reconocer la sala activa." });
+      } else {
+        const activeRoomId = lobby.room.id;
+        setState({ status: "ready", lobby });
+        setSetupState((current) => current?.roomId === activeRoomId
+          ? current
+          : { status: "loading", roomId: activeRoomId });
+        void refreshSetup(activeRoomId);
+      }
       setConnection("online");
     } catch {
       if (request === requestSequence.current) {
         setState({ status: "error", message: "No pudimos recuperar la sala. Recargá la página para intentar de nuevo." });
       }
     }
-  }, [normalizedCode, router]);
+  }, [normalizedCode, refreshSetup, router]);
 
   useEffect(() => {
     void Promise.resolve().then(refresh);
@@ -197,6 +275,42 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
     } finally { actionInFlight.current = false; setBusy(false); }
   }
 
+  function updateSetup(configuration: TuttiFruttiRoomConfiguration) {
+    setSetupState((current) => current?.status === "ready"
+      ? { ...current, draft: configuration, error: null, notice: null }
+      : current);
+  }
+
+  async function saveSetup() {
+    if (setupState?.status !== "ready" || setupState.stale || setupState.saving) return;
+    const roomId = setupState.roomId;
+    setSetupState((current) => current?.status === "ready"
+      ? { ...current, saving: true, error: null, notice: null }
+      : current);
+    try {
+      const saved = await saveTuttiFruttiRoomConfiguration(
+        createBrowserSupabaseClient() as unknown as TuttiFruttiRoomSetupClient,
+        roomId,
+        setupState.draft
+      );
+      setSetupState((current) => current?.status === "ready" && current.roomId === roomId
+        ? { ...current, server: saved, draft: saved.configuration, stale: false, saving: false, error: null, notice: "Configuración guardada." }
+        : current);
+      await refreshSetup(roomId, true);
+      setSetupState((current) => current?.status === "ready" && current.roomId === roomId
+        ? { ...current, notice: "Configuración guardada." }
+        : current);
+    } catch (error) {
+      setSetupState((current) => current?.status === "ready" && current.roomId === roomId
+        ? {
+            ...current,
+            saving: false,
+            error: error instanceof Error ? error.message : "No pudimos guardar la configuración."
+          }
+        : current);
+    }
+  }
+
   if (state.status === "loading") return <p aria-live="polite">Comprobando sala...</p>;
   if (state.status === "error") return <p role="alert">{state.message} <Link href="/tutti-frutti">Volver a Tutti Frutti</Link></p>;
   if (state.status === "absent") return (
@@ -209,12 +323,45 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
     </section>
   );
 
-  return <TuttiFruttiLobbyContent
-    lobby={state.lobby}
-    connected={getConnectedRoomParticipantIds(state.lobby.participants, presence)}
-    connection={connection}
-    busy={busy}
-    actionError={actionError}
-    onExit={(asHost) => { void exitRoom(asHost); }}
-  />;
+  const isHost = state.lobby.participants.some((participant) => participant.isSelf && participant.isHost);
+  const setupForRoom = setupState?.roomId === state.lobby.room.id ? setupState : null;
+
+  return (
+    <>
+      <TuttiFruttiLobbyContent
+        lobby={state.lobby}
+        connected={getConnectedRoomParticipantIds(state.lobby.participants, presence)}
+        connection={connection}
+        busy={busy}
+        actionError={actionError}
+        onExit={(asHost) => { void exitRoom(asHost); }}
+      />
+      {setupForRoom?.status === "loading" ? <p aria-live="polite">Recuperando configuración…</p> : null}
+      {setupForRoom?.status === "error" ? (
+        <section className="tutti-setup tutti-setup--error" aria-labelledby="tutti-setup-error-title">
+          <h2 id="tutti-setup-error-title">No pudimos recuperar la configuración</h2>
+          <p role="alert">{setupForRoom.message}</p>
+          <button className="impostor-action" disabled={connection !== "online"} onClick={() => void refreshSetup(setupForRoom.roomId, true)} type="button">
+            Volver a intentar
+          </button>
+        </section>
+      ) : null}
+      {setupForRoom?.status === "ready" ? (
+        <TuttiFruttiRoomSetup
+          configuration={setupForRoom.draft}
+          isHost={isHost}
+          roomStatus={state.lobby.room.status}
+          connection={connection}
+          dirty={JSON.stringify(setupForRoom.draft) !== JSON.stringify(setupForRoom.server.configuration)}
+          stale={setupForRoom.stale}
+          saving={setupForRoom.saving}
+          error={setupForRoom.error}
+          notice={setupForRoom.notice}
+          onChange={updateSetup}
+          onSave={() => { void saveSetup(); }}
+          onReload={() => { void refreshSetup(setupForRoom.roomId, true); }}
+        />
+      ) : null}
+    </>
+  );
 }
