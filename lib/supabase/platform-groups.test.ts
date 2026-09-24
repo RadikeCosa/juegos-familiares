@@ -86,7 +86,7 @@ describe("createGroupWithAdminPlayer", () => {
       },
       invitation: {
         code: "K7M4Q9XA",
-        path: "/impostor/join/K7M4Q9XA"
+        path: "/grupo/invitacion/K7M4Q9XA"
       }
     });
 
@@ -363,7 +363,7 @@ describe("getMyActiveGroupInvitation", () => {
 
     await expect(getMyActiveGroupInvitation(supabase)).resolves.toEqual({
       code: "K7M4Q9XA",
-      path: "/impostor/join/K7M4Q9XA"
+      path: "/grupo/invitacion/K7M4Q9XA"
     });
 
     expect(supabase.rpc).toHaveBeenCalledWith("get_my_active_group_invitation");

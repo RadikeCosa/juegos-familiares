@@ -79,7 +79,7 @@ export function TuttiFruttiEntryShell() {
     return (
       <section className="impostor-platform-context">
         <p>Necesitás entrar a un grupo antes de crear o unirte a una sala.</p>
-        <Link className="impostor-action impostor-action--primary" href="/grupo">Ir a mi grupo</Link>
+        <Link className="impostor-action impostor-action--primary" href="/">Ir al inicio</Link>
       </section>
     );
   }

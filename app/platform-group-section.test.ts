@@ -1,14 +1,14 @@
 import { isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { getInvitationShareData } from "./platform-admin-invitation-panel";
 import {
-  formatAvailableWords,
-  renderGroupMembersList,
-  renderImpostorGroupContext
-} from "./group-context-shell";
-import type { PlatformBootstrapState } from "../../../lib/supabase/platform-bootstrap";
+  renderPlatformGroupContext,
+  renderPlatformGroupMembersList
+} from "./platform-group-section";
+import type { PlatformBootstrapState } from "../lib/supabase/platform-bootstrap";
 
-vi.mock("../../../lib/supabase/browser-client", () => ({
+vi.mock("../lib/supabase/browser-client", () => ({
   createBrowserSupabaseClient: vi.fn()
 }));
 
@@ -106,18 +106,34 @@ const players = [
   }
 ];
 
-describe("renderGroupMembersList", () => {
+describe("renderPlatformGroupMembersList", () => {
   it("shows the admin first and marks it with a badge", () => {
-    const text = inspect(renderGroupMembersList(players, "player-1")).text;
+    const text = inspect(renderPlatformGroupMembersList(players, "player-1")).text;
 
     expect(text).toMatch(/^RamiroAdminPedroCamila$/);
   });
 });
 
-describe("renderImpostorGroupContext", () => {
-  it("renders the admin group view with members and invitation CTA", () => {
+describe("renderPlatformGroupContext", () => {
+  it("can build Platform invitation share data without changing the invitation route", () => {
+    expect(
+      getInvitationShareData(
+        {
+          code: "K7M4Q9XA",
+          path: "/grupo/invitacion/K7M4Q9XA"
+        },
+        "platform"
+      )
+    ).toEqual({
+      title: "Invitación a Juegos Familiares",
+      text: "Sumate a mi grupo de Juegos Familiares.",
+      url: "/grupo/invitacion/K7M4Q9XA"
+    });
+  });
+
+  it("renders the Platform group surface with members, count and invitation CTA", () => {
     const markup = renderToStaticMarkup(
-      renderImpostorGroupContext(adminBootstrapState, {
+      renderPlatformGroupContext(adminBootstrapState, {
         status: "success",
         players
       })
@@ -125,19 +141,33 @@ describe("renderImpostorGroupContext", () => {
 
     expect(markup).toContain("Familia");
     expect(markup).toContain("Integrantes");
+    expect(markup).toContain("3 integrantes");
     expect(markup).toContain("Ramiro");
     expect(markup).toContain("Admin");
     expect(markup).toContain("Pedro");
     expect(markup).toContain("Camila");
-    expect(markup).toContain("Banco de palabras");
-    expect(markup).toContain("Cargando banco");
-    expect(markup).toContain("/impostor/grupo/palabras");
-    expect(markup).toContain("Invitá a los demás");
+    expect(markup).toContain("Buscando invitación");
+  });
+
+  it("does not render Impostor-only Room or GroupWord actions", () => {
+    const markup = renderToStaticMarkup(
+      renderPlatformGroupContext(adminBootstrapState, {
+        status: "success",
+        players
+      })
+    );
+
+    expect(markup).not.toContain("Jugar");
+    expect(markup).not.toContain("Crear sala");
+    expect(markup).not.toContain("Unirme a una sala");
+    expect(markup).not.toContain("Banco de palabras");
+    expect(markup).not.toContain("Agregar palabras");
+    expect(markup).not.toContain("/impostor/grupo/palabras");
   });
 
   it("renders the non-admin group view without the invitation CTA", () => {
     const markup = renderToStaticMarkup(
-      renderImpostorGroupContext(nonAdminBootstrapState, {
+      renderPlatformGroupContext(nonAdminBootstrapState, {
         status: "success",
         players
       })
@@ -145,33 +175,30 @@ describe("renderImpostorGroupContext", () => {
 
     expect(markup).toContain("Familia");
     expect(markup).toContain("Integrantes");
-    expect(markup).toContain("Ramiro");
-    expect(markup).toContain("Admin");
     expect(markup).not.toContain("Invitar personas");
-    expect(markup).not.toContain("Compartir invitación");
-    expect(markup).not.toContain("Copiar código");
+    expect(markup).not.toContain("Compartir invitacion");
+    expect(markup).not.toContain("Copiar codigo");
   });
 
   it("renders loading states for bootstrap and players", () => {
     expect(
-      inspect(
-        renderImpostorGroupContext({ status: "loading" }, { status: "idle" })
-      ).text
+      inspect(renderPlatformGroupContext({ status: "loading" }, { status: "idle" }))
+        .text
     ).toContain("Comprobando tu grupo");
 
     expect(
-      inspect(renderImpostorGroupContext(adminBootstrapState, { status: "loading" }))
+      inspect(renderPlatformGroupContext(adminBootstrapState, { status: "loading" }))
         .text
     ).toContain("Cargando integrantes");
   });
 
   it("keeps the group visible when players fail to load", () => {
     const text = inspect(
-      renderImpostorGroupContext(
+      renderPlatformGroupContext(
         adminBootstrapState,
         {
           status: "error",
-          message: "No pudimos cargar los integrantes. Intentá de nuevo."
+          message: "No pudimos cargar los integrantes. Intenta de nuevo."
         },
         { onRetryPlayers: () => undefined }
       )
@@ -184,7 +211,7 @@ describe("renderImpostorGroupContext", () => {
 
   it("renders connection errors with a retry action", () => {
     const text = inspect(
-      renderImpostorGroupContext(
+      renderPlatformGroupContext(
         { status: "connection-error" },
         { status: "idle" },
         { onRetryBootstrap: () => undefined }
@@ -195,86 +222,34 @@ describe("renderImpostorGroupContext", () => {
     expect(text).toContain("Reintentar");
   });
 
-  it("sends unrecognized users back to /impostor without onboarding", () => {
+  it("sends unrecognized users back to the Platform home without onboarding", () => {
     const page = inspect(
-      renderImpostorGroupContext(
+      renderPlatformGroupContext(
         { status: "unrecognized", reason: "no-auth" },
         { status: "idle" }
       )
     );
 
     expect(page.text).toContain("Todavía no tenés un grupo");
-    expect(page.text).toContain("Ir a Impostor");
+    expect(page.text).toContain("Ir al inicio");
     expect(page.text).not.toContain("Crear grupo");
-    expect(page.hrefs).toContain("/impostor");
+    expect(page.hrefs).toContain("/");
   });
 
-  it("sends sessions without Player back to /impostor", () => {
+  it("fails safely when the recognized context is inconsistent", () => {
     const page = inspect(
-      renderImpostorGroupContext(
-        { status: "unrecognized", reason: "no-player" },
-        { status: "idle" }
+      renderPlatformGroupContext(
+        { status: "inconsistent", reason: "player-without-group" },
+        { status: "success", players }
       )
     );
 
-    expect(page.text).toContain("Todavía no tenés un grupo");
-    expect(page.hrefs).toContain("/impostor");
-  });
-
-  it("documents direct refresh as bootstrap followed by players loading", () => {
-    const text = inspect(
-      renderImpostorGroupContext(adminBootstrapState, { status: "loading" })
-    ).text;
-
-    expect(text).toContain("Familia");
-    expect(text).toContain("Cargando integrantes");
-  });
-
-  it("renders the word bank summary for a recognized player", () => {
-    const markup = renderToStaticMarkup(
-      renderImpostorGroupContext(
-        adminBootstrapState,
-        {
-          status: "success",
-          players
-        },
-        {
-          groupWordsState: {
-            status: "success",
-            totalCount: 12,
-            ownWords: [
-              {
-                id: "word-1",
-                text: "Chocotorta",
-                createdAt: "2026-08-18T13:00:00.000Z"
-              },
-              {
-                id: "word-2",
-                text: "Torre Eiffel",
-                createdAt: "2026-08-18T13:01:00.000Z"
-              },
-              {
-                id: "word-3",
-                text: "Harry Potter",
-                createdAt: "2026-08-18T13:02:00.000Z"
-              }
-            ]
-          }
-        }
-      )
-    );
-
-    expect(markup).toContain("Banco de palabras");
-    expect(markup).toContain("12 disponibles");
-    expect(markup).toContain("Tus aportes");
-    expect(markup).toContain("<dd>3</dd>");
-    expect(markup).toContain("Agregar palabras");
-    expect(markup).toContain("/impostor/grupo/palabras");
-  });
-
-  it("pluralizes the available words count", () => {
-    expect(formatAvailableWords(0)).toBe("0 disponibles");
-    expect(formatAvailableWords(1)).toBe("1 disponible");
-    expect(formatAvailableWords(12)).toBe("12 disponibles");
+    expect(page.text).toContain("No pudimos recuperar correctamente tu grupo");
+    expect(page.text).toContain("Ir al inicio");
+    expect(page.text).not.toContain("Familia");
+    expect(page.text).not.toContain("Integrantes");
+    expect(page.text).not.toContain("Ramiro");
+    expect(page.text).not.toContain("Invitar personas");
+    expect(page.hrefs).toContain("/");
   });
 });

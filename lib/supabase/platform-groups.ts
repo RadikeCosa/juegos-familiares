@@ -131,7 +131,7 @@ function getSingleRow<TRow>(data: unknown): TRow | null {
 }
 
 function getInvitationPath(code: string) {
-  return `/impostor/join/${encodeURIComponent(code)}`;
+  return `/grupo/invitacion/${encodeURIComponent(code)}`;
 }
 
 function isSupabaseErrorLike(error: unknown): error is SupabaseErrorLike {

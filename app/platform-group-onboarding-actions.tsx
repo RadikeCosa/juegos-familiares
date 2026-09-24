@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { createBrowserSupabaseClient } from "../../lib/supabase/browser-client";
+import { createBrowserSupabaseClient } from "../lib/supabase/browser-client";
 import {
   bootstrapPlatformContext,
   type PlatformBootstrapClient,
   type RecognizedPlatformContext
-} from "../../lib/supabase/platform-bootstrap";
+} from "../lib/supabase/platform-bootstrap";
 import {
   createCreateGroupSubmitController,
   createJoinGroupSubmitController,
@@ -16,7 +17,7 @@ import {
   type JoinedGroupWithInvitation,
   type PlatformPermissions,
   type ResolvedGroupInvitation
-} from "../../lib/supabase/platform-groups";
+} from "../lib/supabase/platform-groups";
 
 type OnboardingIntent = "create-group" | "join-group";
 
@@ -70,7 +71,7 @@ function createPlatformBootstrapClient(): PlatformBootstrapClient {
   return createBrowserSupabaseClient() as unknown as PlatformBootstrapClient;
 }
 
-export function ImpostorAnonymousOnboardingActions({
+export function PlatformGroupOnboardingActions({
   onRecognizedContext,
   initialPlatformPermissions
 }: {
@@ -241,7 +242,7 @@ export function ImpostorAnonymousOnboardingActions({
 
   return (
     <section
-      className="impostor-onboarding"
+      className="platform-group-onboarding"
       aria-labelledby="impostor-onboarding-title"
     >
       <h2 id="impostor-onboarding-title">Empezar</h2>
@@ -367,7 +368,7 @@ export function ImpostorAnonymousOnboardingActions({
         </form>
       ) : null}
 
-      <p className="impostor-onboarding__status" aria-live="polite">
+      <p className="platform-group-onboarding__status" aria-live="polite">
         {state.status === "creating"
           ? "Creando identidad y grupo..."
           : state.status === "resolving"
@@ -407,7 +408,7 @@ export function ImpostorAnonymousOnboardingActions({
         </dl>
       ) : null}
       {state.status === "join-success" ? (
-        <div className="impostor-onboarding__success" role="status">
+        <div className="platform-group-onboarding__success" role="status">
           <strong>Ya estás dentro de {state.result.group.name}.</strong>
           <dl className="impostor-created-group">
             <div>
@@ -419,16 +420,16 @@ export function ImpostorAnonymousOnboardingActions({
               <dd>{state.result.player.nickname}</dd>
             </div>
           </dl>
-          <a className="impostor-action impostor-action--primary" href="/impostor/grupo">
-            Ir al grupo
-          </a>
+          <Link className="impostor-action impostor-action--primary" href="/">
+            Ir al inicio
+          </Link>
         </div>
       ) : null}
     </section>
   );
 }
 
-export function ImpostorJoinByLinkActions({
+export function PlatformGroupJoinByLinkActions({
   invitationCode,
   onRecognizedContext
 }: {
@@ -499,7 +500,7 @@ export function ImpostorJoinByLinkActions({
 
   return (
     <section
-      className="impostor-onboarding"
+      className="platform-group-onboarding"
       aria-labelledby="impostor-link-join-title"
     >
       <h2 id="impostor-link-join-title">Te invitaron a un grupo</h2>
@@ -544,7 +545,7 @@ export function ImpostorJoinByLinkActions({
         </form>
       ) : null}
 
-      <p className="impostor-onboarding__status" aria-live="polite">
+      <p className="platform-group-onboarding__status" aria-live="polite">
         {state.status === "resolving"
           ? "Creando identidad y buscando grupo..."
           : state.status === "joining"
@@ -557,7 +558,7 @@ export function ImpostorJoinByLinkActions({
       </p>
 
       {state.status === "success" ? (
-        <div className="impostor-onboarding__success" role="status">
+        <div className="platform-group-onboarding__success" role="status">
           <strong>Ya estás dentro de {state.result.group.name}.</strong>
           <dl className="impostor-created-group">
             <div>
@@ -569,9 +570,9 @@ export function ImpostorJoinByLinkActions({
               <dd>{state.result.player.nickname}</dd>
             </div>
           </dl>
-          <a className="impostor-action impostor-action--primary" href="/impostor/grupo">
-            Ir al grupo
-          </a>
+          <Link className="impostor-action impostor-action--primary" href="/">
+            Ir al inicio
+          </Link>
         </div>
       ) : null}
     </section>

@@ -15,8 +15,8 @@ export default function ImpostorGroupWordsPage() {
       </a>
       <div className="impostor-shell" id="contenido">
         <nav className="impostor-nav" aria-label="Navegación del banco">
-          <Link className="impostor-back" href="/impostor/grupo">
-            Tu grupo
+          <Link className="impostor-back" href="/impostor">
+            Impostor
           </Link>
         </nav>
 

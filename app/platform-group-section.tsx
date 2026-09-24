@@ -1,34 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { AdminInvitationSection } from "../platform-admin-invitation-panel";
-import { createBrowserSupabaseClient } from "../../lib/supabase/browser-client";
-import {
-  bootstrapPlatformContext,
-  type PlatformBootstrapClient,
-  type PlatformBootstrapState,
-  type RecognizedPlatformContext
-} from "../../lib/supabase/platform-bootstrap";
-import {
-  listGroupPlayers,
-  type GroupPlayer,
-  type PlatformPlayersClient
-} from "../../lib/supabase/platform-players";
+import { AdminInvitationSection } from "./platform-admin-invitation-panel";
+import type { PlatformBootstrapState } from "../lib/supabase/platform-bootstrap";
+import type { GroupPlayer } from "../lib/supabase/platform-players";
 
-type GroupPlayersState =
+export type GroupPlayersState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "success"; players: GroupPlayer[] }
   | { status: "error"; message: string };
-
-function createPlatformBootstrapClient(): PlatformBootstrapClient {
-  return createBrowserSupabaseClient() as unknown as PlatformBootstrapClient;
-}
-
-function createPlatformPlayersClient(): PlatformPlayersClient {
-  return createBrowserSupabaseClient() as unknown as PlatformPlayersClient;
-}
 
 function sortPlayersForGroup(players: GroupPlayer[], adminPlayerId: string) {
   return [...players].sort((firstPlayer, secondPlayer) => {
@@ -80,18 +61,18 @@ export function renderPlatformGroupContext(
 ) {
   if (bootstrapState.status === "loading") {
     return (
-      <section className="impostor-group-card" aria-live="polite">
-        <h1>Comprobando tu grupo...</h1>
+      <section className="home-platform-context home-group-card" aria-live="polite">
+        <h2>Comprobando tu grupo...</h2>
       </section>
     );
   }
 
   if (bootstrapState.status === "unrecognized") {
     return (
-      <section className="impostor-group-card" aria-live="polite">
+      <section className="home-platform-context home-group-card" aria-live="polite">
         <p className="impostor-kicker">Grupo</p>
-        <h1>Todavia no tenes un grupo en este dispositivo.</h1>
-        <p>Volve a Juegos Familiares para entrar a un juego o unirte con una invitacion.</p>
+        <h2>Todavía no tenés un grupo en este dispositivo.</h2>
+        <p>Volvé a Juegos Familiares para crear o unirte a un grupo.</p>
         <Link className="impostor-action impostor-action--primary" href="/">
           Ir al inicio
         </Link>
@@ -101,9 +82,9 @@ export function renderPlatformGroupContext(
 
   if (bootstrapState.status === "inconsistent") {
     return (
-      <section className="impostor-group-card" aria-live="polite">
+      <section className="home-platform-context home-group-card" aria-live="polite">
         <p className="impostor-kicker">Grupo</p>
-        <h1>No pudimos recuperar correctamente tu grupo.</h1>
+        <h2>No pudimos recuperar correctamente tu grupo.</h2>
         <p>Volve al inicio para revisar tu contexto.</p>
         <Link className="impostor-action impostor-action--primary" href="/">
           Ir al inicio
@@ -114,9 +95,9 @@ export function renderPlatformGroupContext(
 
   if (bootstrapState.status === "connection-error") {
     return (
-      <section className="impostor-group-card" aria-live="polite">
+      <section className="home-platform-context home-group-card" aria-live="polite">
         <p className="impostor-kicker">Grupo</p>
-        <h1>No pudimos comprobar tu grupo ahora.</h1>
+        <h2>No pudimos comprobar tu grupo ahora.</h2>
         <p>Revisa tu conexion e intenta de nuevo.</p>
         {options.onRetryBootstrap ? (
           <button
@@ -138,11 +119,12 @@ export function renderPlatformGroupContext(
 
   return (
     <section
-      className="impostor-group-card"
+      className="home-platform-context home-group-card"
       aria-labelledby="platform-group-title"
     >
       <p className="impostor-kicker">Tu grupo</p>
-      <h1 id="platform-group-title">{group.name}</h1>
+      <h2 id="platform-group-title">{group.name}</h2>
+      <p>Hola, {player.nickname}.</p>
 
       <div
         className="impostor-group-section"
@@ -184,107 +166,4 @@ export function renderPlatformGroupContext(
       {isAdmin ? <AdminInvitationSection context="platform" /> : null}
     </section>
   );
-}
-
-export function PlatformGroupContextShell() {
-  const [bootstrapState, setBootstrapState] = useState<PlatformBootstrapState>({
-    status: "loading"
-  });
-  const [playersState, setPlayersState] = useState<GroupPlayersState>({
-    status: "idle"
-  });
-
-  async function runBootstrap(showLoading: boolean) {
-    if (showLoading) {
-      setBootstrapState({ status: "loading" });
-      setPlayersState({ status: "idle" });
-    }
-
-    setBootstrapState(
-      await bootstrapPlatformContext(createPlatformBootstrapClient())
-    );
-  }
-
-  async function loadPlayers(context: RecognizedPlatformContext) {
-    setPlayersState({ status: "loading" });
-
-    try {
-      const players = await listGroupPlayers(
-        createPlatformPlayersClient(),
-        context.group.id
-      );
-
-      setPlayersState({ status: "success", players });
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "No pudimos cargar los integrantes. Intenta de nuevo.";
-
-      setPlayersState({ status: "error", message });
-    }
-  }
-
-  useEffect(() => {
-    let isActive = true;
-
-    void bootstrapPlatformContext(createPlatformBootstrapClient()).then(
-      (nextBootstrapState) => {
-        if (isActive) {
-          setBootstrapState(nextBootstrapState);
-        }
-      }
-    );
-
-    return () => {
-      isActive = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (bootstrapState.status !== "recognized") {
-      return;
-    }
-
-    let isActive = true;
-
-    void Promise.resolve()
-      .then(() => {
-        if (isActive) {
-          setPlayersState({ status: "loading" });
-        }
-
-        return listGroupPlayers(
-          createPlatformPlayersClient(),
-          bootstrapState.group.id
-        );
-      })
-      .then((players) => {
-        if (isActive) {
-          setPlayersState({ status: "success", players });
-        }
-      })
-      .catch((error) => {
-        const message =
-          error instanceof Error
-            ? error.message
-            : "No pudimos cargar los integrantes. Intenta de nuevo.";
-
-        if (isActive) {
-          setPlayersState({ status: "error", message });
-        }
-      });
-
-    return () => {
-      isActive = false;
-    };
-  }, [bootstrapState]);
-
-  return renderPlatformGroupContext(bootstrapState, playersState, {
-    onRetryBootstrap: () => void runBootstrap(true),
-    onRetryPlayers:
-      bootstrapState.status === "recognized"
-        ? () => void loadPlayers(bootstrapState)
-        : undefined
-  });
 }

@@ -36,7 +36,7 @@ Estado autoritativo
 - `Group` y el contexto de pertenencia;
 - `Room` y `RoomParticipant` para identidad de juego, Group, host,
   membership y lifecycle compartidos;
-- navegación compartida y `/grupo`;
+- navegación compartida y gestión de Group en `/`;
 - shell mobile-first y capacidades PWA;
 - adaptadores comunes de acceso a Supabase cuando corresponde.
 
@@ -106,13 +106,14 @@ participantes.
 
 ## Superficie de grupo
 
-`/grupo` es la superficie canónica de plataforma. Reconstruye el contexto
-`AuthIdentity → Player → Group`, lista integrantes mediante lectura protegida y
-muestra la invitación activa únicamente al administrador del grupo.
-
-La pertenencia actual se representa mediante la relación de `Player` con un
-`Group`; no existe una abstracción separada de membership. La superficie no es
-una `Room` ni contiene estado de gameplay.
+La portada `/` es la superficie canónica de plataforma para el contexto
+`AuthIdentity → Player → Group`, el listado protegido de integrantes y la
+invitación activa visible únicamente para el administrador. `/grupo` redirige
+a la portada por compatibilidad; `/grupo/invitacion/[code]` resuelve la
+incorporación a un grupo. La pertenencia actual se representa mediante la
+relación de `Player` con un `Group`; no existe una abstracción separada de
+membership. La gestión de Group no es una `Room` ni contiene estado de
+gameplay.
 
 ## Persistencia y operaciones
 

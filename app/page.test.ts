@@ -7,282 +7,79 @@ import type { PlatformBootstrapState } from "../lib/supabase/platform-bootstrap"
 
 const createBrowserSupabaseClient = vi.hoisted(() => vi.fn());
 const ensureAnonymousAuthIdentity = vi.hoisted(() => vi.fn());
+vi.mock("../lib/supabase/browser-client", () => ({ createBrowserSupabaseClient }));
+vi.mock("../lib/supabase/anonymous-auth", () => ({ ensureAnonymousAuthIdentity }));
 
-vi.mock("../lib/supabase/browser-client", () => ({
-  createBrowserSupabaseClient
-}));
-
-vi.mock("../lib/supabase/anonymous-auth", () => ({
-  ensureAnonymousAuthIdentity
-}));
-
-type InspectableProps = {
-  children?: ReactNode;
-  href?: string;
-};
-
+type Props = { children?: ReactNode; href?: string };
 function inspect(node: ReactNode): { text: string; hrefs: string[] } {
-  if (node === null || node === undefined || typeof node === "boolean") {
-    return { text: "", hrefs: [] };
+  if (node === null || node === undefined || typeof node === "boolean") return { text: "", hrefs: [] };
+  if (typeof node === "string" || typeof node === "number") return { text: String(node), hrefs: [] };
+  if (Array.isArray(node)) return node.reduce((result, child) => {
+    const next = inspect(child);
+    return { text: result.text + next.text, hrefs: [...result.hrefs, ...next.hrefs] };
+  }, { text: "", hrefs: [] });
+  if (isValidElement<Props>(node)) {
+    const children = inspect(node.props.children);
+    return { text: children.text, hrefs: typeof node.props.href === "string" ? [node.props.href, ...children.hrefs] : children.hrefs };
   }
-
-  if (typeof node === "string" || typeof node === "number") {
-    return { text: String(node), hrefs: [] };
-  }
-
-  if (Array.isArray(node)) {
-    return node.reduce(
-      (result, child) => {
-        const inspectedChild = inspect(child);
-
-        return {
-          text: result.text + inspectedChild.text,
-          hrefs: [...result.hrefs, ...inspectedChild.hrefs]
-        };
-      },
-      { text: "", hrefs: [] }
-    );
-  }
-
-  if (isValidElement<InspectableProps>(node)) {
-    const inspectedChildren = inspect(node.props.children);
-    const hrefs =
-      typeof node.props.href === "string"
-        ? [node.props.href, ...inspectedChildren.hrefs]
-        : inspectedChildren.hrefs;
-
-    return {
-      text: inspectedChildren.text,
-      hrefs
-    };
-  }
-
   return { text: "", hrefs: [] };
 }
 
-describe("Home", () => {
-  it("presents Juegos Familiares and delegates the Impostor entry point to the platform shell", () => {
-    const page = inspect(Home());
+const recognized: PlatformBootstrapState = {
+  status: "recognized",
+  player: { id: "player-1", groupId: "group-1", nickname: "Ramiro", createdAt: "2026-08-14T12:00:00.000Z" },
+  group: { id: "group-1", name: "Familia", adminPlayerId: "player-1", createdAt: "2026-08-14T12:00:00.000Z" }
+};
 
+describe("Home", () => {
+  it("presents Juegos Familiares and delegates interactive content to the platform shell", () => {
+    const page = inspect(Home());
     expect(page.text).toContain("Juegos Familiares");
-    expect(page.text).toContain(
-      "Juegos simples para compartir en familia o con amigos."
-    );
+    expect(page.text).toContain("Juegos simples para compartir en familia o con amigos.");
   });
 
-  it("does not create AuthIdentity when / renders", () => {
+  it("does not create AuthIdentity when the home route renders", () => {
     inspect(Home());
-
     expect(createBrowserSupabaseClient).not.toHaveBeenCalled();
     expect(ensureAnonymousAuthIdentity).not.toHaveBeenCalled();
   });
 });
 
-describe("renderPlatformHomeContext", () => {
-  it("keeps the compact identity and a stable Impostor card while checking the active Room", () => {
-    const state: PlatformBootstrapState = {
-      status: "recognized",
-      player: {
-        id: "player-1",
-        groupId: "group-1",
-        nickname: "Ramiro",
-        createdAt: "2026-08-14T12:00:00.000Z"
-      },
-      group: {
-        id: "group-1",
-        name: "Familia",
-        adminPlayerId: "player-1",
-        createdAt: "2026-08-14T12:00:00.000Z"
-      }
-    };
-
-    const page = inspect(renderPlatformHomeContext(state, { status: "loading" }));
-
-    expect(page.text).toContain("Familia");
-    expect(page.text).toContain("Ramiro");
-    expect(page.text).toContain("Impostor");
-    expect(page.text).toContain("Comprobando tu sala activa");
-    expect(page.text).not.toContain("Jugar a Impostor");
-    expect(page.text).not.toContain("Volver a la sala");
-    expect(page.text).not.toContain("Volver a la partida");
-    expect(page.hrefs).toEqual(["/grupo", "/tutti-frutti"]);
+describe("homepage group experience", () => {
+  it("shows group context and games together without a separate group link", () => {
+    const markup = renderToStaticMarkup(renderPlatformHomeContext(recognized, { status: "absent" }));
+    expect(markup).toContain("Familia");
+    expect(markup).toContain("Hola, Ramiro");
+    expect(markup).toContain("Integrantes");
+    expect(markup).toContain("Jugar a Impostor");
+    expect(markup).toContain("Tutti Frutti");
+    expect(markup).toContain('href="/impostor"');
+    expect(markup).toContain('href="/tutti-frutti"');
+    expect(markup).not.toContain('href="/grupo"');
   });
 
-  it("links the complete compact group context and the Impostor CTA when no active Room exists", () => {
-    const state: PlatformBootstrapState = {
-      status: "recognized",
-      player: {
-        id: "player-1",
-        groupId: "group-1",
-        nickname: "Ramiro",
-        createdAt: "2026-08-14T12:00:00.000Z"
-      },
-      group: {
-        id: "group-1",
-        name: "Familia",
-        adminPlayerId: "player-1",
-        createdAt: "2026-08-14T12:00:00.000Z"
-      }
-    };
-
-    const page = inspect(renderPlatformHomeContext(state, { status: "absent" }));
-
-    const markup = renderToStaticMarkup(renderPlatformHomeContext(state, { status: "absent" }));
-
-    expect(page.text).toContain("Familia");
-    expect(page.text).toContain("Ramiro");
-    expect(markup).toContain(">Ramiro</strong><span>(Familia)</span>");
-    expect(page.text).toContain("Encontrá al impostor sin revelar demasiado.");
-    expect(page.text).toContain("Jugar a Impostor");
-    expect(page.hrefs).toEqual(["/grupo", "/impostor", "/tutti-frutti"]);
-    expect(markup).toContain('aria-label="Abrir el grupo actual: Familia"');
-    expect(markup).toContain('class="game-entry__art game-entry__art--tutti-frutti"');
-    expect(markup).toContain('<svg viewBox="0 0 96 96"');
-  });
-
-  it("links directly to active lobby and playing Rooms while keeping identity and a secondary Impostor link", () => {
-    const state: PlatformBootstrapState = {
-      status: "recognized",
-      player: {
-        id: "player-1",
-        groupId: "group-1",
-        nickname: "Ramiro",
-        createdAt: "2026-08-14T12:00:00.000Z"
-      },
-      group: {
-        id: "group-1",
-        name: "Familia",
-        adminPlayerId: "player-1",
-        createdAt: "2026-08-14T12:00:00.000Z"
-      }
-    };
-
-    const lobby = inspect(
-      renderPlatformHomeContext(state, {
-        status: "success",
-        room: { id: "room-1", code: "AB7KQ2M4", status: "lobby", gameType: "impostor" }
-      })
-    );
-    const playing = inspect(
-      renderPlatformHomeContext(state, {
-        status: "success",
-        room: { id: "room-1", code: "PLAY1234", status: "playing", gameType: "impostor" }
-      })
-    );
-
-    expect(lobby.text).toContain("Familia");
-    expect(lobby.text).toContain("Ramiro");
-    expect(lobby.text).toContain("Sala activa");
-    expect(lobby.text).toContain("Volver a la sala");
-    expect(lobby.text).toContain("Ver Impostor");
-    expect(lobby.text).not.toContain("Jugar a Impostor");
-    expect(lobby.hrefs).toEqual(["/grupo", "/impostor/sala/AB7KQ2M4", "/impostor", "/tutti-frutti"]);
-
-    expect(playing.text).toContain("Familia");
-    expect(playing.text).toContain("Ramiro");
-    expect(playing.text).toContain("Partida en curso");
-    expect(playing.text).toContain("Volver a la partida");
-    expect(playing.text).toContain("Ver Impostor");
-    expect(playing.text).not.toContain("Jugar a Impostor");
-    expect(playing.hrefs).toEqual(["/grupo", "/impostor/sala/PLAY1234", "/impostor", "/tutti-frutti"]);
-  });
-
-  it("routes an active Tutti Frutti Room by its persisted game identity", () => {
-    const state: PlatformBootstrapState = {
-      status: "recognized",
-      player: { id: "player-1", groupId: "group-1", nickname: "Ramiro", createdAt: "2026-08-14T12:00:00.000Z" },
-      group: { id: "group-1", name: "Familia", adminPlayerId: "player-1", createdAt: "2026-08-14T12:00:00.000Z" }
-    };
-    const page = inspect(renderPlatformHomeContext(state, {
-      status: "success",
-      room: { id: "room-2", code: "TUTT1234", status: "lobby", gameType: "tutti_frutti" }
+  it("routes recognized users directly to an active Room", () => {
+    const markup = renderToStaticMarkup(renderPlatformHomeContext(recognized, {
+      status: "success", room: { id: "room-1", code: "AB7KQ2M4", status: "lobby", gameType: "impostor" }
     }));
-
-    expect(page.hrefs).toContain("/tutti-frutti/sala/TUTT1234");
-    expect(page.hrefs).not.toContain("/impostor/sala/TUTT1234");
+    expect(markup).toContain('href="/impostor/sala/AB7KQ2M4"');
+    expect(markup).toContain("Volver a la sala");
   });
 
-  it("shows retry and a safe navigation to Impostor when active Room lookup fails", () => {
-    const state: PlatformBootstrapState = {
-      status: "recognized",
-      player: {
-        id: "player-1",
-        groupId: "group-1",
-        nickname: "Ramiro",
-        createdAt: "2026-08-14T12:00:00.000Z"
-      },
-      group: {
-        id: "group-1",
-        name: "Familia",
-        adminPlayerId: "player-1",
-        createdAt: "2026-08-14T12:00:00.000Z"
-      }
-    };
-
-    const page = inspect(
-      renderPlatformHomeContext(
-        state,
-        { status: "error", message: "No pudimos comprobar si tenés una sala activa." },
-        { onRetryActiveRoom: vi.fn() }
-      )
-    );
-
-    expect(page.text).toContain("No pudimos comprobar si tenés una sala activa.");
-    expect(page.text).toContain("Reintentar");
-    expect(page.text).toContain("Ver Impostor");
-    expect(page.text).toContain("Familia");
-    expect(page.text).not.toContain("Jugar a Impostor");
-    expect(page.hrefs).toEqual(["/grupo", "/impostor", "/tutti-frutti"]);
+  it("offers group onboarding on the homepage to unrecognized visitors", () => {
+    const markup = renderToStaticMarkup(renderPlatformHomeContext({ status: "unrecognized", reason: "no-auth" }, { status: "idle" }));
+    expect(markup).toContain("Tu grupo");
+    expect(markup).toContain("Unirme a un grupo");
+    expect(markup).not.toContain("Crear grupo");
+    expect(markup).not.toContain('href="/impostor"');
   });
 
-  it("keeps loading state focused on checking the group without showing stale data", () => {
-    const markup = renderToStaticMarkup(
-      renderPlatformHomeContext({ status: "loading" })
-    );
-
-    expect(markup).toContain("Comprobando tu grupo");
-    expect(markup).not.toContain("Hola,");
-    expect(markup).not.toContain("Abrir el grupo actual");
-  });
-
-  it("keeps unrecognized users on a lightweight home without onboarding", () => {
-    const page = inspect(
-      renderPlatformHomeContext({ status: "unrecognized", reason: "no-auth" })
-    );
-
-    expect(page.text).toContain(
-      "Entrá a Impostor para unirte a tu grupo o seguir jugando."
-    );
-    expect(page.text).toContain("Jugar");
-    expect(page.text).not.toContain("Encontrá al impostor sin revelar demasiado.");
-    expect(page.hrefs).toContain("/impostor");
-  });
-
-  it("links inconsistent and connection-error states to the neutral Impostor entry", () => {
-    const inconsistent = inspect(
-      renderPlatformHomeContext({
-        status: "inconsistent",
-        reason: "player-without-group"
-      })
-    );
-    const connectionError = inspect(
-      renderPlatformHomeContext({ status: "connection-error" })
-    );
-
-    expect(inconsistent.text).toContain("No pudimos recuperar correctamente");
-    expect(inconsistent.text).toContain(
-      "Podés entrar a Impostor para revisar tu contexto."
-    );
-    expect(inconsistent.text).toContain("Ir a Impostor");
-    expect(inconsistent.text).not.toContain("Ver grupo");
-    expect(inconsistent.hrefs).toContain("/impostor");
-
-    expect(connectionError.text).toContain("No pudimos comprobar tu grupo ahora");
-    expect(connectionError.text).toContain(
-      "Podés entrar a Impostor y volver a intentar desde ahí."
-    );
-    expect(connectionError.text).toContain("Ir a Impostor");
-    expect(connectionError.text).not.toContain("Ver grupo");
-    expect(connectionError.hrefs).toContain("/impostor");
+  it("keeps home recovery and retry actions within the platform surface", () => {
+    const inconsistent = renderToStaticMarkup(renderPlatformHomeContext({ status: "inconsistent", reason: "player-without-group" }, { status: "idle" }, { onRetryBootstrap: vi.fn() }));
+    const connectionError = renderToStaticMarkup(renderPlatformHomeContext({ status: "connection-error" }, { status: "idle" }, { onRetryBootstrap: vi.fn() }));
+    expect(inconsistent).toContain("No pudimos recuperar");
+    expect(inconsistent).toContain("Volver a intentar");
+    expect(connectionError).toContain("Reintentar");
+    expect(inconsistent).not.toContain('href="/impostor"');
   });
 });

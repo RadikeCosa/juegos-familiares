@@ -44,7 +44,7 @@ const ownWords = [
 ];
 
 describe("renderWordBankContent", () => {
-  it("sends direct unauthenticated visits back to Impostor without onboarding", () => {
+  it("sends direct unauthenticated visits to home for group setup", () => {
     const markup = renderToStaticMarkup(
       renderWordBankContent(
         { status: "unrecognized", reason: "no-auth" },
@@ -54,7 +54,7 @@ describe("renderWordBankContent", () => {
     );
 
     expect(markup).toContain("Necesitás entrar a tu grupo");
-    expect(markup).toContain("/impostor");
+    expect(markup).toContain('href="/"');
     expect(markup).not.toContain("Crear grupo");
     expect(markup).not.toContain("Agregar palabra o frase");
   });

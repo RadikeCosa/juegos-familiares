@@ -14,32 +14,16 @@ import {
 import { createBrowserSupabaseClient } from "../../lib/supabase/browser-client";
 import {
   bootstrapPlatformContext,
-  writeLocalIdentityFromContext,
   type PlatformBootstrapClient,
   type PlatformBootstrapState,
-  type RecognizedPlatformContext
 } from "../../lib/supabase/platform-bootstrap";
-import { createGetMyActiveGroupInvitationController } from "../../lib/supabase/platform-groups";
 import { roomPath } from "../../lib/supabase/impostor-rooms";
-import { shareInvitation } from "./admin-invitation-panel";
-import { ImpostorAnonymousOnboardingActions } from "./anonymous-onboarding-actions";
 
 function createPlatformBootstrapClient(): PlatformBootstrapClient {
   return createBrowserSupabaseClient() as unknown as PlatformBootstrapClient;
 }
 
-type ShareGroupInvitationState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "success"; message: string }
-  | { status: "error"; message: string };
-
-export function isShareCancellation(error: unknown) {
-  return error instanceof Error && error.name === "AbortError";
-}
-
-function ImpostorRecognizedContext({
-  group,
+function ImpostorRoomEntry({
   player,
   roomState,
   onRetryActiveRoom,
@@ -49,7 +33,8 @@ function ImpostorRecognizedContext({
   onShowJoinRoomForm,
   onHideJoinRoomForm,
   onJoinRoomSubmit,
-}: RecognizedPlatformContext & {
+}: {
+  player: { nickname: string };
   roomState: ActiveRoomContextState;
   onRetryActiveRoom?: () => void;
   roomCreationState: RoomCreationState;
@@ -59,227 +44,75 @@ function ImpostorRecognizedContext({
   onHideJoinRoomForm?: () => void;
   onJoinRoomSubmit?: (event: FormEvent<HTMLFormElement>) => void;
 }) {
-  const isAdmin = group.adminPlayerId === player.id;
-  const [shareState, setShareState] = useState<ShareGroupInvitationState>({
-    status: "idle"
-  });
-  const invitationController = useRef(
-    createGetMyActiveGroupInvitationController()
-  );
   const joinInputRef = useRef<HTMLInputElement | null>(null);
-
   useEffect(() => {
-    if (roomJoinState.status === "form") {
-      joinInputRef.current?.focus();
-    }
+    if (roomJoinState.status === "form") joinInputRef.current?.focus();
   }, [roomJoinState.status]);
 
-  async function handleShareInvitation() {
-    if (shareState.status === "loading") {
-      return;
-    }
-
-    setShareState({ status: "loading" });
-
-    try {
-      const invitation = await invitationController.current.submit(
-        createBrowserSupabaseClient()
-      );
-      const result = await shareInvitation(invitation);
-
-      setShareState({
-        status: "success",
-        message:
-          result === "shared"
-            ? "Invitación lista para compartir."
-            : "Enlace copiado."
-      });
-    } catch (error) {
-      if (isShareCancellation(error)) {
-        setShareState({ status: "idle" });
-        return;
-      }
-
-      setShareState({
-        status: "error",
-        message: "No pudimos compartir la invitación. Intentá de nuevo."
-      });
-    }
-  }
-
   return (
-    <section
-      className="impostor-platform-context"
-      aria-labelledby="impostor-platform-context-title"
-    >
-      <h2 id="impostor-platform-context-title">Empezar a jugar</h2>
+    <section className="impostor-platform-context" aria-labelledby="impostor-platform-context-title">
+      <h2 id="impostor-platform-context-title">Jugar a Impostor</h2>
       <p>Hola, {player.nickname}.</p>
       {roomState.status === "loading" || roomState.status === "idle" ? (
         <p aria-live="polite">Comprobando sala activa...</p>
       ) : null}
       {roomState.status === "absent" ? (
         <>
-          <p className="impostor-platform-context__meta">
-            No hay una sala activa.
-          </p>
+          <p className="impostor-platform-context__meta">No hay una sala activa.</p>
           {roomJoinState.status === "idle" ? (
             <>
-              <button
-                className="impostor-action impostor-action--primary"
-                type="button"
-                onClick={onShowJoinRoomForm}
-              >
+              <button className="impostor-action impostor-action--primary" type="button" onClick={onShowJoinRoomForm}>
                 Unirme a una sala
               </button>
-              <button
-                className="impostor-action"
-                type="button"
-                disabled={roomCreationState.status === "creating"}
-                onClick={onCreateRoom}
-              >
-                {roomCreationState.status === "creating"
-                  ? "Creando sala..."
-                  : "Crear sala"}
+              <button className="impostor-action" type="button" disabled={roomCreationState.status === "creating"} onClick={onCreateRoom}>
+                {roomCreationState.status === "creating" ? "Creando sala..." : "Crear sala"}
               </button>
-              {roomCreationState.status === "error" ? (
-                <p aria-live="polite">{roomCreationState.message}</p>
-              ) : null}
+              {roomCreationState.status === "error" ? <p role="alert">{roomCreationState.message}</p> : null}
             </>
           ) : (
-            <form
-              className="impostor-create-group impostor-room-join-step"
-              aria-labelledby="impostor-join-room-title"
-              onSubmit={onJoinRoomSubmit}
-            >
+            <form className="impostor-create-group impostor-room-join-step" aria-labelledby="impostor-join-room-title" onSubmit={onJoinRoomSubmit}>
               <div>
                 <p className="impostor-kicker">Unirse a una sala</p>
                 <h3 id="impostor-join-room-title">Ingresá el código de la sala</h3>
-                <p id="impostor-join-room-help">
-                  Pedíselo a la persona que creó la sala.
-                </p>
+                <p id="impostor-join-room-help">Pedíselo a la persona que creó la sala.</p>
               </div>
               <label className="impostor-field">
                 <span>Código de sala</span>
-                <input
-                  ref={joinInputRef}
-                  aria-describedby="impostor-join-room-help"
-                  aria-invalid={roomJoinState.status === "error"}
-                  name="roomCode"
-                  type="text"
-                  autoCapitalize="characters"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  maxLength={8}
-                  required
-                  disabled={roomJoinState.status === "joining"}
-                />
+                <input ref={joinInputRef} aria-describedby="impostor-join-room-help" aria-invalid={roomJoinState.status === "error"} name="roomCode" type="text" autoCapitalize="characters" autoCorrect="off" spellCheck={false} maxLength={8} required disabled={roomJoinState.status === "joining"} />
               </label>
-              {roomJoinState.status === "error" ? (
-                <p className="impostor-room-join-step__error" aria-live="polite">
-                  {roomJoinState.message}
-                </p>
-              ) : null}
+              {roomJoinState.status === "error" ? <p className="impostor-room-join-step__error" aria-live="polite">{roomJoinState.message}</p> : null}
               <div className="impostor-room-join-step__actions">
-                <button
-                  className="impostor-action impostor-action--primary"
-                  type="submit"
-                  disabled={roomJoinState.status === "joining"}
-                >
-                  {roomJoinState.status === "joining"
-                    ? "Entrando..."
-                    : "Entrar a la sala"}
+                <button className="impostor-action impostor-action--primary" type="submit" disabled={roomJoinState.status === "joining"}>
+                  {roomJoinState.status === "joining" ? "Entrando..." : "Entrar a la sala"}
                 </button>
-                <button
-                  className="impostor-action"
-                  type="button"
-                  disabled={roomJoinState.status === "joining"}
-                  onClick={onHideJoinRoomForm}
-                >
-                  Volver
-                </button>
+                <button className="impostor-action" type="button" disabled={roomJoinState.status === "joining"} onClick={onHideJoinRoomForm}>Volver</button>
               </div>
             </form>
           )}
-          <Link className="impostor-action" href="/impostor/grupo">
-            Ver grupo
-          </Link>
         </>
       ) : null}
       {roomState.status === "success" ? (
         <>
-          <p className="impostor-platform-context__meta">
-            {roomState.room.status === "playing"
-              ? "Partida en curso"
-              : "Sala activa"}
-          </p>
-          <Link
-            className="impostor-action impostor-action--primary"
-            href={roomPath(roomState.room.gameType, roomState.room.code)}
-          >
-            {roomState.room.status === "playing"
-              ? "Volver a la partida"
-              : "Volver a la sala"}
-          </Link>
-          <Link className="impostor-action" href="/impostor/grupo">
-            Ver grupo
+          <p className="impostor-platform-context__meta">{roomState.room.status === "playing" ? "Partida en curso" : "Sala activa"}</p>
+          <Link className="impostor-action impostor-action--primary" href={roomPath(roomState.room.gameType, roomState.room.code)}>
+            {roomState.room.status === "playing" ? "Volver a la partida" : "Volver a la sala"}
           </Link>
         </>
       ) : null}
       {roomState.status === "error" ? (
         <>
           <p>No pudimos comprobar si tenés una sala activa.</p>
-          {onRetryActiveRoom ? (
-            <button
-              className="impostor-action impostor-action--primary"
-              type="button"
-              onClick={onRetryActiveRoom}
-            >
-              Reintentar
-            </button>
-          ) : null}
-          <Link className="impostor-action" href="/impostor/grupo">
-            Ver grupo
-          </Link>
+          {onRetryActiveRoom ? <button className="impostor-action impostor-action--primary" type="button" onClick={onRetryActiveRoom}>Reintentar</button> : null}
         </>
       ) : null}
-      <div className="impostor-group-summary">
-        <p>Tu grupo</p>
-        <strong>{group.name}</strong>
-        <Link className="impostor-action" href="/grupo">
-          Ver grupo de Platform
-        </Link>
-      </div>
-      {isAdmin && roomState.status === "absent" ? (
-        <button
-          className="impostor-action"
-          type="button"
-          disabled={shareState.status === "loading"}
-          onClick={() => void handleShareInvitation()}
-        >
-          {shareState.status === "loading"
-            ? "Preparando invitación..."
-            : "Compartir invitación"}
-        </button>
-      ) : null}
-      {isAdmin && shareState.status === "success" ? (
-        <p className="impostor-platform-context__meta" aria-live="polite">
-          {shareState.message}
-        </p>
-      ) : null}
-      {isAdmin && shareState.status === "error" ? (
-        <p className="impostor-onboarding__status" aria-live="polite">
-          {shareState.message}
-        </p>
-      ) : null}
+      <Link className="impostor-action" href="/impostor/grupo/palabras">Administrar banco de palabras</Link>
     </section>
   );
 }
 
-
 export function renderImpostorPlatformContext(
   state: PlatformBootstrapState,
   options: {
-    onRecognizedContext?: (context: RecognizedPlatformContext) => void;
     onRetry?: () => void;
     roomState?: ActiveRoomContextState;
     onRetryActiveRoom?: () => void;
@@ -292,17 +125,12 @@ export function renderImpostorPlatformContext(
   } = {}
 ) {
   if (state.status === "loading") {
-    return (
-      <section className="impostor-platform-context" aria-live="polite">
-        <h2>Comprobando tu grupo...</h2>
-      </section>
-    );
+    return <section className="impostor-platform-context" aria-live="polite"><h2>Comprobando tu grupo...</h2></section>;
   }
 
   if (state.status === "recognized") {
     return (
-      <ImpostorRecognizedContext
-        group={state.group}
+      <ImpostorRoomEntry
         player={state.player}
         roomState={options.roomState ?? { status: "idle" }}
         onRetryActiveRoom={options.onRetryActiveRoom}
@@ -317,92 +145,40 @@ export function renderImpostorPlatformContext(
   }
 
   if (state.status === "inconsistent") {
-    return (
-      <section className="impostor-platform-context" aria-live="polite">
-        <h2>No pudimos recuperar correctamente tu grupo.</h2>
-        <p>Podés intentar más tarde o volver a empezar.</p>
-      </section>
-    );
+    return <section className="impostor-platform-context" aria-live="polite"><h2>No pudimos recuperar tu acceso.</h2><p>Revisá el grupo desde el inicio antes de jugar.</p><Link className="impostor-action impostor-action--primary" href="/">Ir al inicio</Link></section>;
   }
 
   if (state.status === "connection-error") {
-    return (
-      <section className="impostor-platform-context" aria-live="polite">
-        <h2>No pudimos comprobar tu grupo ahora.</h2>
-        <p>Revisá tu conexión e intentá de nuevo.</p>
-        {options.onRetry ? (
-          <button
-            className="impostor-action impostor-action--primary"
-            type="button"
-            onClick={options.onRetry}
-          >
-            Reintentar
-          </button>
-        ) : null}
-      </section>
-    );
+    return <section className="impostor-platform-context" aria-live="polite"><h2>No pudimos comprobar tu acceso ahora.</h2><p>Revisá tu conexión e intentá de nuevo.</p>{options.onRetry ? <button className="impostor-action impostor-action--primary" type="button" onClick={options.onRetry}>Reintentar</button> : null}</section>;
   }
 
-  return (
-    <ImpostorAnonymousOnboardingActions
-      onRecognizedContext={options.onRecognizedContext}
-    />
-  );
+  return <section className="impostor-platform-context" aria-live="polite"><h2>Necesitás unirte a un grupo para jugar.</h2><p>La gestión del grupo está en la pantalla de inicio.</p><Link className="impostor-action impostor-action--primary" href="/">Ir al inicio</Link></section>;
 }
 
 export function ImpostorPlatformContextShell() {
-  const [state, setState] = useState<PlatformBootstrapState>({
-    status: "loading"
-  });
+  const [state, setState] = useState<PlatformBootstrapState>({ status: "loading" });
   const { roomState, retry: retryActiveRoom } = useActiveRoomContext(state);
-  const {
-    roomCreationState,
-    roomJoinState,
-    createRoom,
-    showJoinRoomForm,
-    hideJoinRoomForm,
-    joinRoomByCode
-  } = useRoomEntryActions();
+  const { roomCreationState, roomJoinState, createRoom, showJoinRoomForm, hideJoinRoomForm, joinRoomByCode } = useRoomEntryActions();
 
   async function runBootstrap(showLoading: boolean) {
-    if (showLoading) {
-      setState({ status: "loading" });
-    }
-
+    if (showLoading) setState({ status: "loading" });
     setState(await bootstrapPlatformContext(createPlatformBootstrapClient()));
-  }
-
-  function handleRecognizedContext(context: RecognizedPlatformContext) {
-    writeLocalIdentityFromContext(context);
-    setState({ status: "recognized", ...context });
   }
 
   function handleJoinRoomSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    const formData = new FormData(event.currentTarget);
-
-    joinRoomByCode(String(formData.get("roomCode") ?? ""));
+    joinRoomByCode(String(new FormData(event.currentTarget).get("roomCode") ?? ""));
   }
 
   useEffect(() => {
-    let isActive = true;
-
-    void bootstrapPlatformContext(createPlatformBootstrapClient()).then(
-      (bootstrapState) => {
-        if (isActive) {
-          setState(bootstrapState);
-        }
-      }
-    );
-
-    return () => {
-      isActive = false;
-    };
+    let active = true;
+    void bootstrapPlatformContext(createPlatformBootstrapClient()).then((nextState) => {
+      if (active) setState(nextState);
+    });
+    return () => { active = false; };
   }, []);
 
   return renderImpostorPlatformContext(state, {
-    onRecognizedContext: handleRecognizedContext,
     onRetry: () => void runBootstrap(true),
     roomState,
     onRetryActiveRoom: retryActiveRoom,

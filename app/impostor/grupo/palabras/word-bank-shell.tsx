@@ -22,7 +22,6 @@ import {
   type PlatformBootstrapClient,
   type PlatformBootstrapState
 } from "../../../../lib/supabase/platform-bootstrap";
-import { formatAvailableWords } from "../group-context-shell";
 
 type WordBankDataState =
   | { status: "idle" }
@@ -34,6 +33,10 @@ type WordMutationState =
   | { status: "idle"; message: string }
   | { status: "adding"; message: string }
   | { status: "deleting"; wordIds: string[]; message: string };
+
+function formatAvailableWords(count: number) {
+  return count === 1 ? "1 disponible" : `${count} disponibles`;
+}
 
 const GENERIC_LOAD_ERROR = "No pudimos cargar el banco de palabras. Intentá de nuevo.";
 const EMPTY_WORD_ERROR = "Escribí una palabra o frase.";
@@ -180,12 +183,12 @@ export function renderWordBankContent(
       <section className="impostor-group-card" aria-live="polite">
         <p className="impostor-kicker">Banco de palabras</p>
         <h1>Necesitás entrar a tu grupo.</h1>
-        <p>Volvé a Impostor para crear un grupo o unirte con una invitación.</p>
+        <p>Volvé al inicio para crear o unirte a un grupo.</p>
         <Link
           className="impostor-action impostor-action--primary"
-          href="/impostor"
+          href="/"
         >
-          Ir a Impostor
+          Ir al inicio
         </Link>
       </section>
     );
@@ -196,12 +199,12 @@ export function renderWordBankContent(
       <section className="impostor-group-card" aria-live="polite">
         <p className="impostor-kicker">Banco de palabras</p>
         <h1>No pudimos recuperar correctamente tu grupo.</h1>
-        <p>Volvé a Impostor para revisar tu contexto.</p>
+        <p>Volvé al inicio para revisar tu grupo.</p>
         <Link
           className="impostor-action impostor-action--primary"
-          href="/impostor"
+          href="/"
         >
-          Ir a Impostor
+          Ir al inicio
         </Link>
       </section>
     );

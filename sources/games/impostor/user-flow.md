@@ -10,21 +10,17 @@ visibles de la experiencia productiva. Las reglas pertenecen a
 
 ### Plataforma
 
-- `/`: inicio de Juegos Familiares y acceso a Impostor o al contexto existente.
-- `/grupo`: superficie canónica del Group, con integrantes e invitación para el
-  administrador.
+- `/`: inicio, onboarding y gestión del grupo reconocido, incluidos integrantes e invitación del administrador.
+- `/grupo`: ruta de compatibilidad que redirige a `/`.
+- `/grupo/invitacion/[code]`: incorporación al grupo mediante invitación.
 
 ### Impostor
 
-- `/impostor`: presentación del juego y entrada principal para crear, unirse o
-  volver a una Room.
-- `/impostor/grupo`: contexto secundario del Group dentro de Impostor, también
-  con acceso a Room y al banco de palabras.
-- `/impostor/grupo/palabras`: cantidad disponible, alta y gestión de los
-  aportes propios.
-- `/impostor/join/[code]`: invitación directa para unirse a un Group.
-- `/impostor/sala/[code]`: entrada directa, lobby y todas las fases de una
-  tanda.
+- `/impostor`: entrada al juego para crear, unirse o volver a una Room; también enlaza al banco de palabras. Si falta el contexto de grupo, deriva a `/`.
+- `/impostor/grupo`: ruta de compatibilidad que redirige a `/impostor`.
+- `/impostor/grupo/palabras`: cantidad disponible, alta y gestión de los aportes propios.
+- `/impostor/join/[code]`: ruta de compatibilidad que redirige a `/grupo/invitacion/[code]`.
+- `/impostor/sala/[code]`: entrada directa, lobby y todas las fases de una tanda.
 
 No existe una ruta separada para “join Room”: el enlace compartido abre la
 misma ruta `/impostor/sala/[code]`.
@@ -35,7 +31,7 @@ La aplicación no usa un registro tradicional con email y contraseña. Una
 sesión de Supabase Auth anónima sustenta la identidad liviana cuando una acción
 de producto la necesita.
 
-Renderizar `/`, `/impostor`, `/impostor/grupo`, el banco de palabras o una
+Renderizar `/`, `/impostor`, las rutas de compatibilidad, el banco de palabras o una
 invitación no crea una identidad por sí solo. Sin contexto reconocido, la UI
 ofrece acciones explícitas:
 
@@ -45,7 +41,7 @@ ofrece acciones explícitas:
   de crear identidad o intentar el join.
 
 Si existe Auth pero no un Player asociado, la experiencia guía al flujo de
-Group en vez de inventar pertenencia desde datos locales.
+Group en la portada en vez de inventar pertenencia desde datos locales.
 
 ## Inicio habitual
 
@@ -55,8 +51,8 @@ Un Player reconocido ve su contexto y, si corresponde, una Room activa:
 - `Volver a la partida` cuando la tanda está en curso;
 - acciones para crear o unirse cuando no existe Room activa.
 
-El administrador del Group puede compartir su invitación. El rol de
-administrador no lo convierte en host de una Room.
+La invitación del Group se consulta y comparte desde la pantalla de inicio. El
+rol de administrador del Group no convierte a esa persona en host de una Room.
 
 ## Entrada a una Room
 
@@ -158,8 +154,8 @@ quedan palabras, la UI explica el bloqueo y ofrece terminar la tanda o volver al
 banco para agregar contenido.
 
 Al terminar, la pantalla final muestra ganador o ganadores, clasificación,
-puntajes y cantidad de rondas. `Volver al grupo` sale de la Room cerrada; para
-otra tanda se crea una Room nueva.
+puntajes y cantidad de rondas. `Volver a Impostor` sale de la Room cerrada;
+desde allí se puede crear otra Room.
 
 ## Recovery visible
 

@@ -1263,12 +1263,12 @@ export function renderRoomLobbyContent(
       <section className="impostor-group-card" aria-live="polite">
         <p className="impostor-kicker">Sala</p>
         <h1>Primero necesitás unirte a un grupo.</h1>
-        <p>Volvé a Impostor para crear un grupo o unirte con una invitación.</p>
+        <p>Volvé al inicio para crear o unirte a un grupo.</p>
         <Link
           className="impostor-action impostor-action--primary"
-          href="/impostor"
+          href="/"
         >
-          Ir a Impostor
+          Ir al inicio
         </Link>
       </section>
     );
@@ -1279,12 +1279,12 @@ export function renderRoomLobbyContent(
       <section className="impostor-group-card" aria-live="polite">
         <p className="impostor-kicker">Sala</p>
         <h1>No pudimos recuperar correctamente tu grupo.</h1>
-        <p>Volvé a Impostor para revisar tu contexto.</p>
+        <p>Volvé al inicio para revisar tu grupo.</p>
         <Link
           className="impostor-action impostor-action--primary"
-          href="/impostor"
+          href="/"
         >
-          Ir a Impostor
+          Ir al inicio
         </Link>
       </section>
     );
@@ -1395,7 +1395,7 @@ export function renderRoomLobbyContent(
             ? "1 ronda jugada"
             : `${roundCount} rondas jugadas`}
         </p>
-        <p>La tanda terminó. Desde tu grupo podés crear otra sala.</p>
+        <p>La tanda terminó. Volvé a Impostor para crear otra sala.</p>
         <div
           className="impostor-group-section"
           aria-labelledby="impostor-room-final-score-title"
@@ -1415,8 +1415,8 @@ export function renderRoomLobbyContent(
             ))}
           </ol>
         </div>
-        <Link className="impostor-action impostor-action--primary" href="/impostor/grupo">
-          Volver al grupo
+        <Link className="impostor-action impostor-action--primary" href="/impostor">
+          Volver a Impostor
         </Link>
       </section>
     );
@@ -2321,7 +2321,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
         | "online"
         | "authority"
         | "poll-reconcile",
-      options: { startError?: string; absentDestination?: "join" | "group" } = {},
+      options: { startError?: string; absentDestination?: "join" | "entry" } = {},
     ) => {
       authoritativeRefreshInFlightCountRef.current += 1;
       clearGameStatePollTimeout();
@@ -2380,8 +2380,8 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
             return;
           }
 
-          if (options.absentDestination === "group") {
-            router.replace("/impostor/grupo");
+          if (options.absentDestination === "entry") {
+            router.replace("/impostor");
             return;
           }
 
@@ -2517,7 +2517,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
         | "online"
         | "authority"
         | "poll-reconcile",
-      options: { startError?: string; absentDestination?: "join" | "group" } = {},
+      options: { startError?: string; absentDestination?: "join" | "entry" } = {},
     ) =>
       authoritativeRefreshController.run(() =>
         runAuthoritativeRoomStateRefresh(reason, options),
@@ -2748,7 +2748,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
 
     try {
       await leaveRoomController.submit(createImpostorRoomsClient());
-      router.replace("/impostor/grupo");
+      router.replace("/impostor");
     } catch (error) {
       setLifecycleActionState({
         status: "error",
@@ -2773,7 +2773,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
 
     try {
       await closeRoomController.submit(createImpostorRoomsClient());
-      router.replace("/impostor/grupo");
+      router.replace("/impostor");
     } catch (error) {
       setLifecycleActionState({
         status: "error",
@@ -3243,7 +3243,7 @@ export function ImpostorRoomLobbyShell({ roomCode }: { roomCode: string }) {
       activeRoomId,
       () =>
         void refreshAuthoritativeRoomState("realtime", {
-          absentDestination: "group",
+          absentDestination: "entry",
         }),
     );
 
