@@ -11,6 +11,12 @@ import {
   type TuttiFruttiRoomConfiguration,
   type TuttiFruttiRoomSetupClient
 } from "../../../../lib/supabase/tutti-frutti-room-setup";
+import {
+  getTuttiFruttiGameState,
+  startTuttiFruttiSession,
+  type TuttiFruttiGameClient,
+  type TuttiFruttiStartedGame
+} from "../../../../lib/supabase/tutti-frutti-game";
 import { TuttiFruttiRoomSetup } from "./tutti-frutti-room-setup";
 import {
   closeRoom, getConnectedRoomParticipantIds, getMyActiveRoom, joinRoomByCode,
@@ -51,11 +57,16 @@ export function TuttiFruttiLobbyContent(options: {
   connected: Set<string>;
   connection: "online" | "offline" | "reconnecting";
   busy: boolean;
+  starting: boolean;
+  game: TuttiFruttiStartedGame | null;
+  gameError: string | null;
   actionError: string | null;
+  onStart: () => void;
   onExit: (asHost: boolean) => void;
 }) {
-  const { lobby, connected, connection, busy, actionError, onExit } = options;
+  const { lobby, connected, connection, busy, starting, game, gameError, actionError, onStart, onExit } = options;
   const isHost = lobby.participants.some((participant) => participant.isSelf && participant.isHost);
+  const enoughPlayers = lobby.participants.length >= 2;
   return (
     <section className="impostor-platform-context" aria-labelledby="tutti-room-title">
       <p className="impostor-kicker">Sala de Tutti Frutti</p>
@@ -77,7 +88,36 @@ export function TuttiFruttiLobbyContent(options: {
           </li>
         ))}
       </ul>
-      <p>La sala está lista. Todavía no se puede iniciar una partida de Tutti Frutti.</p>
+      {lobby.room.status === "lobby" ? (
+        <>
+          {isHost ? (
+            <>
+              <p>{enoughPlayers ? "La sala está lista para empezar." : "Se necesitan al menos dos participantes para iniciar."}</p>
+              <button
+                className="impostor-action impostor-action--primary"
+                type="button"
+                disabled={busy || starting || !enoughPlayers || connection !== "online"}
+                onClick={onStart}
+              >
+                {starting ? "Iniciando partida…" : "Iniciar partida"}
+              </button>
+            </>
+          ) : <p>Esperando a que el anfitrión inicie la partida.</p>}
+        </>
+      ) : (
+        <section aria-labelledby="tutti-game-started-title" className="tutti-setup">
+          <h2 id="tutti-game-started-title">Partida iniciada</h2>
+          {game ? (
+            <>
+              <p>Ronda {game.round.number} de {game.roundCount}</p>
+              <p>Letra preparada</p>
+              <p aria-label={`Letra ${game.round.letter}`} className="tutti-game-letter">{game.round.letter}</p>
+              <p>Categorías: {game.categories.map((category) => category.label).join(", ")}</p>
+            </>
+          ) : <p aria-live="polite">Recuperando la partida…</p>}
+          {gameError ? <p role="alert">{gameError}</p> : null}
+        </section>
+      )}
       {lobby.room.status === "lobby" ? (
         <button className="impostor-action" type="button" disabled={busy || connection !== "online"} onClick={() => onExit(isHost)}>
           {isHost ? "Cerrar sala" : "Salir de la sala"}
@@ -94,12 +134,16 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const [state, setState] = useState<RoomState>({ status: "loading" });
   const [presence, setPresence] = useState<RoomPresenceState>({});
   const [actionError, setActionError] = useState<string | null>(null);
+  const [game, setGame] = useState<TuttiFruttiStartedGame | null>(null);
+  const [gameError, setGameError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [connection, setConnection] = useState<"online" | "offline" | "reconnecting">("online");
   const [setupState, setSetupState] = useState<SetupState | null>(null);
   const actionInFlight = useRef(false);
   const requestSequence = useRef(0);
   const setupRequestSequence = useRef(0);
+  const gameRequestSequence = useRef(0);
   const roomPresenceRef = useRef<RoomPresenceSubscription | null>(null);
   const normalizedCode = normalizeRoomJoinCode(code);
 
@@ -145,6 +189,25 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
     }
   }, []);
 
+  const refreshGame = useCallback(async (roomId: string) => {
+    const request = ++gameRequestSequence.current;
+    try {
+      const snapshot = await getTuttiFruttiGameState(
+        createBrowserSupabaseClient() as unknown as TuttiFruttiGameClient,
+        roomId
+      );
+      if (request === gameRequestSequence.current) {
+        setGame(snapshot);
+        setGameError(null);
+      }
+    } catch (error) {
+      if (request === gameRequestSequence.current) {
+        setGame(null);
+        setGameError(error instanceof Error ? error.message : "No pudimos recuperar la partida.");
+      }
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     const request = ++requestSequence.current;
     try {
@@ -153,6 +216,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
       if (!lobby) {
         setState({ status: "absent" });
         setSetupState(null);
+        setGame(null);
       }
       else if (lobby.room.gameType !== "tutti_frutti" || lobby.room.code !== normalizedCode) {
         router.replace(roomPath(lobby.room.gameType, lobby.room.code));
@@ -165,6 +229,8 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
           ? current
           : { status: "loading", roomId: activeRoomId });
         void refreshSetup(activeRoomId);
+        if (lobby.room.status === "playing") void refreshGame(activeRoomId);
+        else { setGame(null); setGameError(null); }
       }
       setConnection("online");
     } catch {
@@ -172,7 +238,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         setState({ status: "error", message: "No pudimos recuperar la sala. Recargá la página para intentar de nuevo." });
       }
     }
-  }, [normalizedCode, refreshSetup, router]);
+  }, [normalizedCode, refreshGame, refreshSetup, router]);
 
   useEffect(() => {
     void Promise.resolve().then(refresh);
@@ -208,9 +274,12 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   }, [refresh]);
 
   useEffect(() => {
-    if (!roomId || !selfPlayerId || lobby?.room.status !== "lobby") return;
+    if (!roomId || !selfPlayerId) return;
     const client = createBrowserSupabaseClient();
     const changes = subscribeToRoomChanges(client as unknown as ImpostorRoomChangesClient, roomId, () => { void refresh(); }, "tutti_frutti");
+    if (lobby?.room.status !== "lobby") {
+      return () => { void changes.unsubscribe(); };
+    }
     const heartbeat = startRoomLivenessHeartbeat({
       refresh: () => refreshMyRoomLiveness(client as unknown as ImpostorRoomsClient),
       onError: () => setConnection("reconnecting")
@@ -247,6 +316,26 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
       if (roomPresenceRef.current === roomPresence) roomPresenceRef.current = null;
     };
   }, [roomId, selfPlayerId, lobby?.room.status, refresh]);
+
+  async function startGame() {
+    if (!lobby || !lobby.room.id || lobby.room.status !== "lobby" || starting || lobby.participants.length < 2) return;
+    setStarting(true);
+    setActionError(null);
+    try {
+      const snapshot = await startTuttiFruttiSession(
+        createBrowserSupabaseClient() as unknown as TuttiFruttiGameClient,
+        lobby.room.id
+      );
+      setGame(snapshot);
+      setGameError(null);
+      await refresh();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "No pudimos iniciar la partida.");
+      await refresh();
+    } finally {
+      setStarting(false);
+    }
+  }
 
   async function joinDirectCode() {
     if (actionInFlight.current) return;
@@ -333,7 +422,11 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         connected={getConnectedRoomParticipantIds(state.lobby.participants, presence)}
         connection={connection}
         busy={busy}
+        starting={starting}
+        game={game}
+        gameError={gameError}
         actionError={actionError}
+        onStart={() => { void startGame(); }}
         onExit={(asHost) => { void exitRoom(asHost); }}
       />
       {setupForRoom?.status === "loading" ? <p aria-live="polite">Recuperando configuración…</p> : null}

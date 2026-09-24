@@ -1033,6 +1033,22 @@ body {
   width: 100%;
 }
 
+.tutti-game-letter {
+  display: grid;
+  width: min(100%, 8rem);
+  min-height: 8rem;
+  place-items: center;
+  border: 2px solid var(--primary);
+  border-radius: var(--radius-lg);
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(3.5rem, 18vw, 5rem);
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: var(--shadow-soft);
+}
+
 @media (min-width: 30rem) {
   .tutti-setup__preset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

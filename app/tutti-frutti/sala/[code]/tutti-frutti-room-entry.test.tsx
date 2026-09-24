@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { ActiveRoomLobby } from "../../../../lib/supabase/impostor-rooms";
+import type { TuttiFruttiStartedGame } from "../../../../lib/supabase/tutti-frutti-game";
 import { TuttiFruttiLobbyContent } from "./tutti-frutti-room-entry";
 
 const lobby: ActiveRoomLobby = {
@@ -12,9 +13,15 @@ const lobby: ActiveRoomLobby = {
   ]
 };
 
-function render(current: ActiveRoomLobby, connected: Set<string>, connection: "online" | "offline" | "reconnecting" = "online") {
+function render(
+  current: ActiveRoomLobby,
+  connected: Set<string>,
+  connection: "online" | "offline" | "reconnecting" = "online",
+  game: TuttiFruttiStartedGame | null = null
+) {
   return renderToStaticMarkup(createElement(TuttiFruttiLobbyContent, {
-    lobby: current, connected, connection, busy: false, actionError: null, onExit: vi.fn()
+    lobby: current, connected, connection, busy: false, starting: false, game,
+    gameError: null, actionError: null, onStart: vi.fn(), onExit: vi.fn()
   }));
 }
 
@@ -28,7 +35,7 @@ describe("Tutti Frutti lobby", () => {
     expect(markup).toContain("conectado");
     expect(markup).toContain("desconectado");
     expect(markup).toContain("Cerrar sala");
-    expect(markup).not.toContain("Iniciar partida");
+    expect(markup).toContain("Iniciar partida");
   });
 
   it("lets a member leave and keeps actions unavailable while offline", () => {
@@ -42,5 +49,39 @@ describe("Tutti Frutti lobby", () => {
     expect(markup).toContain("Salir de la sala");
     expect(markup).toContain("Sin conexión");
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Salir de la sala<\/button>/);
+  });
+
+  it("does not offer start to a guest and waits for the host", () => {
+    const memberLobby: ActiveRoomLobby = {
+      ...lobby,
+      participants: lobby.participants.map((participant) => ({
+        ...participant, isSelf: participant.playerId === "member"
+      }))
+    };
+    const markup = render(memberLobby, new Set());
+    expect(markup).toContain("Esperando a que el anfitrión inicie la partida.");
+    expect(markup).not.toContain("Iniciar partida");
+  });
+
+  it("shows the shared candidate letter once the Room is playing", () => {
+    const playingLobby: ActiveRoomLobby = {
+      ...lobby,
+      room: { ...lobby.room, status: "playing" }
+    };
+    const game: TuttiFruttiStartedGame = {
+      roomId: "room-1", roomStatus: "playing", sessionId: "session-1",
+      startedByPlayerId: "host", roundCount: 5,
+      categories: [{ position: 1, kind: "preset", key: "name", label: "Nombre" }],
+      participants: [
+        { playerId: "host", nickname: "Ana" },
+        { playerId: "member", nickname: "Beto" }
+      ],
+      round: { number: 1, phase: "LETTER_PENDING", letter: "M" }
+    };
+    const markup = render(playingLobby, new Set(), "online", game);
+    expect(markup).toContain("Partida iniciada");
+    expect(markup).toContain("Letra M");
+    expect(markup).toContain("Categorías: Nombre");
+    expect(markup).not.toContain("Iniciar partida");
   });
 });
