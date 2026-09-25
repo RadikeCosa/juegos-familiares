@@ -191,9 +191,10 @@ describe("Tutti Frutti lobby", () => {
         lockedAt: "2026-09-25T12:00:45.100Z", letterDecision: null }
     };
     const review = { roomId: "room-1", sessionId: "session-1", roundId: "round-1", roundNumber: 1,
-      phase: "REVIEWING" as const, categories: [{ position: 1, label: "Nombre", entries: [
+      phase: "REVIEWING" as const, serverNow: "2026-09-25T12:00:46.000Z", activeChallenge: null,
+      categories: [{ position: 1, label: "Nombre", entries: [
         { playerId: "host", nickname: "Ana", answerText: "Mono", isEmpty: false,
-          duplicateGroupId: null, duplicateCount: 0 }
+          duplicateGroupId: null, duplicateCount: 0, canChallenge: false, challengeStatus: null }
       ] }] };
     const reviewState = { status: "ready" as const, sessionId: "session-1", roundNumber: 1, review };
     expect(render(playingLobby, new Set(), "online", game, { reviewState })).toContain("Mono");

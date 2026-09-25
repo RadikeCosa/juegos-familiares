@@ -174,10 +174,28 @@ equal(entry(3, "Cora").duplicateGroupId, null, "punctuation remains distinct");
 equal(entry(4, "Beto").isEmpty, true, "empty answers appear explicitly");
 equal(entry(4, "Cora").duplicateGroupId, null, "empty answers are not grouped");
 equal(entry(5, "Ana").duplicateCount, 3, "a three-player group remains within its category");
-equal(JSON.stringify(await rpc(member.instance, "get_tutti_frutti_review", { target_room_id: room.room_id })),
-  JSON.stringify(review), "roster members see the same locked snapshot");
-equal(JSON.stringify(await rpc(host.instance, "get_tutti_frutti_review", { target_room_id: room.room_id })),
-  JSON.stringify(review), "repeat reads do not mutate the review");
+const comparisonView = snapshot => ({
+  ...snapshot,
+  serverNow: null,
+  categories: snapshot.categories.map(category => ({
+    ...category,
+    entries: category.entries.map(entry => {
+      const sharedEntry = { ...entry };
+      delete sharedEntry.canChallenge;
+      return sharedEntry;
+    })
+  }))
+});
+const memberReview = await rpc(member.instance, "get_tutti_frutti_review", { target_room_id: room.room_id });
+equal(JSON.stringify(comparisonView(memberReview)), JSON.stringify(comparisonView(review)),
+  "roster members see the same answer snapshot");
+equal(memberReview.categories[0].entries.find(answer => answer.nickname === "Ana").canChallenge, true,
+  "a roster member can challenge another player's answer");
+equal(memberReview.categories[0].entries.find(answer => answer.nickname === "Beto").canChallenge, false,
+  "a player cannot challenge their own answer");
+const hostRepeat = await rpc(host.instance, "get_tutti_frutti_review", { target_room_id: room.room_id });
+equal(JSON.stringify(comparisonView(hostRepeat)), JSON.stringify(comparisonView(review)),
+  "repeat reads do not mutate the shared review");
 const hostPlayerId = psql("select id from public.players where auth_user_id="
   + sqlString(host.userId) + "::uuid");
 psql("insert into public.tutti_frutti_rounds (id, session_id, round_number, phase,"

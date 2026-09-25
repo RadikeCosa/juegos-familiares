@@ -106,7 +106,7 @@ revalidan contra las migrations y datos del destino antes de ejecutarse.
 2, 7–16 → 17 recuperación y cierre MVP
 ```
 
-Los Incrementos 0–11 están integrados en el `main` local al cerrar esta entrega;
+Los Incrementos 0–12 están integrados en el `main` local al cerrar esta entrega;
 sus migrations y validadores se ejecutaron sólo en Supabase local. La política
 de sucesión en `playing` está implementada en el
 código del 5, pero falta verificar la definición desplegada antes de atribuirla
@@ -520,32 +520,55 @@ identidad; queda pendiente el smoke visual de dos sesiones aisladas.
 
 ### 12. Desafíos y decisión social
 
+**Estado de implementación:** integrado en `main` local; pendiente de smoke
+visual de dos sesiones. La migration se aplicó a Supabase local sin resetear la
+base existente; los validadores DB locales de los incrementos 11 y 12 pasan,
+al igual que los 766 tests de aplicación y el build. El lint termina con un
+warning previo en `validate-6-2.mjs`. La UI de dos navegadores aún no se
+verificó. El diseño fija una disputa a la vez por ronda y una por respuesta, 30
+segundos de plazo y roster congelado al iniciar la sesión. El
+impugnador registra automáticamente `INVALID`. Con 3+ jugadores el autor no
+vota y se requiere más de la mitad de elegibles; empate significa válida. Con
+dos jugadores, sólo el autor puede aceptar (`INVALID`) o rechazar (`VALID`).
+La falta de respuesta deja válida la respuesta. La DB extiende el Cron
+existente con un lock advisory y lotes acotados; no agrega otro job. El estado
+de la disputa sólo expone al roster el objetivo, plazo, voto propio y
+resultado, nunca votos ajenos ni conteos. Aún no se aplicó la migration
+remotamente. La suite DB global no se ejecutó completa: su precondición exige
+una DB sin Groups y la DB local preexistente contiene fixtures; no se reinició
+para preservarlos. El Cron fue comprobado localmente, no en un destino real.
+
 - **Goal:** una respuesta no vacía puede impugnarse y resolverse con la
   regla de 3+ o acuerdo mutuo de 2, sin bloquear indefinidamente la ronda.
-- **Scope:** creación, voto/acuerdo, quórum, empate válido, resolución;
-  política explícita de elegibilidad/ausencia y orden de desafíos.
+- **Scope:** una impugnación abierta por ronda, un intento por respuesta,
+  creación, voto/acuerdo, quórum, desempate válido, plazo y resolución.
 - **Explicitly out of scope:** diccionarios, IA y árbitro host.
 - **Likely files / areas:** `tutti_frutti_challenges`, votos, RPCs, UI y
   tests de concurrencia.
 - **Database impact:** claves únicas por desafío/votante, FK a answer y
-  roster, estado final inmutable, RLS/grants privados.
+  roster, estado final inmutable, señal Realtime sin contenido de votos,
+  RLS/grants privados.
 - **Application impact:** sólo actores elegibles votan; UI reconstruye
   estado y resultado autorizado.
-- **Security requirements:** autor excluido con 3+, acuerdo explícito de
-  ambos con 2; outsider/no-roster no impugna ni vota; no publicar voto ajeno
-  si la política de visibilidad no lo autoriza.
-- **Concurrency / idempotency:** doble challenge/voto, último voto y timeout
-  resuelven una sola vez; cambios de Presence no alteran quórum sin regla
-  acordada.
-- **Automated verification:** mayoría 3+, empate válido, 2 sin acuerdo
-  válido, autor/no-roster/otro Group, desconexión y retries simultáneos.
-- **Manual smoke:** disputa con tres jugadores y con dos; refresh durante
-  votación; desconexión según política aprobada.
+- **Security requirements:** derivar identidad y elegibilidad desde `auth.uid()`
+  y roster congelado; autor excluido con 3+; sólo autor resuelve con 2;
+  outsider/no-roster no impugna ni vota; votos y conteos ajenos permanecen
+  privados.
+- **Concurrency / idempotency:** orden Room → sesión → sesión Tutti → ronda →
+  impugnación → voto; retries iguales no duplican ni cambian decisiones;
+  Cron y RPC serializan por locks comunes y el job usa lock advisory para
+  evitar trabajo duplicado.
+- **Automated verification:** mayoría, empate, ambos cierres anticipados, dos
+  jugadores, silencio/plazo, voto fuera de plazo, acceso por actor, privacidad,
+  retries y carrera con Cron.
+- **Manual smoke:** dos sesiones aisladas en móvil, revisión compartida del 11,
+  apertura/voto con 2 y 3+ jugadores, refresh, reconexión y vuelta a foreground.
 - **Documentation update:** elegibles, timeout/abstención, mecanismo de
   acuerdo de dos y secuencia UX elegidos.
-- **Exit criteria:** todo desafío llega a resolución determinista; política
-  de ausencia cerrada antes de implementar sus guards.
-- **Depends on:** 11 y decisiones de elegibilidad/timeout/orden.
+- **Exit criteria:** resolución determinista autoritativa, sin voto posterior
+  al plazo; estado y UI reconstruibles desde servidor. Validar Cron en un
+  destino real antes de cualquier aplicación remota.
+- **Depends on:** 11 y reglas confirmadas en `product-decisions.md`.
 - **Does not depend on:** score o ronda siguiente.
 
 ### 13. Puntuación inmutable de ronda
@@ -722,8 +745,7 @@ validación previa a cualquier aplicación remota, no una decisión de producto.
 | Datos reales del destino, estrategia de backfill y alternativa A de sesión mínima | 3/4 y constraints estrictas | 0–2 con migración local segura; el remoto requiere preflight antes de aplicar |
 | Normalización más allá de trim/case | 9/11/13 sólo si se pretende incluirla; si no, declarar versión mínima trim/case en 9 | 0–8 |
 | Cierre temprano al completar todos: elegibilidad con Presence cambiante y reversión de completion | Sólo implementación de ese guard; no se añade silenciosamente al 10 | Flujo con deadline como garantía de progreso |
-| Presentación de review y desafíos secuenciales/paralelos | 11/12, respectivamente | 0–10 |
-| Electores al desconectar, timeout/abstención, visibilidad de votos y acuerdo de dos | 12 y por dependencia 13–17 | 0–11 |
+| Reglas de desafío social | Confirmadas e implementadas en 12 | 0–11 |
 | Autoridad de avance a ronda siguiente | 14 si requiere acción de usuario | 0–13 |
 | Acceso a resultado final tras salir y presentación mínima postgame | 15 en el read model/UX respectivo | 0–14 |
 | Quién inicia revancha, preselección de configuración, salida entre partidas y lobby postgame | 16 | 0–15 |

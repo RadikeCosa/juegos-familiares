@@ -137,8 +137,9 @@ Supabase; no remote migration is implied.
 | `tutti_frutti_answers` | Implemented by Increment 9 for private answer entry; later increments may add final validity and immutable awarded points. | Columns: `session_id`, `round_id`, `player_id`, `category_position`, `original_text`, `normalized_value`, `updated_at`. Unique `(round_id, player_id, category_position)` and composite FKs ensure round, frozen participant, and category belong to the same session. Empty values persist as `''`; direct client grants are revoked. RPC writes are allowed in `PLAYING` and before the authoritative deadline in `FINAL_COUNTDOWN`. |
 | `tutti_frutti_answer_signals` | Implemented by Increment 9 as a private Realtime invalidation surface. | One row per `(session_id, player_id)` with revision and timestamp. RLS allows the corresponding frozen participant to read it; clients cannot write it. The signal contains no answer text or answer row and only prompts an authorized RPC reread. |
 | `tutti_frutti_round_completions` | Persist one completion indication per round participant if early close is supported. | Unique `(round_id, player_id)`; the first valid call establishes the round's one deadline. Later calls do not change it. Individual completion reversal and early-close eligibility remain `OPEN`. |
-| `tutti_frutti_challenges` | Persist the dispute and final outcome. | FK to one non-empty answer and challenger; challenger differs from answer author; at most one open challenge per answer, with final resolution immutable. |
-| `tutti_frutti_challenge_votes` | Persist voter choices. | Unique `(challenge_id, voter_id)` and session roster membership. For 3+ players the answer author cannot vote; for two players mutual agreement must be represented without unilateral invalidation. Exact disconnect eligibility/timeout remains `OPEN`. |
+| `tutti_frutti_challenges` | Implemented locally by Increment 12 on its branch; persists one dispute and final outcome. | FK to one answer and both frozen-roster participants; answer author differs from challenger; one open challenge per round and one challenge per answer; deadline is exactly 30 seconds after opening; status is immutable after resolution. |
+| `tutti_frutti_challenge_votes` | Implemented locally by Increment 12 on its branch; direct client access is closed. | Unique `(challenge_id, voter_player_id)`, immutable choices, and frozen-roster membership. Opening records challenger's `INVALID`. With 3+ players the author cannot vote and invalidation requires more than half of eligible roster; with two, the author explicitly accepts or rejects. |
+| `tutti_frutti_review_signals` | Implemented locally by Increment 12 on its branch as a roster-filtered Realtime invalidation surface. | One revision per `(session_id, round_id)`; clients can read only during locked review and cannot write. Carries no answers or ballots; causes an authorized review reread. |
 | `tutti_frutti_round_scores` | **Do not add initially.** | Per-answer awarded points are immutable scoring snapshots. Per-player round totals and cumulative totals derive by summing them, including zero for absent/empty answers. Add a separate snapshot only if measured read or historical needs justify it. |
 
 Draft configuration must not be the only source for a started session. At
@@ -204,12 +205,19 @@ even before the job runs. The client estimates the server-clock offset for its
 countdown display and rereads the authoritative phase. Early close remains a
 future option and is not part of Increment 10.
 
-Challenge resolution only changes an answer's final validity after authorized
-votes or mutual agreement. The two-player case can use the same vote table
-with the answer author allowed to record agreement, but this is a technical
-candidate, not a decision about UI or timeout. The final eligibility snapshot
-and absence policy must be decided before implementing resolution. Open
-challenges block scoring.
+Challenge resolution changes an answer's final validity after authorized
+votes. The roster frozen at session start remains eligible regardless of
+Presence. Only one challenge may be open per round and each answer can be
+challenged once. Opening automatically records the challenger's `INVALID`
+choice. With 3+ players the answer author cannot vote; invalidity requires more
+than half of all eligible roster members. The answer remains valid on a tie.
+With two players the same table records the author's explicit `INVALID`
+agreement or `VALID` rejection, without a majority calculation. A 30-second
+deadline turns missing votes into abstentions and unresolved challenges into
+valid answers. The 3+ case resolves early when invalidity is reached or becomes
+impossible. Votes and partial counts remain private; the review read returns
+only the caller's choice, deadline and final outcome. Open challenges block
+future scoring.
 
 **RECOMMENDED scoring source of truth:** after all challenges resolve, compute
 10/5/0 from locked answers and final validity in one guarded transaction, then
@@ -275,8 +283,8 @@ delete answers or roster membership.
 | Select / skip letter | Repeated draw or votes after window. | Lock session/round; unique `(session, letter)` and voter/candidate key; server time and phase guard. |
 | First Tutti Frutti call | Simultaneous callers establish two deadlines. | Lock round; validate caller and phase; write deadline only if absent; later calls preserve it. |
 | Edit versus lock | Late answer write lands after lock. | Serialize both through round lock and server deadline; reject writes once locked. |
-| Challenge creation | Two challenges target one answer. | Lock answer/round; unique open-challenge constraint; review phase and challenger guards. |
-| Vote / resolution | Duplicate vote or changing quorum. | Unique challenge/voter key, authorized eligibility policy, locked challenge; resolve once. Disconnect policy remains `OPEN`. |
+| Challenge creation | Two challenges target one answer or round. | Common Room → session → game session → round locking; one-open-per-round and one-per-answer constraints; review phase and challenger guards. |
+| Vote / resolution | Duplicate vote, Cron race, or changed quorum. | Continue lock order through challenge and vote; immutable unique voter choice; advisory transaction lock and bounded batch in the existing Cron job; resolve once. Presence cannot change the frozen roster. |
 | Score | Retry double-awards points. | Require locked answers and zero open challenges; lock round; apply immutable points once and mark `scored_at` in one transaction. |
 | Finish / return lobby | Session and Room diverge. | Lock Room then session; mark finish and set `lobby` atomically; retry returns prior result. |
 | Host succession | Two callers choose different successors. | Lock Room and host liveness; choose deterministically from Room members and, in `playing`, the frozen session roster under the confirmed policy. Verify the deployed RPC before implementation. |

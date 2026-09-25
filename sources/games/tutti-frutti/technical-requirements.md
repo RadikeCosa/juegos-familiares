@@ -151,12 +151,17 @@ product decision, not an implied result of multi-session Rooms.
    and score. If absent at lock, their latest persisted answers are used.
    Presence alone never erases game participation. Eligibility for early
    close when presence changes remains `OPEN`.
-9. Non-empty answers begin review valid. A challenge targets one answer;
-   at most one challenge on that answer may be open. For three or more
-   players, the answer author is excluded and invalidity requires a simple
-   majority; a tie leaves it valid. With two players, invalidation requires
-   mutual agreement. Voter eligibility, timeout, and abstention on disconnect
-   remain `OPEN` and block finalizing those transition guards.
+9. Non-empty answers begin review valid. Only a different session participant
+   may challenge a non-empty answer. The session roster frozen at start defines
+   eligibility regardless of Presence. One challenge may be open per round;
+   each answer can be challenged only once. Opening records the challenger's
+   `INVALID` vote. For three or more players, the answer author cannot vote and
+   invalidation requires more than half of all eligible players; a tie remains
+   valid. With two players, only the answer author can explicitly accept
+   (`INVALID`) or reject (`VALID`) invalidation. Challenges expire after 30
+   seconds; no response is an abstention and leaves the answer valid unless
+   invalidity already met its threshold. Majority outcomes resolve early in
+   both directions.
 10. Scoring occurs only after all challenges are resolved. Duplicate comparison
    is within one round and category, using deterministic normalization.
    Recompute uniqueness from final valid answers. The initial rule is
@@ -183,11 +188,15 @@ Increment 9 revokes all direct client privileges on answer rows and uses
 own-answer RPCs. Realtime emits only a separately protected invalidation
 signal; each recipient rereads through the RPC.
 During review, only authorized session participants may read the answer set
-needed for social judgment. Challenge votes and their visibility must follow
-the final product policy. Impostor secret words, roles, and individual votes
-remain isolated from Tutti Frutti routes and read models. New schema surfaces
-require explicit RLS, grants, RPC checks, and tests for unauthorized actors,
-cross-group access, cross-game access, and non-roster RoomParticipants.
+needed for social judgment. Challenge votes are private: the review RPC returns
+only the caller's vote, the active target and deadline, and a resolved
+per-answer outcome. It never returns other ballots, partial counts, or
+normalized values. The Realtime review signal is roster-filtered and carries
+no vote data; it only prompts an authorized reread. Impostor secret words,
+roles, and individual votes remain isolated from Tutti Frutti routes and read
+models. New schema surfaces require explicit RLS, grants, RPC checks, and tests
+for unauthorized actors, cross-group access, cross-game access, and non-roster
+RoomParticipants.
 
 ## Presence, host, Realtime, and recovery
 

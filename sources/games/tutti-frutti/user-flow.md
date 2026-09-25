@@ -34,8 +34,8 @@ the 45-second countdown, and the server locks answers at expiry. The UI then
 shows each player's own confirmed answers and any unconfirmed edit while
 waiting for review. Increment 11 adds a read-only review of all frozen-roster
 answers, one category at a time in configured order, after lock. Empty answers
-and provisional matches identify the matching participants; challenges and
-scoring are not yet implemented.
+and provisional matches identify the matching participants. Increment 12 adds
+sequential challenges without scoring or advancing the round.
 
 ---
 
@@ -491,7 +491,10 @@ This keeps review lightweight.
 
 # 18. Challenge Flow
 
-A participant may challenge a non-empty answer.
+A participant may challenge a non-empty answer submitted by someone else.
+Each answer can be challenged once, and only one challenge may be open in the
+round. The server records the challenger's `INVALID` vote when the challenge
+opens. The eligible roster stays frozen even if someone disconnects.
 
 Example:
 
@@ -519,18 +522,22 @@ Group decision
 Valid / Invalid
 ```
 
-A challenge does not immediately invalidate the answer.
+A challenge does not immediately invalidate the answer. It remains open for at
+most 30 seconds; an unanswered vote is an abstention and leaves the answer
+valid unless the invalidation threshold was already reached.
 
 ---
 
 # 19. Challenge Voting
 
-`CONFIRMED` for sessions with three or more players:
+For sessions with three or more players:
 
 * the answer author cannot vote on their own answer;
-* other active players vote valid or invalid;
-* simple majority determines invalidity;
-* if invalidity does not obtain a majority, the answer remains valid.
+* other players in the frozen session roster vote valid or invalid;
+* invalidity requires more than half of all eligible players;
+* the answer author cannot vote;
+* a tie leaves the answer valid;
+* the system resolves early when invalidity is reached or becomes impossible.
 
 Example:
 
@@ -543,9 +550,18 @@ Camila        ✓
 Pedro                     ✓
 ```
 
-If the vote ties:
+If exactly half of eligible players vote `INVALID`:
 
 > the answer remains valid.
+
+With two players, the challenger records `INVALID` when opening, and the answer
+author explicitly chooses whether to accept invalidation (`INVALID`) or reject
+it (`VALID`). This uses a separate resolution rule, not a majority calculation.
+
+While the decision is open, players see the target and deadline plus their own
+recorded choice. They do not see other ballots or partial counts. The resolved
+answer status becomes visible to the frozen roster. The review phase remains
+open; this increment does not score or advance the round.
 
 Guiding rule:
 
@@ -814,8 +830,6 @@ before calling Tutti Frutti. Gameplay validation may motivate a later change.
 
 `OPEN` before the corresponding implementation increment:
 
-* whether challenges are resolved sequentially or in parallel;
-* eligibility and timeout during challenge voting when presence changes;
 * early-close eligibility when presence changes;
 * who may initiate a rematch and whether that action is host-only;
 * whether previous configuration is preselected;

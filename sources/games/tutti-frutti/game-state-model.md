@@ -509,11 +509,13 @@ During review:
 * answers are visible;
 * duplicate status may be shown;
 * players may challenge eligible answers;
-* unresolved disputes must be resolved.
+* at most one dispute may be open at a time; each answer may be challenged once;
+* an open dispute resolves by vote, agreement, or its server deadline.
 
 Answers cannot be edited.
 
-The round remains `REVIEWING` until challenge processing is complete.
+Resolving a challenge updates that answer's validity but does not score or
+advance the round. Scoring and round advancement are later transitions.
 
 ---
 
@@ -551,24 +553,17 @@ A resolved challenge must not remain open.
 
 # 20. Challenge Eligibility
 
-Initial expected rules:
-
-* only non-empty answers may be challenged;
-* an answer already invalid cannot be challenged;
-* duplicate answers are challengeable individually if validity is disputed;
-* challenge author and answer author are distinct players.
-
-Whether the same answer may receive multiple simultaneous challenges should be avoided.
-
-Preferred model:
-
-> one open challenge per answer.
+Only a non-empty answer can be challenged, and the challenger must be a
+different participant from its author. The frozen session roster determines
+participation; disconnection and Presence do not change it. Each answer can be
+challenged once and only one challenge may be open in a round. Duplicate
+answers remain separately challengeable.
 
 ---
 
 # 21. Challenge Voting
 
-`CONFIRMED` for sessions with three or more players: eligible voters are:
+For sessions with three or more players, eligible voters are:
 
 ```text
 eligible players
@@ -586,18 +581,22 @@ INVALID
 Resolution:
 
 ```text
-invalid votes > valid votes
-    → INVALID
+INVALID votes > half of all eligible players
+    → RESOLVED_INVALID
 
-otherwise
-    → VALID
+otherwise, once all votes are in or invalidity is impossible
+    → RESOLVED_VALID
 ```
 
-This makes a tie remain valid. For two players, invalidation instead requires
-mutual agreement; without agreement the answer remains valid (`CONFIRMED`).
+The challenger's `INVALID` vote is recorded when opening. Exactly half is a tie
+and leaves the answer valid. The author cannot vote in this branch. For two
+players, no majority is calculated: the challenger has already recorded
+`INVALID`, and only the answer author may explicitly record `INVALID`
+(agreement) or `VALID` (rejection). The decision resolves immediately.
 
-The exact voter eligibility and quorum behavior when presence changes remain
-`OPEN`.
+Every challenge has a 30-second server deadline. A missing vote is an
+abstention; timeout resolves an undecided challenge as valid. A late vote is
+rejected. Roster membership, not connection state, controls eligibility.
 
 ---
 
@@ -618,9 +617,10 @@ eligible voters for an opponent's answer = 1
 ```
 
 The multi-player rule would allow a single opponent to invalidate the answer,
-so it does not apply. `CONFIRMED`: both players must agree to invalidate a
-disputed answer; otherwise it stays valid. The exact interaction and persistence
-mechanism remain `OPEN`.
+so it does not apply. Both players must agree to invalidate a disputed answer;
+otherwise it stays valid. The same vote table records the challenger's
+automatic `INVALID` and the author's explicit decision, using a separate
+resolution branch.
 
 ---
 
@@ -935,16 +935,9 @@ The timer still guarantees eventual progress regardless.
 
 # 34. Disconnect During REVIEWING
 
-A disconnected voter must not indefinitely prevent challenge resolution.
-
-The challenge model must therefore define:
-
-* eligible-voter snapshot;
-* dynamic eligible voters;
-* timeout behavior;
-* abstention behavior.
-
-This is intentionally unresolved in the conceptual model.
+A disconnected voter remains in the frozen eligible roster. An open challenge
+expires after 30 seconds, and an absent vote counts as an abstention. If the
+invalidity threshold has not been reached, timeout leaves the answer valid.
 
 ---
 
@@ -1164,7 +1157,6 @@ snapshots this pool in each session.
 `OPEN` before the corresponding implementation increment:
 
 * eligibility for early close when presence changes, without removing participation;
-* challenge voter eligibility, quorum, timeout or abstention during disconnect;
 * whether an individual completion indication can be reversed before lock (the countdown cannot);
 * normalization details and review ordering;
 * who may initiate a rematch, optional configuration preselection, participant

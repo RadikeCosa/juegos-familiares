@@ -634,8 +634,12 @@ The system acts as a facilitator for disagreement rather than an automated refer
 For games with at least three players:
 
 * the answer author does not vote on their own answer;
-* other eligible players vote valid or invalid;
-* simple majority determines invalidity.
+* every other player in the session's frozen roster is eligible, whether
+  connected or not;
+* the challenger automatically records an `INVALID` vote when opening;
+* invalidation requires more than half of all eligible players to vote
+  `INVALID`;
+* an exact tie leaves the answer valid.
 
 ## Rationale
 
@@ -689,6 +693,23 @@ Two-player games are supported.
 For disputed answers, invalidation requires mutual agreement between the two players.
 
 If no agreement is reached, the answer remains valid.
+
+The challenger automatically records `INVALID` when opening the challenge.
+The answer author explicitly records `INVALID` to agree to invalidation or
+`VALID` to reject it. The majority calculation does not apply to two-player
+games, and the challenger's opening vote does not decide the outcome alone.
+
+## Challenge timing and sequencing
+
+Only one challenge may be open in a round at a time, and each answer may be
+challenged once. A challenge closes 30 seconds after it opens. An unanswered
+vote is an abstention; when the deadline expires, an unresolved answer remains
+valid. The server rejects votes received at or after the deadline. Presence
+changes do not change the frozen eligible roster.
+
+With three or more players, a challenge resolves as soon as invalidity has a
+strict majority, or as soon as the remaining votes cannot reach that majority.
+This includes both early-invalid and early-valid outcomes.
 
 ## Rationale
 
@@ -1119,8 +1140,8 @@ The following details remain intentionally unresolved:
 
 ## Review UX
 
-* whether several challenges may be opened before voting;
-* sequential versus parallel challenge resolution.
+The rules for one open challenge per round and sequential resolution are
+confirmed in the challenge decisions above and implemented for Increment 12.
 
 ## Normalization
 
@@ -1129,8 +1150,8 @@ The following details remain intentionally unresolved:
 
 ## Presence and voting
 
-* exact voter eligibility when a player disconnects during review;
-* challenge timeout or abstention behavior.
+The frozen-roster eligibility and 30-second timeout/abstention rules are
+confirmed in the challenge decisions above and implemented for Increment 12.
 
 ## Post-game lifecycle
 

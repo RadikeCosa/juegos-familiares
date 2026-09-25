@@ -119,7 +119,7 @@ already owned by the roadmap above.
 
 ## Current improvement work
 
-El `main` local integra los Incrementos 0–11 de Tutti Frutti y el traslado de
+El `main` local integra los Incrementos 0–12 de Tutti Frutti y el traslado de
 la gestión de grupos a la portada. Los Incrementos 7–9 se integraron desde
 `codex/tutti-frutti-increment-9`. Este estado local no equivale a una
 publicación: la baseline productiva indicada arriba no cambió y no se
@@ -185,6 +185,16 @@ mientras la transición de
 bloqueo estaba sin commit. Se revisó la UI móvil con una identidad; quedó
 pendiente el smoke visual de dos sesiones aisladas. No se aplicó migration
 remota.
+
+El Incremento 12 está integrado al `main` local. Agrega impugnaciones durante
+la revisión: en partidas de tres o más participantes decide la mayoría estricta
+del roster congelado, y en partidas de dos decide el autor. La disputa vence a
+los 30 segundos y la DB extiende el Cron existente con resolución autónoma. Los
+validadores locales de Tutti Frutti 11 y 12 y la suite de aplicación pasan; el
+lint conserva un warning previo y el build pasa. Quedan pendientes el smoke
+visual con dos sesiones aisladas y la comprobación operacional de Cron en un
+destino real. La migration no se aplicó remotamente y la baseline productiva no
+cambió.
 
 Only observations confirmed against the current product should become active
 improvement work. Historical UX findings are evidence to revalidate, not an

@@ -1346,6 +1346,36 @@ body {
   font-weight: 700;
 }
 
+.tutti-review__entry .impostor-action {
+  min-height: 2.75rem;
+  justify-self: start;
+}
+
+.tutti-challenge {
+  display: grid;
+  gap: var(--space-2);
+  border: 2px solid var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--background);
+  padding: var(--space-3);
+}
+
+.tutti-challenge h3,
+.tutti-challenge p {
+  margin: 0;
+}
+
+.tutti-challenge__actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: var(--space-2);
+}
+
+.tutti-challenge__actions .impostor-action {
+  min-height: 2.75rem;
+  width: 100%;
+}
+
 .tutti-review__empty {
   color: var(--foreground-muted);
   font-style: italic;
