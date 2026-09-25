@@ -1074,6 +1074,103 @@ body {
   min-height: 2.875rem;
 }
 
+.tutti-answer-entry {
+  display: grid;
+  width: min(100%, 40rem);
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: clamp(var(--space-4), 5vw, var(--space-6));
+  box-shadow: var(--shadow-soft);
+}
+
+.tutti-answer-entry h2,
+.tutti-answer-entry p {
+  margin: 0;
+}
+
+.tutti-answer-entry h2 {
+  color: var(--foreground);
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(1.35rem, 5vw, 1.75rem);
+}
+
+.tutti-answer-entry > p,
+.tutti-answer-entry__offline {
+  color: var(--foreground-muted);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.tutti-answer-entry__fields {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.tutti-answer-field {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-2);
+}
+
+.tutti-answer-field label {
+  color: var(--foreground);
+  font-weight: 750;
+}
+
+.tutti-answer-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--background);
+  color: var(--foreground);
+  padding: 0 var(--space-3);
+  font: inherit;
+}
+
+.tutti-answer-field input:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.tutti-answer-field__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  color: var(--foreground-muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.tutti-answer-field [role="alert"] {
+  color: var(--danger);
+  font-weight: 650;
+}
+
+.tutti-answer-field__stale,
+.tutti-answer-entry__load-error {
+  display: grid;
+  gap: var(--space-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+}
+
+.tutti-answer-field__stale .impostor-action,
+.tutti-answer-entry__load-error .impostor-action {
+  width: 100%;
+  min-height: 2.875rem;
+}
+
+.tutti-answer-entry__offline {
+  border-inline-start: 3px solid var(--accent);
+  padding-inline-start: var(--space-3);
+}
+
 @media (min-width: 30rem) {
   .tutti-setup__preset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

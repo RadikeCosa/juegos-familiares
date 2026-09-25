@@ -19,6 +19,7 @@ import {
   type TuttiFruttiStartedGame
 } from "../../../../lib/supabase/tutti-frutti-game";
 import { TuttiFruttiRoomSetup } from "./tutti-frutti-room-setup";
+import { TuttiFruttiAnswerEntry } from "./tutti-frutti-answer-entry";
 import {
   closeRoom, getConnectedRoomParticipantIds, getMyActiveRoom, joinRoomByCode,
   leaveRoom, normalizeRoomJoinCode, reassignRoomHostIfStale,
@@ -70,6 +71,7 @@ export function TuttiFruttiLobbyContent(options: {
 }) {
   const { lobby, connected, connection, busy, starting, voting, skipSeconds, game, gameError, actionError, onStart, onSkipVote, onExit } = options;
   const isHost = lobby.participants.some((participant) => participant.isSelf && participant.isHost);
+  const selfPlayerId = lobby.participants.find((participant) => participant.isSelf)?.playerId;
   const enoughPlayers = lobby.participants.length >= 2;
   return (
     <section className="impostor-platform-context" aria-labelledby="tutti-room-title">
@@ -140,7 +142,19 @@ export function TuttiFruttiLobbyContent(options: {
                   )}
                 </section>
               ) : game.round.phase === "PLAYING" ? (
-                <p role="status">Letra confirmada. La ronda está lista.</p>
+                <>
+                  <p role="status">Letra confirmada. La ronda está lista.</p>
+                  {lobby.room.id && selfPlayerId ? (
+                    <TuttiFruttiAnswerEntry
+                      roomId={lobby.room.id}
+                      sessionId={game.sessionId}
+                      playerId={selfPlayerId}
+                      roundNumber={game.round.number}
+                      categories={game.categories}
+                      connection={connection}
+                    />
+                  ) : null}
+                </>
               ) : null}
             </>
           ) : <p aria-live="polite">Recuperando la partida…</p>}
