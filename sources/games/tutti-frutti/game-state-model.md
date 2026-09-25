@@ -238,6 +238,16 @@ Other players' answers remain hidden.
 
 The round remains `PLAYING` until the first valid Tutti Frutti action.
 
+Increment 9 persists an answer for each `(round, participant, category
+position)` and keeps prior rounds' rows as history. An unanswered category
+reads as an empty value; saving empty text or only surrounding whitespace
+persists an empty row. Each participant reads only their own answers. The
+server permits edits only while the active round phase is `PLAYING`. The
+client autosaves after 500 ms and reloads the authorized state on entry,
+reconnection, or answer invalidation. Other tabs' unsaved drafts are retained
+and marked stale until the player saves or reloads the server value. No
+countdown, lock, review, or score transition is implemented by this increment.
+
 ---
 
 # 9. Player Completion State
@@ -420,6 +430,15 @@ empty → no valid answer / zero-score state
 
 A non-empty answer remains valid unless challenged and invalidated.
 
+In the Increment 9 implementation, each answer also stores the original
+display text, a normalized comparison value, and the server update timestamp.
+The session pins normalization version 1: normalize to NFC, trim external
+Unicode whitespace, and lowercase for comparison while preserving accents,
+punctuation, and internal spaces. The original text is shown to its owner;
+input is limited to 200 Unicode code points after NFC. A value that becomes
+empty after trimming is stored as an empty string. Final validity, challenge
+state, and points remain for later increments.
+
 ---
 
 # 16. Normalization
@@ -428,21 +447,19 @@ Normalization is used for comparison, not display.
 
 The original input must remain preserved.
 
-Potential normalization pipeline:
+Implemented normalization version 1 for comparison:
 
 ```text
 original text
   ↓
-trim whitespace
+NFC
   ↓
-case normalization
+trim external Unicode whitespace
   ↓
-optional accent normalization
-  ↓
-comparison value
+lowercase, preserving accents/punctuation/internal whitespace
 ```
 
-Exact normalization rules remain open.
+Plural/singular equivalence and spelling tolerance remain open.
 
 Normalization must be deterministic and identical for all players.
 

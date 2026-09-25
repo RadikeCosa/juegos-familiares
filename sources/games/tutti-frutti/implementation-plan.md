@@ -105,10 +105,9 @@ revalidan contra las migrations y datos del destino antes de ejecutarse.
 2, 7–16 → 17 recuperación y cierre MVP
 ```
 
-Los Incrementos 0–6 están integrados en el `main` local. Los Incrementos 7 y 8
-están implementados en `codex/tutti-frutti-increment-7`, pero aún no
-integrados en `main`; sus migrations y validadores se ejecutaron sólo en
-Supabase local. La política de sucesión en `playing` está implementada en el
+Los Incrementos 0–9 están integrados en el `main` local al cerrar esta entrega;
+sus migrations y validadores se ejecutaron sólo en Supabase local. La política
+de sucesión en `playing` está implementada en el
 código del 5, pero falta verificar la definición desplegada antes de atribuirla
 a producción. El pool de letras del 7 quedó definido como `A B C D E F G H I
 J L M N O P R S T U V`. El Incremento 9 depende del 8; el 17 completa la
@@ -334,9 +333,9 @@ el smoke manual de dos identidades; no hay migration remota aplicada.
 
 ### 7. Inicio Tutti y primera letra candidata
 
-**Estado:** implementado en la rama `codex/tutti-frutti-increment-7`; no
-integrado en `main`. Migration y pruebas DB ejecutadas contra Supabase local;
-sin aplicación remota ni smoke visual manual en dos navegadores.
+**Estado:** implementado e integrado en `main` local. Migration y pruebas DB
+ejecutadas contra Supabase local; sin aplicación remota ni smoke visual manual
+en dos navegadores.
 
 - **Goal:** host inicia una sesión con mínimo dos jugadores y primera letra
   preparada, sin saltar ni responder aún.
@@ -369,8 +368,8 @@ sin aplicación remota ni smoke visual manual en dos navegadores.
 
 ### 8. Ventana y voto para saltar letra
 
-**Estado:** implementado en `codex/tutti-frutti-increment-7`; validado en
-Supabase local. No integrado en `main` ni aplicado remotamente.
+**Estado:** implementado e integrado en `main` local; validado en Supabase
+local. No aplicado remotamente.
 
 - **Goal:** jugadores saltan una candidata por mayoría antes de comenzar la
   ronda; si no se alcanza, la misma candidata queda aceptada.
@@ -404,29 +403,42 @@ Supabase local. No integrado en `main` ni aplicado remotamente.
 
 ### 9. Respuestas privadas y persistentes
 
+**Estado:** implementado e integrado en `main` local. La migration y el
+validador de DB pasaron en Supabase local; las migrations remotas no se
+aplicaron.
+
 - **Goal:** cada integrante del roster edita sus respuestas por categoría y
   las recupera antes del lock.
-- **Scope:** texto original, valor normalizado determinista, upsert por
-  ronda/Player/categoría, lectura sólo propia en fase de entrada.
+- **Scope implementado:** texto original, normalización v1 versionada por
+  sesión, upsert por ronda/Player/posición de categoría, lectura sólo propia,
+  fase editable `PLAYING`, y retención del historial por ronda.
 - **Explicitly out of scope:** ver respuestas ajenas, lock y puntaje.
 - **Likely files / areas:** `tutti_frutti_answers`, RPCs/lecturas privadas,
   formulario y tests de privacidad.
 - **Database impact:** unicidad de clave, FK cruzadas de sesión/ronda/
   categoría/roster, RLS/grants deny-by-default.
-- **Application impact:** guardado con error/retry explícito; refresh recupera
-  último valor aceptado por servidor.
+- **Application impact:** autoguardado tras 500 ms, estados accesibles y
+  reintento usando el borrador actual; refresh/reconexión recupera el último
+  valor aceptado por servidor. Invalidaciones Realtime no transportan respuestas.
 - **Security requirements:** autor único; ni select directo, RPC amplia ni
   Realtime filtran respuestas ajenas durante PLAYING.
-- **Concurrency / idempotency:** último write aceptado bajo orden/versionado
-  definido; duplicado de petición no crea segunda respuesta.
-- **Automated verification:** actor propio/ajeno, no-roster, cross-room/game,
-  privacidad de lecturas y payloads; unicidad y reconnect.
-- **Manual smoke:** dos dispositivos escriben; ninguno ve respuestas del
-  otro; reconexión restaura sólo las propias.
-- **Documentation update:** privacidad y normalización decidida, con versión
-  de regla de sesión.
-- **Exit criteria:** aislamiento comprobado también en DB, no sólo en UI.
-- **Depends on:** 8 y decisión de normalización mínima a persistir.
+- **Concurrency / idempotency:** clave única por ronda/participante/categoría;
+  último guardado confirmado gana y la RPC devuelve el valor/timestamp
+  canónicos de su transacción. Guardados por campo se serializan por pestaña.
+- **Automated verification:** validador local cubre actor propio/ajeno,
+  cross-room/game, códigos SQLSTATE, límites/normalización, acceso directo,
+  payload de invalidación, historial por ronda, carreras concurrentes y RPC
+  canónica. Suite de tests del proyecto y regresión focalizada de Impostor
+  pasaron.
+- **Manual smoke:** no se completó el smoke visual de dos navegadores. El
+  validador local de DB ejercitó dos identidades, privacidad y Realtime.
+- **Documentation update:** completada en las fuentes activas de Tutti
+  Frutti, arquitectura y estado del proyecto.
+- **Exit criteria:** aislamiento y comportamiento de DB comprobados; el build
+  compiló, pero Next falló interpretando `tsc --showConfig`. El chequeo de
+  tipos directo pasó. No se limpiaron los fixtures escritos por el validador.
+- **Depends on:** 8 y la decisión de normalización registrada en la sección
+  46 de `product-decisions.md`.
 - **Does not depend on:** votación de desafíos ni scoring.
 
 ### 10. Llamada, countdown y lock

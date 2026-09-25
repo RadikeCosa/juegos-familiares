@@ -12,9 +12,10 @@ migration.
 
 The Increment 3 local migration applies the recommended minimal session
 identity and Impostor backfill with explicit linkage, atomic retry checks, and
-closed-by-default access. It is not a production baseline: remote preflight
-was unavailable, new writers are not mirrored until Increment 4, and the
-application does not consume `room_sessions` yet.
+closed-by-default access. Later local increments consume that identity for
+Tutti Frutti configuration, session start, letter skipping, and private answer
+entry. These local migrations are not a production baseline; no remote
+migration is implied.
 
 The design must allow multiple sequential Tutti Frutti sessions in one Room,
 preserve one active Room per Player, prevent simultaneous sessions in one
@@ -115,20 +116,22 @@ JSONB row, with atomic replacement, host-only writes in `lobby`, member reads,
 and defaults returned without persisting a row. Increment 7 adds the session,
 ordered category snapshot, round, and pending letter candidate described
 below. Increment 8 adds candidate deadlines and private fixed skip votes; the
-authorized read returns only aggregate counts. These changes are present on
-`codex/tutti-frutti-increment-7` and were validated only against local
-Supabase; they are not yet integrated in `main` or applied remotely. Remaining
-answer and later gameplay entities are future design candidates.
+authorized read returns only aggregate counts. Increment 9 implements private
+persistent answer entry. The current answer-entry contract permits writes
+only during `PLAYING`; countdown, lock, review and scoring remain future
+design candidates. These migrations were validated only against local
+Supabase; no remote migration is implied.
 
 | Candidate | Persist or derive? | Relationships and invariant |
 | --- | --- | --- |
 | `tutti_frutti_room_setup` | Implemented in Increment 6 as one Room-scoped JSONB draft. | One row per Tutti Frutti Room; host-only writes while Room is `lobby`; member reads remain available later. Each save atomically replaces rounds and ordered preset/custom categories. Defaults are returned without a row. Prior-value preselection remains `OPEN`. |
-| `tutti_frutti_sessions` | Implemented by Increment 7, keyed by shared `room_sessions.id`. | Stores configured round count, approved 20-letter pool snapshot, and initiating Player. Direct client access is closed. |
+| `tutti_frutti_sessions` | Implemented by Increment 7 and extended by Increment 9, keyed by shared `room_sessions.id`. | Stores configured round count, approved 20-letter pool snapshot, initiating Player, and immutable answer-normalization version (currently 1). Direct client access is closed. |
 | `tutti_frutti_session_categories` | Implemented by Increment 7 as ordered snapshot rows. | Stores effective category labels and preset/custom identity so lobby edits cannot alter the session. |
-| `tutti_frutti_rounds` | Implemented by Increment 7; first row is created at start. | Round 1 begins in `LETTER_PENDING`; later phase transitions and gameplay fields remain future increments. |
+| `tutti_frutti_rounds` | Implemented by Increment 7; first row is created at start. | Round 1 begins in `LETTER_PENDING`; Increment 8 accepts one candidate into `PLAYING`; later phase transitions remain future increments. |
 | `tutti_frutti_letter_candidates` | Implemented by Increment 7 and extended in Increment 8. | Letter belongs to the session pool, is unique across the session, and has one server deadline. The current candidate moves to skipped or accepted; one pending candidate is allowed per session. |
 | `tutti_frutti_letter_skip_votes` | Implemented by Increment 8 with closed direct access. | Unique `(candidate_id, player_id)`, frozen-roster FK, server timestamp, and one immutable vote per candidate. Authorized RPC reads return aggregate counts only. |
-| `tutti_frutti_answers` | Persist latest accepted original text during entry, deterministic normalized value, final validity, and immutable awarded points after scoring. | Unique `(round_id, player_id, category_id)` with composite session-consistency checks. Author can write only before lock. Missing/empty values score zero. Open challenge status can be derived. |
+| `tutti_frutti_answers` | Implemented by Increment 9 for private answer entry; later increments may add final validity and immutable awarded points. | Columns: `session_id`, `round_id`, `player_id`, `category_position`, `original_text`, `normalized_value`, `updated_at`. Unique `(round_id, player_id, category_position)` and composite FKs ensure round, frozen participant, and category belong to the same session. Empty values persist as `''`; direct client grants are revoked. RPC writes are currently allowed only in `PLAYING`. |
+| `tutti_frutti_answer_signals` | Implemented by Increment 9 as a private Realtime invalidation surface. | One row per `(session_id, player_id)` with revision and timestamp. RLS allows the corresponding frozen participant to read it; clients cannot write it. The signal contains no answer text or answer row and only prompts an authorized RPC reread. |
 | `tutti_frutti_round_completions` | Persist one completion indication per round participant if early close is supported. | Unique `(round_id, player_id)`; the first valid call establishes the round's one deadline. Later calls do not change it. Individual completion reversal and early-close eligibility remain `OPEN`. |
 | `tutti_frutti_challenges` | Persist the dispute and final outcome. | FK to one non-empty answer and challenger; challenger differs from answer author; at most one open challenge per answer, with final resolution immutable. |
 | `tutti_frutti_challenge_votes` | Persist voter choices. | Unique `(challenge_id, voter_id)` and session roster membership. For 3+ players the answer author cannot vote; for two players mutual agreement must be represented without unilateral invalidation. Exact disconnect eligibility/timeout remains `OPEN`. |
@@ -160,14 +163,31 @@ separate user-visible states. Their guards remain mandatory either way.
 
 ## Answers, countdown, review, and scoring
 
-Answer writes should serialize with round lock on the same round row. The
-server stores original text and the most recent accepted value; it applies a
-deterministic session-versioned normalization at write or lock. The exact
-normalization beyond trim/case is `OPEN`. The private entry read model returns
-only the actor's answers. At `REVIEWING`, an authorized session participant may
-read the answer set and duplicate groups needed for review. Duplicate groups
-are derived from final valid normalized answers in the same round/category,
-not stored while validity can change.
+Increment 9 serializes answer writes through Room, session, and current-round
+locks. Its read RPC returns every active category with an empty value where
+the actor has not saved a row. The write RPC derives the actor and current
+round from server state, requires Room status `playing`, phase exactly
+`PLAYING`, frozen-roster membership, and a category in the session snapshot.
+It upserts the answer and returns the canonical persisted text and
+`updated_at`. Writes across tabs/devices are last-transaction-committed wins;
+an answer's prior-round rows remain unchanged.
+
+Normalization version 1 is stored on the session. The server normalizes to
+NFC, trims external Unicode whitespace, and lowercases for comparison. It
+preserves accents, punctuation, and internal whitespace. The original text is
+preserved for display, except empty or whitespace-only input is stored as the
+empty string. Both client and server limit input to 200 Unicode code points
+after NFC. The read model returns only the actor's answers. At `REVIEWING`, a
+separate authorized read may expose the answer set and duplicate groups needed
+for social review; that read is not part of Increment 9. Duplicate groups are
+derived from final valid normalized answers in the same round/category, not
+stored while validity can change.
+
+The Realtime publication includes only `tutti_frutti_answer_signals`, never
+the answer table. Its own-player RLS policy protects each invalidation row.
+Clients use a signal only to reread through the own-answer RPC, and also read
+on page load, visibility return, and network reconnection. Drafts stay local
+in memory and are marked stale when a newer confirmed server value arrives.
 
 The round stores one authoritative `countdown_started_at`, `countdown_ends_at`,
 and `triggered_by` as candidates. A first valid call locks the round row,

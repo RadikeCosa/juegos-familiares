@@ -10,15 +10,15 @@ proposed physical representation and alternatives are in
 `physical-data-model.md`; the domain flow is in `game-state-model.md`.
 
 The local `main` implements Impostor gameplay, game-aware Room routing, a
-Tutti Frutti coordination lobby, and shared lobby configuration. Increment 7
-is implemented in branch `codex/tutti-frutti-increment-7`, not yet integrated
-into `main`: it starts the first Tutti Frutti session and exposes its initial
-`LETTER_PENDING` candidate. Answer entry and later gameplay remain future
-increments. Increment 8 is also implemented in that branch, not yet
-integrated into `main`: it adds the 5-second strict-majority skip vote and
-lazy resolution on authorized state reads. The `rooms` table persists an
-immutable game type and active-Room discovery returns it; the zero-argument
-create path remains Impostor-only.
+Tutti Frutti coordination lobby, shared lobby configuration, session start,
+letter skipping, and private persistent answer entry. Increment 7 snapshots
+configuration and roster while starting the first session and its initial
+`LETTER_PENDING` candidate. Increment 8 adds the 5-second strict-majority skip
+vote and lazy resolution on authorized state reads. Increment 9 adds
+participant-private answer reads and writes during `PLAYING`; countdown,
+locking, review, and scoring remain future increments. The `rooms` table
+persists an immutable game type and active-Room discovery returns it; the
+zero-argument create path remains Impostor-only.
 `game_sessions.state` and
 `session_players` contain Impostor rules. The
 source baseline and the distinction between confirmed host-succession policy,
@@ -109,36 +109,53 @@ product decision, not an implied result of multi-session Rooms.
    unused pool would be smaller than the number of configured rounds still to
    play. The authorized state read resolves expired deadlines lazily; client
    polling never decides the outcome.
-4. Answers are keyed by session round, session participant, and frozen
-   category. The original text is preserved. Only its author may change it,
-   and only while the round is `PLAYING` or `FINAL_COUNTDOWN` and not locked.
-   Each accepted write is durable so reconnect can recover the latest
-   persisted value. Autosave presentation and exact normalization remain
-   outside this contract.
-5. The first server-valid Tutti Frutti call starts exactly one irreversible
+4. Increment 9 implements answers keyed by session round, frozen session
+   participant, and category position. The original non-empty text is
+   preserved; empty or whitespace-only input is persisted as empty. Only the
+   author can read or write their answers through RPCs. The implemented write
+   phase is exactly `PLAYING`; `LETTER_PENDING` and all later phases reject
+   writes. Increment 10 must explicitly extend the guard to `FINAL_COUNTDOWN`
+   if editing is to remain available until lock. Every round keeps its own
+   answer history. The session stores immutable normalization version 1:
+   NFC, trimmed Unicode whitespace and case-insensitive comparison, while
+   preserving accents, punctuation, and internal spaces. Input is limited to
+   200 Unicode code points after NFC, counted equally in client and server.
+5. The answer-table read and write grants are revoked. The own-answer read RPC
+   returns empty values for categories without rows and only the authenticated
+   participant's rows. The save RPC derives session, round and participant,
+   serializes with round writes, and returns the canonical persisted answer
+   and timestamp. Stable SQLSTATEs distinguish invalid input (`P0041`),
+   non-editable phase (`P0042`) and invalid category (`P0043`).
+6. A participant's answer change updates a separate RLS-filtered Realtime
+   signal without answer text. Other tabs reread through the own-answer RPC;
+   load, visibility return and network reconnection also trigger a read.
+   Unsaved local drafts remain in memory and are marked stale when another
+   tab has a newer server value. Autosave waits 500 ms, serializes by category
+   in one tab, and a retry uses the current draft. There is no offline queue.
+7. The first server-valid Tutti Frutti call starts exactly one irreversible
    deadline. The preferred all-fields-complete eligibility rule remains a
    `WORKING HYPOTHESIS` pending gameplay validation. Later calls cannot
    extend or reset the deadline. All players may edit until the shared lock.
    The 45-second duration is a tunable hypothesis; the authoritative deadline
    is server-derived, never a client countdown.
-6. The round locks once at the deadline or a valid early-close condition.
+8. The round locks once at the deadline or a valid early-close condition.
    A disconnected participant keeps their roster place, previous answers,
    and score. If absent at lock, their latest persisted answers are used.
    Presence alone never erases game participation. Eligibility for early
    close when presence changes remains `OPEN`.
-7. Non-empty answers begin review valid. A challenge targets one answer;
+9. Non-empty answers begin review valid. A challenge targets one answer;
    at most one challenge on that answer may be open. For three or more
    players, the answer author is excluded and invalidity requires a simple
    majority; a tie leaves it valid. With two players, invalidation requires
    mutual agreement. Voter eligibility, timeout, and abstention on disconnect
    remain `OPEN` and block finalizing those transition guards.
-8. Scoring occurs only after all challenges are resolved. Duplicate comparison
+10. Scoring occurs only after all challenges are resolved. Duplicate comparison
    is within one round and category, using deterministic normalization.
    Recompute uniqueness from final valid answers. The initial rule is
    10/5/0; the first caller receives no speed bonus. Persist an immutable
    scoring snapshot so later normalization or code changes cannot alter
    historical results. Round and game totals can be derived from it.
-9. When the configured number of rounds has been scored, mark the session
+11. When the configured number of rounds has been scored, mark the session
    finished and immutable, detach it as the active session, and return its
    Room from `playing` to `lobby` in one transaction. Retain finished results
    for authorized session participants and create a new session for a rematch.
@@ -154,6 +171,9 @@ membership alone does not grant access to a session's private data.
 Before `REVIEWING`, a participant can read only their own answers and the
 shared non-secret round state. Other players' answers must not appear in
 tables readable through client grants, Realtime payloads, or broad read RPCs.
+Increment 9 revokes all direct client privileges on answer rows and uses
+own-answer RPCs. Realtime emits only a separately protected invalidation
+signal; each recipient rereads through the RPC.
 During review, only authorized session participants may read the answer set
 needed for social judgment. Challenge votes and their visibility must follow
 the final product policy. Impostor secret words, roles, and individual votes
@@ -218,7 +238,8 @@ authorization and destination confirmation.
 `OPEN`: who initiates a rematch, whether it is host-only, configuration
 preselection, departure between matches, and post-game lobby UI; challenge
 voter eligibility and timeout/abstention on disconnect; early-close
-eligibility under changing Presence; normalization beyond trim/case; review ordering;
-and the precise individual-completion interaction. These must be resolved before implementing
-the transitions they govern. They do not change the confirmed Session-finish
-and Room-return lifecycle.
+eligibility under changing Presence; semantic normalization such as
+plural/singular equivalence or spelling tolerance; review ordering; and the
+precise individual-completion interaction. These must be resolved before
+implementing the transitions they govern. They do not change the confirmed
+Session-finish and Room-return lifecycle.

@@ -21,15 +21,15 @@ It focuses on:
 
 It intentionally avoids defining persistence or database implementation details.
 
-Current local `main` reaches the shared lobby and configuration: players can
-see the code, members, host, and visual connection indicators, recover on
-refresh, leave, or close as host. The host can configure and save rounds and
-categories; members see the last confirmed configuration. Increment 7 is
-implemented in `codex/tutti-frutti-increment-7`, not yet integrated into
-`main`: the host can start with at least two participants, and all frozen
-participants load the same first pending letter. Reopening or reconnecting
-reconstructs that state. Letter skipping is implemented by Increment 8;
-answer entry and later gameplay remain future increments.
+Current local `main` includes the shared lobby and configuration, session
+start, letter skipping, and private answer entry. Players can see the code,
+members, host, and visual connection indicators, recover on refresh, leave, or
+close as host. The host configures and saves rounds and categories; members see
+the last confirmed configuration. Increment 7 starts with at least two
+participants and freezes the configuration and roster. Increment 8 resolves
+the 5-second skip vote. Increment 9 lets each player save and recover their
+own answers during `PLAYING`; countdown, lock, review, and scoring are not yet
+implemented.
 
 ---
 
@@ -313,6 +313,20 @@ Object     [              ]
 ```
 
 Players enter answers independently and simultaneously.
+
+During `PLAYING`, each category has its own answer field. Answers autosave
+after 500 ms without typing and show saving, saved, or error feedback. A player
+can retry a failed save; the retry uses the current field value. The field
+shows the count of up to 200 Unicode code points after NFC. Original text is
+preserved for display, except empty or whitespace-only text is saved as an
+empty answer. A server-confirmed save is authoritative.
+
+On opening or returning to the page, and after network reconnection or a
+private invalidation, the player reloads their own server-confirmed answers.
+If another tab saved a newer value while this tab has local edits, those edits
+stay visible and are marked stale. The player can reload the saved value or
+save the current draft. Drafts that have not reached the server remain only in
+memory and are not queued offline.
 
 ---
 

@@ -119,12 +119,11 @@ already owned by the roadmap above.
 
 ## Current improvement work
 
-El `main` local integra los Incrementos 0–6 de Tutti Frutti y el traslado de
-la gestión de grupos a la portada. El Incremento 7 está implementado y
-commiteado en la rama `codex/tutti-frutti-increment-7`, todavía no integrado
-en `main`. Este estado de código local no equivale a una publicación: la
-baseline productiva indicada arriba no cambió y no se aplicaron migrations
-remotas.
+El `main` local integra los Incrementos 0–9 de Tutti Frutti y el traslado de
+la gestión de grupos a la portada. Los Incrementos 7–9 se integraron desde
+`codex/tutti-frutti-increment-9`. Este estado local no equivale a una
+publicación: la baseline productiva indicada arriba no cambió y no se
+aplicaron migrations remotas.
 
 Los Incrementos 0–4 introducen el tipo de juego, create/join y lobby Tutti,
 identidad y roster neutral, y el espejo transaccional de inicio/fin Impostor.
@@ -150,27 +149,21 @@ invitación de administración; Impostor conserva sus salas y su banco de
 palabras. Las pruebas automatizadas focalizadas, TypeScript y lint pasaron
 para ese cambio; no se hizo una comprobación visual manual en dos navegadores.
 
-El Incremento 7 agrega el inicio transaccional de Tutti Frutti: congela el
-roster y la configuración efectiva, crea la sesión, la ronda
-`LETTER_PENDING` y su candidata, y pasa la Room a `playing`. La lectura
-autorizada reconstruye el estado usando el roster congelado; el inicio es
-idempotente para el iniciador registrado. La migration y el validador de DB
-se ejecutaron en Supabase local; también pasaron la suite de tests, lint y
-build. No se hizo smoke visual manual en dos navegadores. El commit está en
-la rama indicada, no en `main`; no se aplicaron migrations remotas ni se
+Los Incrementos 7–9 agregan, respectivamente, inicio transaccional y snapshot
+de sesión, votación para saltar letras, y entrada persistente de respuestas.
+El Incremento 9 guarda cada respuesta bajo la ronda, participante y posición
+de categoría; sólo su autor la lee mediante RPC y las respuestas no tienen
+acceso directo desde clientes. La UI guarda tras 500 ms, conserva cambios no
+confirmados en memoria y relee tras carga, reconexión o invalidación Realtime.
+Las respuestas se pueden editar únicamente en `PLAYING`; countdown, lock,
+revisión y puntaje continúan pendientes. Las migrations y validadores de DB
+de estos incrementos se ejecutaron en Supabase local. Los tests del proyecto
+y la regresión automatizada de Impostor pasaron; el chequeo de tipos directo
+pasó. Lint terminó sin errores, con una advertencia preexistente. El build
+compiló el bundle, pero Next falló al interpretar `tsc --showConfig`. No se
+completó el smoke visual del formulario con dos navegadores. No se limpiaron
+los fixtures locales del validador, no se aplicaron migrations remotas ni se
 modificó producción.
-
-El Incremento 8 agrega la votación autoritativa para saltar candidatas, con
-ventana de 5 segundos, umbral calculado sobre el roster congelado, tally sin
-identidades y resolución perezosa al leer estado vencido. Los votos que llegan
-a mayoría crean una candidata sin cambiar la ronda; los vencimientos aceptan
-la letra. La migration, las pruebas concurrentes de DB local y las pruebas
-focalizadas de UI/adaptador pasaron. También pasaron los 732 tests del proyecto,
-el build y lint sin errores (con una advertencia preexistente). No se hizo
-smoke visual manual: requiere dos identidades. La suite agregada de DB no pudo
-ejecutarse porque exige comenzar sin grupos y la base local ya tenía 30; no se
-limpió para preservar esos datos. El incremento está implementado en la rama
-indicada, sin integrar a `main` ni aplicar migrations remotas.
 
 Only observations confirmed against the current product should become active
 improvement work. Historical UX findings are evidence to revalidate, not an

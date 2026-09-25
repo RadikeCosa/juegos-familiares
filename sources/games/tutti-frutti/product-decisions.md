@@ -730,14 +730,12 @@ Automatic detection reduces review effort and makes scoring reliable.
 
 ## Decision
 
-Comparison should use a normalized representation rather than literal raw text.
-
-At minimum, normalization should likely handle:
-
-* surrounding whitespace;
-* case differences.
-
-Further normalization remains subject to technical analysis.
+Comparison uses a normalized representation rather than literal raw text.
+Increment 9 confirms normalization version 1 for persisted answers: NFC,
+trim external Unicode whitespace, and compare without case distinctions while
+preserving accents, punctuation, and internal whitespace. The original
+player-entered text remains visible. Plural/singular equivalence and spelling
+tolerance remain open for later product decisions.
 
 ## Example
 
@@ -1111,8 +1109,6 @@ The following details remain intentionally unresolved:
 
 ## Normalization
 
-* accent handling;
-* punctuation;
 * plural/singular equivalence;
 * spelling tolerance.
 
@@ -1190,3 +1186,41 @@ changes that contract.
 * whether previous configuration values appear preselected;
 * what happens when a participant leaves between matches;
 * the exact post-game lobby presentation and actions.
+
+# 46. Answers Are Private and Persisted Per Round
+
+## Context
+
+Players need to enter answers on their own devices and recover them after a
+refresh or reconnect. Showing an answer to another player before review would
+change the game's simultaneous-entry dynamic.
+
+## Decision — CONFIRMED
+
+During the active answer-entry phase, a participant can read and edit only
+their own answers. Answers remain associated with the round in which they
+were entered. Empty or whitespace-only input means that category has no
+answer, and that empty state is persisted.
+
+The answer text shown to its author is preserved. Comparison uses a
+session-pinned normalization rule: NFC, trim external Unicode whitespace,
+and case-insensitive comparison while retaining accents, punctuation, and
+internal whitespace. The first rule is version 1. An answer is limited to
+200 Unicode code points after NFC. The entry form autosaves after 500 ms.
+
+Increment 9 currently permits editing only in `PLAYING`. It does not include
+the countdown, answer lock, review, or scoring. Any later decision to keep
+editing during a countdown must explicitly extend the server phase guard.
+
+## Rationale
+
+Server-backed private reads preserve a player's work through refresh and
+reconnection without revealing it early. Per-round rows preserve history and
+make future review and scoring independent of later edits.
+
+## Tradeoff
+
+Unsaved drafts are held only in page memory. If connectivity is lost before a
+save is confirmed, the player must keep that page open; there is no offline
+queue. Comparison normalization defines only textual equivalence and does
+not attempt to decide whether an answer is valid for its category.

@@ -13,8 +13,11 @@ React y TypeScript. Usa Supabase Auth para identidad autenticada, Postgres para
 estado persistente, Row Level Security para limitar lecturas y escrituras, y
 RPCs de Postgres para operaciones autoritativas.
 
-Supabase Realtime y Presence se usan donde Impostor necesita notificación,
-invalidación o disponibilidad efímera. La aplicación también dispone de
+Supabase Realtime y Presence se usan para invalidación y disponibilidad
+efímera donde el flujo lo requiere. Impostor mantiene su coordinación propia;
+Tutti Frutti usa Presence en el lobby y una señal RLS-filtrada para invalidar
+las respuestas del mismo participante. Esa señal no contiene texto ni
+reemplaza una lectura autorizada por RPC. La aplicación también dispone de
 manifest, service worker y shell PWA compartidos.
 
 ```text
