@@ -196,6 +196,93 @@ body {
   max-width: none;
 }
 
+.home-group-disclosure {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--surface) 72%, var(--background));
+}
+
+.home-group-disclosure__summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 3.75rem;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  color: var(--foreground);
+  cursor: pointer;
+  list-style: none;
+}
+
+.home-group-disclosure__summary::-webkit-details-marker {
+  display: none;
+}
+
+.home-group-disclosure__summary::after {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  color: var(--foreground-muted);
+  content: "";
+  transform: rotate(45deg) translateY(-0.15rem);
+  transition: transform 180ms ease;
+}
+
+.home-group-disclosure[open] .home-group-disclosure__summary::after {
+  transform: rotate(225deg) translate(-0.1rem, -0.05rem);
+}
+
+.home-group-disclosure__summary span {
+  color: var(--foreground-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.home-group-disclosure__summary strong {
+  grid-column: 1;
+  grid-row: 2;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: 1.125rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.home-group-disclosure__summary::after {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.home-group-disclosure__summary:focus-visible {
+  border-radius: var(--radius-lg);
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.home-group-disclosure[open] .home-group-card {
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: transparent;
+  box-shadow: none;
+  padding: var(--space-4);
+}
+
+.home-platform-context--onboarding {
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.home-platform-context--onboarding h2 {
+  font-size: 1.125rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-group-disclosure__summary::after {
+    transition: none;
+  }
+}
+
 .platform-group-onboarding {
   display: grid;
   gap: var(--space-4);

@@ -46,7 +46,7 @@ describe("Home", () => {
 });
 
 describe("homepage group experience", () => {
-  it("shows group context and games together without a separate group link", () => {
+  it("shows game cards before the collapsed group section without a separate group link", () => {
     const markup = renderToStaticMarkup(renderPlatformHomeContext(recognized, { status: "absent" }));
     expect(markup).toContain("Familia");
     expect(markup).toContain("Hola, Ramiro");
@@ -56,6 +56,9 @@ describe("homepage group experience", () => {
     expect(markup).toContain('href="/impostor"');
     expect(markup).toContain('href="/tutti-frutti"');
     expect(markup).not.toContain('href="/grupo"');
+    expect(markup.indexOf("Jugar a Impostor")).toBeLessThan(markup.indexOf("<details"));
+    expect(markup.indexOf("Tutti Frutti")).toBeLessThan(markup.indexOf("<details"));
+    expect(markup).not.toMatch(/<details[^>]*open/);
   });
 
   it("routes recognized users directly to an active Room", () => {
@@ -66,20 +69,34 @@ describe("homepage group experience", () => {
     expect(markup).toContain("Volver a la sala");
   });
 
-  it("offers group onboarding on the homepage to unrecognized visitors", () => {
+  it("shows game cards before visible group onboarding to unrecognized visitors", () => {
     const markup = renderToStaticMarkup(renderPlatformHomeContext({ status: "unrecognized", reason: "no-auth" }, { status: "idle" }));
     expect(markup).toContain("Tu grupo");
     expect(markup).toContain("Unirme a un grupo");
     expect(markup).not.toContain("Crear grupo");
-    expect(markup).not.toContain('href="/impostor"');
+    expect(markup).toContain('href="/impostor"');
+    expect(markup).toContain('href="/tutti-frutti"');
+    expect(markup.indexOf("Jugar a Impostor")).toBeLessThan(markup.indexOf("Tu grupo"));
+    expect(markup.indexOf("Tutti Frutti")).toBeLessThan(markup.indexOf("Tu grupo"));
   });
 
-  it("keeps home recovery and retry actions within the platform surface", () => {
+  it("keeps games before home recovery and retry states", () => {
     const inconsistent = renderToStaticMarkup(renderPlatformHomeContext({ status: "inconsistent", reason: "player-without-group" }, { status: "idle" }, { onRetryBootstrap: vi.fn() }));
     const connectionError = renderToStaticMarkup(renderPlatformHomeContext({ status: "connection-error" }, { status: "idle" }, { onRetryBootstrap: vi.fn() }));
     expect(inconsistent).toContain("No pudimos recuperar");
     expect(inconsistent).toContain("Volver a intentar");
     expect(connectionError).toContain("Reintentar");
-    expect(inconsistent).not.toContain('href="/impostor"');
+    for (const markup of [inconsistent, connectionError]) {
+      expect(markup).toContain('href="/impostor"');
+      expect(markup).toContain('href="/tutti-frutti"');
+      expect(markup.indexOf("Jugar a Impostor")).toBeLessThan(markup.indexOf("home-platform-context"));
+    }
+  });
+
+  it("shows the games above the group loading state", () => {
+    const markup = renderToStaticMarkup(renderPlatformHomeContext({ status: "loading" }, { status: "idle" }));
+    expect(markup).toContain("Comprobando tu grupo");
+    expect(markup.indexOf("Jugar a Impostor")).toBeLessThan(markup.indexOf("Comprobando tu grupo"));
+    expect(markup.indexOf("Tutti Frutti")).toBeLessThan(markup.indexOf("Comprobando tu grupo"));
   });
 });

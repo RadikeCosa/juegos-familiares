@@ -131,7 +131,7 @@ describe("renderPlatformGroupContext", () => {
     });
   });
 
-  it("renders the Platform group surface with members, count and invitation CTA", () => {
+  it("renders group details in a collapsed disclosure with members and invitation CTA", () => {
     const markup = renderToStaticMarkup(
       renderPlatformGroupContext(adminBootstrapState, {
         status: "success",
@@ -139,6 +139,10 @@ describe("renderPlatformGroupContext", () => {
       })
     );
 
+    expect(markup).toContain('<details class="home-group-disclosure">');
+    expect(markup).toContain("<summary");
+    expect(markup).not.toMatch(/<details[^>]*open/);
+    expect(markup.indexOf("Tu grupo")).toBeLessThan(markup.indexOf("Integrantes"));
     expect(markup).toContain("Familia");
     expect(markup).toContain("Integrantes");
     expect(markup).toContain("3 integrantes");

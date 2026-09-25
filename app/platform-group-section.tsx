@@ -118,52 +118,53 @@ export function renderPlatformGroupContext(
     playersState.status === "success" ? playersState.players.length : undefined;
 
   return (
-    <section
-      className="home-platform-context home-group-card"
-      aria-labelledby="platform-group-title"
-    >
-      <p className="impostor-kicker">Tu grupo</p>
-      <h2 id="platform-group-title">{group.name}</h2>
-      <p>Hola, {player.nickname}.</p>
+    <details className="home-group-disclosure">
+      <summary className="home-group-disclosure__summary">
+        <span>Tu grupo</span>
+        <strong>{group.name}</strong>
+      </summary>
+      <section className="home-platform-context home-group-card">
+        <p>Hola, {player.nickname}.</p>
 
-      <div
-        className="impostor-group-section"
-        aria-labelledby="platform-group-members-title"
-      >
-        <div className="platform-group-section-heading">
-          <h2 id="platform-group-members-title">Integrantes</h2>
-          {typeof membersCount === "number" ? (
-            <p className="platform-group-count" aria-live="polite">
-              {renderMembersCount(membersCount)}
-            </p>
+        <div
+          className="impostor-group-section"
+          aria-labelledby="platform-group-members-title"
+        >
+          <div className="platform-group-section-heading">
+            <h2 id="platform-group-members-title">Integrantes</h2>
+            {typeof membersCount === "number" ? (
+              <p className="platform-group-count" aria-live="polite">
+                {renderMembersCount(membersCount)}
+              </p>
+            ) : null}
+          </div>
+
+          {playersState.status === "loading" || playersState.status === "idle" ? (
+            <p aria-live="polite">Cargando integrantes...</p>
+          ) : null}
+
+          {playersState.status === "success"
+            ? renderPlatformGroupMembersList(playersState.players, group.adminPlayerId)
+            : null}
+
+          {playersState.status === "error" ? (
+            <div className="impostor-group-error" aria-live="polite">
+              <p>{playersState.message}</p>
+              {options.onRetryPlayers ? (
+                <button
+                  className="impostor-action"
+                  type="button"
+                  onClick={options.onRetryPlayers}
+                >
+                  Reintentar
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
 
-        {playersState.status === "loading" || playersState.status === "idle" ? (
-          <p aria-live="polite">Cargando integrantes...</p>
-        ) : null}
-
-        {playersState.status === "success"
-          ? renderPlatformGroupMembersList(playersState.players, group.adminPlayerId)
-          : null}
-
-        {playersState.status === "error" ? (
-          <div className="impostor-group-error" aria-live="polite">
-            <p>{playersState.message}</p>
-            {options.onRetryPlayers ? (
-              <button
-                className="impostor-action"
-                type="button"
-                onClick={options.onRetryPlayers}
-              >
-                Reintentar
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      {isAdmin ? <AdminInvitationSection context="platform" /> : null}
-    </section>
+        {isAdmin ? <AdminInvitationSection context="platform" /> : null}
+      </section>
+    </details>
   );
 }
