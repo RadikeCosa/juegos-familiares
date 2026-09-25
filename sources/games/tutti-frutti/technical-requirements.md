@@ -162,12 +162,15 @@ product decision, not an implied result of multi-session Rooms.
    seconds; no response is an abstention and leaves the answer valid unless
    invalidity already met its threshold. Majority outcomes resolve early in
    both directions.
-10. Scoring occurs only after all challenges are resolved. Duplicate comparison
-   is within one round and category, using deterministic normalization.
-   Recompute uniqueness from final valid answers. The initial rule is
-   10/5/0; the first caller receives no speed bonus. Persist an immutable
-   scoring snapshot so later normalization or code changes cannot alter
-   historical results. Round and game totals can be derived from it.
+10. The current Room host closes review after all challenges resolve. Scoring
+   occurs in that same transaction: compare duplicates within one round and
+   category using deterministic normalization, recomputing uniqueness from
+   final valid answers. The rule is 10/5/0; the first caller receives no speed
+   bonus. Persist immutable points on saved answers and `scored_at` on the
+   round, constrained to 0/5/10. A retry for the same round returns its saved
+   result. Round and game totals are derived in one grouped read joining the
+   frozen roster and categories, so absent answers remain visible as zero.
+   The round enters `RESULT` atomically with scoring.
 11. When the configured number of rounds has been scored, mark the session
    finished and immutable, detach it as the active session, and return its
    Room from `playing` to `lobby` in one transaction. Retain finished results

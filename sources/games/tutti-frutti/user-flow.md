@@ -35,7 +35,10 @@ shows each player's own confirmed answers and any unconfirmed edit while
 waiting for review. Increment 11 adds a read-only review of all frozen-roster
 answers, one category at a time in configured order, after lock. Empty answers
 and provisional matches identify the matching participants. Increment 12 adds
-sequential challenges without scoring or advancing the round.
+sequential challenges. In Increment 13, the current host closes review when
+the group is done; the server scores the round and everyone sees per-answer
+points, round and cumulative totals, and ranking. An open challenge prevents
+closure.
 
 ---
 

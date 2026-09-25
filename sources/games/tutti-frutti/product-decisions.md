@@ -1142,6 +1142,10 @@ The following details remain intentionally unresolved:
 
 The rules for one open challenge per round and sequential resolution are
 confirmed in the challenge decisions above and implemented for Increment 12.
+For Increment 13, the current Room host manually closes review after the group
+finishes checking answers. The server rejects closure while any challenge is
+open and atomically persists scoring before exposing `RESULT`. Repeating the
+close request for the same round returns its saved result.
 
 ## Normalization
 

@@ -25,6 +25,10 @@ import { getTuttiFruttiReview, type TuttiFruttiReview as Review,
 import { TuttiFruttiRoomSetup } from "./tutti-frutti-room-setup";
 import { TuttiFruttiAnswerEntry } from "./tutti-frutti-answer-entry";
 import { TuttiFruttiReview } from "./tutti-frutti-review";
+import { TuttiFruttiRoundResultView } from "./tutti-frutti-round-result";
+import { getTuttiFruttiRoundResult, scoreTuttiFruttiRound,
+  subscribeToTuttiFruttiResultInvalidations, type TuttiFruttiRoundResult,
+  type TuttiFruttiResultClient } from "../../../../lib/supabase/tutti-frutti-result";
 import {
   closeRoom, getConnectedRoomParticipantIds, getMyActiveRoom, joinRoomByCode,
   leaveRoom, normalizeRoomJoinCode, reassignRoomHostIfStale,
@@ -60,6 +64,11 @@ type ReviewState =
   | { status: "error"; sessionId: string; roundNumber: number; message: string }
   | { status: "ready"; sessionId: string; roundNumber: number; review: Review };
 
+type ResultState =
+  | { status: "loading"; sessionId: string; roundNumber: number }
+  | { status: "error"; sessionId: string; roundNumber: number; message: string }
+  | { status: "ready"; sessionId: string; roundNumber: number; result: TuttiFruttiRoundResult };
+
 function roomsClient(): ImpostorRoomsClient {
   return createBrowserSupabaseClient() as unknown as ImpostorRoomsClient;
 }
@@ -80,6 +89,8 @@ export function TuttiFruttiLobbyContent(options: {
   challengeSeconds?: number;
   challengeBusy?: boolean;
   challengeError?: string | null;
+  resultState?: ResultState | null;
+  scoring?: boolean;
   game: TuttiFruttiStartedGame | null;
   gameError: string | null;
   actionError: string | null;
@@ -90,14 +101,17 @@ export function TuttiFruttiLobbyContent(options: {
   onRetryReview?: () => void;
   onOpenChallenge?: (playerId: string, categoryPosition: number) => void;
   onVoteChallenge?: (challengeId: string, choice: "VALID" | "INVALID") => void;
+  onScore?: () => void;
+  onRetryResult?: () => void;
   onExit: (asHost: boolean) => void;
 }) {
   const { lobby, connected, connection, busy, starting, voting, skipSeconds, countdownSeconds = 45,
     callReady = false, calling = false, unconfirmedAnswers = false, reviewState = null,
     challengeSeconds = 0, challengeBusy = false, challengeError = null,
+    resultState = null, scoring = false,
     game, gameError, actionError, onStart, onSkipVote, onCall = () => {},
     onAnswerSaveState = () => {}, onRetryReview = () => {}, onOpenChallenge = () => {},
-    onVoteChallenge = () => {}, onExit } = options;
+    onVoteChallenge = () => {}, onScore = () => {}, onRetryResult = () => {}, onExit } = options;
   const isHost = lobby.participants.some((participant) => participant.isSelf && participant.isHost);
   const selfPlayerId = lobby.participants.find((participant) => participant.isSelf)?.playerId;
   const enoughPlayers = lobby.participants.length >= 2;
@@ -211,7 +225,8 @@ export function TuttiFruttiLobbyContent(options: {
                         <TuttiFruttiReview key={`${reviewState.sessionId}:${reviewState.roundNumber}`}
                           review={reviewState.review} currentPlayerId={selfPlayerId ?? ""}
                           challengeSeconds={challengeSeconds} connection={connection} busy={challengeBusy}
-                          error={challengeError} onOpenChallenge={onOpenChallenge} onVote={onVoteChallenge} />
+                          error={challengeError} isHost={isHost} scoring={scoring} onScore={onScore}
+                          onOpenChallenge={onOpenChallenge} onVote={onVoteChallenge} />
                       ) : reviewState?.status === "error" ? (
                         <div role="alert">
                           <p>{reviewState.message}</p>
@@ -222,6 +237,15 @@ export function TuttiFruttiLobbyContent(options: {
                     </div>
                   ) : null}
                 </>
+              ) : game.round.phase === "RESULT" ? (
+                resultState?.status === "ready" && resultState.sessionId === game.sessionId
+                  && resultState.roundNumber === game.round.number ? (
+                    <TuttiFruttiRoundResultView result={resultState.result} currentPlayerId={selfPlayerId ?? ""} />
+                  ) : resultState?.status === "error" ? (
+                    <div role="alert"><p>{resultState.message}</p>
+                      <button type="button" className="impostor-action" onClick={onRetryResult}
+                        disabled={connection !== "online"}>Volver a intentar</button></div>
+                  ) : <p aria-live="polite">Recuperando el resultado de la ronda…</p>
               ) : null}
             </>
           ) : <p aria-live="polite">Recuperando la partida…</p>}
@@ -250,6 +274,9 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const [challengeSeconds, setChallengeSeconds] = useState(0);
   const [challengeBusy, setChallengeBusy] = useState(false);
   const [challengeError, setChallengeError] = useState<string | null>(null);
+  const [resultState, setResultState] = useState<ResultState | null>(null);
+  const [scoring, setScoring] = useState(false);
+  const [scoreError, setScoreError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [votingCandidateId, setVotingCandidateId] = useState<string | null>(null);
   const [skipSeconds, setSkipSeconds] = useState(5);
@@ -264,6 +291,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const skipVoteInFlight = useRef(false);
   const callInFlight = useRef(false);
   const challengeInFlight = useRef(false);
+  const scoreInFlight = useRef(false);
   const requestSequence = useRef(0);
   const setupRequestSequence = useRef(0);
   const gameRequestSequence = useRef(0);
@@ -338,6 +366,29 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
     }
   }, []);
 
+  const refreshResult = useCallback(async (roomId: string, sessionId: string, roundNumber: number) => {
+    const request = ++reviewRequestSequence.current;
+    setResultState((current) => current?.status === "ready"
+      && current.sessionId === sessionId && current.roundNumber === roundNumber
+      ? current : { status: "loading", sessionId, roundNumber });
+    try {
+      const result = await getTuttiFruttiRoundResult(
+        createBrowserSupabaseClient() as unknown as TuttiFruttiResultClient, roomId
+      );
+      if (request !== reviewRequestSequence.current) return;
+      if (result.roomId !== roomId || result.sessionId !== sessionId || result.roundNumber !== roundNumber) {
+        throw new Error("El resultado pertenece a otra ronda. Actualizá la partida.");
+      }
+      setResultState({ status: "ready", sessionId, roundNumber, result });
+      setScoreError(null);
+    } catch (error) {
+      if (request === reviewRequestSequence.current) {
+        setResultState({ status: "error", sessionId, roundNumber,
+          message: error instanceof Error ? error.message : "No pudimos recuperar el resultado." });
+      }
+    }
+  }, []);
+
   const refreshReview = useCallback(async (roomId: string, sessionId: string, roundNumber: number) => {
     const request = ++reviewRequestSequence.current;
     setReviewState((current) => current?.status === "ready"
@@ -372,6 +423,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         setSetupState(null);
         setGame(null);
         setReviewState(null);
+        setResultState(null);
       }
       else if (lobby.room.gameType !== "tutti_frutti" || lobby.room.code !== normalizedCode) {
         router.replace(roomPath(lobby.room.gameType, lobby.room.code));
@@ -447,6 +499,33 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
     }
   }, [roomId, connection, gameSessionId, gameRoundNumber, refreshReview]);
 
+  async function scoreRound() {
+    if (!roomId || !gameSessionId || !gameRoundNumber || reviewState?.status !== "ready"
+      || reviewState.sessionId !== gameSessionId || reviewState.roundNumber !== gameRoundNumber
+      || scoreInFlight.current || connection !== "online") return;
+    if (!window.confirm("Al puntuar, las respuestas y el resultado de esta ronda quedarán definitivos.")) return;
+    scoreInFlight.current = true;
+    setScoring(true);
+    setScoreError(null);
+    try {
+      const result = await scoreTuttiFruttiRound(
+        createBrowserSupabaseClient() as unknown as TuttiFruttiResultClient, roomId, reviewState.review.roundId
+      );
+      serverOffsetMs.current = Date.parse(result.serverNow) - Date.now();
+      setResultState({ status: "ready", sessionId: result.sessionId,
+        roundNumber: result.roundNumber, result });
+      if (gameSessionId && gameRoundNumber) reviewRequestSequence.current += 1;
+      await refreshGame(roomId);
+    } catch (error) {
+      setScoreError(error instanceof Error ? error.message : "No pudimos puntuar la ronda.");
+      await refreshGame(roomId);
+      if (gameSessionId && gameRoundNumber) void refreshReview(roomId, gameSessionId, gameRoundNumber);
+    } finally {
+      scoreInFlight.current = false;
+      setScoring(false);
+    }
+  }
+
   useEffect(() => {
     if (!roomId || gamePhase !== "REVIEWING" || !gameSessionId || !gameRoundNumber) {
       setReviewState(null);
@@ -457,12 +536,34 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   }, [roomId, gamePhase, gameSessionId, gameRoundNumber, refreshReview]);
 
   useEffect(() => {
+    if (!roomId || gamePhase !== "RESULT" || !gameSessionId || !gameRoundNumber) {
+      setResultState(null);
+      return;
+    }
+    void refreshResult(roomId, gameSessionId, gameRoundNumber);
+    return () => { reviewRequestSequence.current += 1; };
+  }, [roomId, gamePhase, gameSessionId, gameRoundNumber, refreshResult]);
+
+  useEffect(() => {
     if (!roomId || !gameSessionId || !gameRoundNumber || gamePhase !== "REVIEWING") return;
     const client = createBrowserSupabaseClient() as unknown as TuttiFruttiReviewClient;
     const subscription = subscribeToTuttiFruttiReviewInvalidations(client, gameSessionId,
-      () => void refreshReview(roomId, gameSessionId, gameRoundNumber));
+      () => {
+        void refreshGame(roomId);
+        void refreshReview(roomId, gameSessionId, gameRoundNumber);
+      });
     return () => { void subscription.unsubscribe(); };
-  }, [roomId, gamePhase, gameSessionId, gameRoundNumber, refreshReview]);
+  }, [roomId, gamePhase, gameSessionId, gameRoundNumber, refreshGame, refreshReview]);
+
+  useEffect(() => {
+    if (!roomId || !gameSessionId || !gameRoundNumber || gamePhase !== "RESULT") return;
+    const client = createBrowserSupabaseClient() as unknown as TuttiFruttiResultClient;
+    const subscription = subscribeToTuttiFruttiResultInvalidations(client, gameSessionId, () => {
+      void refreshResult(roomId, gameSessionId, gameRoundNumber);
+      void refreshGame(roomId);
+    });
+    return () => { void subscription.unsubscribe(); };
+  }, [roomId, gamePhase, gameSessionId, gameRoundNumber, refreshGame, refreshResult]);
 
   const activeChallenge = reviewState?.status === "ready" ? reviewState.review.activeChallenge : null;
   const activeChallengeId = activeChallenge?.id;
@@ -497,6 +598,9 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         if (roomId && gamePhase === "REVIEWING" && gameSessionId && gameRoundNumber) {
           void refreshReview(roomId, gameSessionId, gameRoundNumber);
         }
+        if (roomId && gamePhase === "RESULT" && gameSessionId && gameRoundNumber) {
+          void refreshResult(roomId, gameSessionId, gameRoundNumber);
+        }
       }
     }
     function onOnline() {
@@ -505,6 +609,9 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
       void refresh();
       if (roomId && gamePhase === "REVIEWING" && gameSessionId && gameRoundNumber) {
         void refreshReview(roomId, gameSessionId, gameRoundNumber);
+      }
+      if (roomId && gamePhase === "RESULT" && gameSessionId && gameRoundNumber) {
+        void refreshResult(roomId, gameSessionId, gameRoundNumber);
       }
     }
     function onOffline() { setConnection("offline"); }
@@ -516,7 +623,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
     };
-  }, [refresh, refreshReview, roomId, gamePhase, gameSessionId, gameRoundNumber]);
+  }, [refresh, refreshReview, refreshResult, roomId, gamePhase, gameSessionId, gameRoundNumber]);
 
   const pendingCandidateId = game?.round.phase === "LETTER_PENDING"
     ? game.round.letterDecision?.candidateId ?? null
@@ -769,7 +876,10 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
           ? reviewState : null}
         challengeSeconds={challengeSeconds}
         challengeBusy={challengeBusy}
-        challengeError={challengeError}
+        challengeError={challengeError ?? scoreError}
+        resultState={resultState?.sessionId === game?.sessionId && resultState?.roundNumber === game?.round.number
+          ? resultState : null}
+        scoring={scoring}
         game={game}
         gameError={gameError}
         actionError={actionError}
@@ -784,6 +894,12 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         }}
         onOpenChallenge={(playerId, categoryPosition) => { void openChallenge(playerId, categoryPosition); }}
         onVoteChallenge={(challengeId, choice) => { void voteChallenge(challengeId, choice); }}
+        onScore={() => { void scoreRound(); }}
+        onRetryResult={() => {
+          if (roomId && gameSessionId && gameRoundNumber) {
+            void refreshResult(roomId, gameSessionId, gameRoundNumber);
+          }
+        }}
         onExit={(asHost) => { void exitRoom(asHost); }}
       />
       {setupForRoom?.status === "loading" ? <p aria-live="polite">Recuperando configuración…</p> : null}

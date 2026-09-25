@@ -634,6 +634,10 @@ open_challenges == 0
 
 and all answer validation states are final.
 
+The current Room host explicitly closes review. The server rejects the close
+while an open challenge remains, then scores and marks the round `RESULT` in
+one transaction. A repeated request for that round returns its stored result.
+
 Then:
 
 ```text

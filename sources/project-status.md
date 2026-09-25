@@ -196,6 +196,18 @@ visual con dos sesiones aisladas y la comprobación operacional de Cron en un
 destino real. La migration no se aplicó remotamente y la baseline productiva no
 cambió.
 
+El Incremento 13 se implementa en la rama `codex/tutti-frutti-increment-13`.
+El host cierra la revisión con una operación transaccional e idempotente que
+guarda puntos 10/5/0 por respuesta y pasa la ronda a `RESULT`; la lectura
+incluye el roster congelado y deriva los totales en una consulta agrupada. La
+migration 13 y sus pruebas DB pasaron en Supabase local; también pasaron las
+regresiones DB de los incrementos 11 y 12. Los 776 tests de aplicación,
+TypeScript, lint y build con Webpack pasaron; lint conserva una advertencia
+preexistente. No se completó un smoke visual manual con dos sesiones aisladas.
+Los fixtures locales del validador se conservaron; no se reinició ni limpió la
+DB. El incremento no está integrado en `main`, no se aplicó remotamente y la
+baseline productiva no cambió.
+
 Only observations confirmed against the current product should become active
 improvement work. Historical UX findings are evidence to revalidate, not an
 automatic backlog. No additional detailed post-beta UX/UI backlog is established

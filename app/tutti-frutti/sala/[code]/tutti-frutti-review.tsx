@@ -5,7 +5,7 @@ import type { TuttiFruttiReview as Review } from "../../../../lib/supabase/tutti
 
 export function TuttiFruttiReview({
   review, currentPlayerId, challengeSeconds, connection, busy, error,
-  onOpenChallenge, onVote
+  isHost, scoring, onScore, onOpenChallenge, onVote
 }: {
   review: Review;
   currentPlayerId: string;
@@ -13,6 +13,9 @@ export function TuttiFruttiReview({
   connection: "online" | "offline" | "reconnecting";
   busy: boolean;
   error: string | null;
+  isHost: boolean;
+  scoring: boolean;
+  onScore: () => void;
   onOpenChallenge: (playerId: string, categoryPosition: number) => void;
   onVote: (challengeId: string, choice: "VALID" | "INVALID") => void;
 }) {
@@ -118,6 +121,14 @@ export function TuttiFruttiReview({
           </li>
         ))}
       </ul>
+      {isHost ? (
+        <div className="tutti-challenge__actions">
+          <button type="button" className="impostor-action impostor-action--primary"
+            disabled={busy || scoring || connection !== "online" || Boolean(activeChallenge)} onClick={onScore}>
+            {scoring ? "Calculando puntajes…" : "Finalizar revisión y puntuar"}
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

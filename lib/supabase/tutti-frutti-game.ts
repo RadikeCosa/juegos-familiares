@@ -21,7 +21,7 @@ export type TuttiFruttiStartedGame = {
   participants: TuttiFruttiGameParticipant[];
   round: {
     number: number;
-    phase: "LETTER_PENDING" | "PLAYING" | "FINAL_COUNTDOWN" | "REVIEWING";
+    phase: "LETTER_PENDING" | "PLAYING" | "FINAL_COUNTDOWN" | "REVIEWING" | "RESULT";
     letter: string;
     countdownEndsAt: string | null;
     calledByPlayerId: string | null;
@@ -87,7 +87,7 @@ function parseStartedGame(value: unknown): TuttiFruttiStartedGame {
     || !Array.isArray(game.participants)
     || typeof game.round !== "object"
     || game.round === null
-    || !["LETTER_PENDING", "PLAYING", "FINAL_COUNTDOWN", "REVIEWING"].includes(game.round.phase ?? "")
+    || !["LETTER_PENDING", "PLAYING", "FINAL_COUNTDOWN", "REVIEWING", "RESULT"].includes(game.round.phase ?? "")
     || !Number.isInteger(game.round.number)
     || typeof game.round.letter !== "string"
     || !/^[A-Z]$/.test(game.round.letter)
@@ -108,7 +108,7 @@ function parseStartedGame(value: unknown): TuttiFruttiStartedGame {
   } else if (game.round.letterDecision !== null) {
     throw new Error("No pudimos reconstruir la partida de Tutti Frutti.");
   }
-  if ((game.round.phase === "FINAL_COUNTDOWN" || game.round.phase === "REVIEWING")
+  if ((game.round.phase === "FINAL_COUNTDOWN" || game.round.phase === "REVIEWING" || game.round.phase === "RESULT")
     && (!game.round.countdownEndsAt || !game.round.calledByPlayerId
       || game.round.phase === "REVIEWING" && !game.round.lockedAt)) {
     throw new Error("No pudimos reconstruir la cuenta de Tutti Frutti.");

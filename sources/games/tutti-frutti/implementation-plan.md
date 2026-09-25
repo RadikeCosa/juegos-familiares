@@ -573,21 +573,29 @@ para preservarlos. El Cron fue comprobado localmente, no en un destino real.
 
 ### 13. Puntuación inmutable de ronda
 
+**Estado de implementación:** implementado en `codex/tutti-frutti-increment-13`.
+La migration y el validador DB pasaron en Supabase local; la integración a
+`main` no forma parte de este cambio.
+
 - **Goal:** calcular 10/5/0 después de resolver desafíos y ofrecer totales
   reproducibles sin doble adjudicación.
-- **Scope:** duplicados entre respuestas finalmente válidas, puntos por
-  respuesta, marcador de ronda puntuada; totales/ranking derivados.
+- **Scope:** cierre manual de revisión por el host actual, duplicados entre
+  respuestas finalmente válidas, puntos por respuesta, marcador de ronda
+  puntuada; totales/ranking derivados.
 - **Explicitly out of scope:** tabla adicional de round scores, estadísticas
   históricas globales o siguiente ronda.
 - **Likely files / areas:** RPC score, puntos en answers/ronda, read model
   result, tests de reglas.
-- **Database impact:** snapshot de puntos y `scored_at` atómicos;
-  inmutabilidad tras puntuación.
-- **Application impact:** resultado explicable por respuesta y total.
+- **Database impact:** puntos por respuesta y `scored_at` atómicos; CHECK de
+  0/5/10 e inmutabilidad tras puntuar. Las respuestas ausentes se muestran
+  como cero usando el roster y categorías congelados.
+- **Application impact:** el host cierra `REVIEWING`; todo el roster ve el
+  resultado por respuesta, total de ronda, acumulado y ranking.
 - **Security requirements:** cliente no envía puntos/validez/duplicados;
   sólo roster autorizado ve resultados.
-- **Concurrency / idempotency:** score concurrente o repetido devuelve
-  mismos puntos; desafíos abiertos impiden score.
+- **Concurrency / idempotency:** locks Room → sesión compartida → sesión Tutti
+  → ronda; repetir el mismo round ID devuelve el resultado guardado; desafíos
+  abiertos impiden puntuar.
 - **Automated verification:** único 10, duplicado 5, inválido/vacío 0;
   invalidar un duplicado vuelve único al restante; doble score sin suma.
 - **Manual smoke:** revisar, resolver y ver resultado idéntico en dos

@@ -73,6 +73,17 @@ describe("Tutti Frutti game RPC adapter", () => {
     await expect(getTuttiFruttiGameState(client, "room-1")).resolves.toEqual(accepted);
   });
 
+  it("reconstructs the scored RESULT phase", async () => {
+    const resultState = {
+      ...game,
+      round: { ...game.round, phase: "RESULT" as const, letterDecision: null,
+        countdownEndsAt: "2026-09-25T12:00:45Z", calledByPlayerId: "host",
+        lockedAt: "2026-09-25T12:00:45Z" }
+    };
+    const client = { rpc: vi.fn().mockResolvedValue({ data: resultState, error: null }) } as unknown as TuttiFruttiGameClient;
+    await expect(getTuttiFruttiGameState(client, "room-1")).resolves.toEqual(resultState);
+  });
+
   it("maps stable SQLSTATEs and hides unknown database messages", async () => {
     const client = {
       rpc: vi.fn().mockResolvedValue({ data: null, error: { code: "P0037", message: "raw" } })

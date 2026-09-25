@@ -24,7 +24,8 @@ describe("Tutti Frutti review UI", () => {
   it("shows one configured category at a time and identifies provisional matches and empty categories", () => {
     const markup = renderToStaticMarkup(createElement(TuttiFruttiReview, {
       review, currentPlayerId: "a", challengeSeconds: 0, connection: "online", busy: false,
-      error: null, onOpenChallenge: () => {}, onVote: () => {}
+      error: null, isHost: true, scoring: false, onScore: () => {},
+      onOpenChallenge: () => {}, onVote: () => {}
     }));
     expect(markup).toContain("Nombre");
     expect(markup).toContain("Lugar · 1 para revisar");
@@ -34,6 +35,7 @@ describe("Tutti Frutti review UI", () => {
     expect(markup).not.toContain("Sin respuesta</span>");
     expect(markup).toContain("1 de 2");
     expect(markup).toContain("Impugnar respuesta");
+    expect(markup).toContain("Finalizar revisión y puntuar");
   });
 
   it("shows only the current player's choice and uses mutual agreement for two players", () => {
@@ -43,7 +45,8 @@ describe("Tutti Frutti review UI", () => {
     } };
     const markup = renderToStaticMarkup(createElement(TuttiFruttiReview, {
       review: activeReview, currentPlayerId: "b", challengeSeconds: 30, connection: "online", busy: false,
-      error: null, onOpenChallenge: () => {}, onVote: () => {}
+      error: null, isHost: false, scoring: false, onScore: () => {},
+      onOpenChallenge: () => {}, onVote: () => {}
     }));
     expect(markup).toContain("De acuerdo: invalidar");
     expect(markup).toContain("No estoy de acuerdo");
@@ -65,7 +68,8 @@ describe("Tutti Frutti review UI", () => {
     } };
     const markup = renderToStaticMarkup(createElement(TuttiFruttiReview, {
       review: activeReview, currentPlayerId: "c", challengeSeconds: 18, connection: "online", busy: false,
-      error: null, onOpenChallenge: () => {}, onVote: () => {}
+      error: null, isHost: false, scoring: false, onScore: () => {},
+      onOpenChallenge: () => {}, onVote: () => {}
     }));
     expect(markup).toContain("Votar válida");
     expect(markup).toContain("Votar inválida");

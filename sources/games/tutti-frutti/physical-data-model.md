@@ -14,8 +14,8 @@ The Increment 3 local migration applies the recommended minimal session
 identity and Impostor backfill with explicit linkage, atomic retry checks, and
 closed-by-default access. Later local increments consume that identity for
 Tutti Frutti configuration, session start, letter skipping, private answer
-entry, autonomous locking, and roster-gated review. These local migrations are
-not a production baseline; no remote
+entry, autonomous locking, roster-gated review, challenges, and immutable round
+scoring. These local migrations are not a production baseline; no remote
 migration is implied.
 
 The design must allow multiple sequential Tutti Frutti sessions in one Room,
@@ -131,15 +131,15 @@ Supabase; no remote migration is implied.
 | `tutti_frutti_room_setup` | Implemented in Increment 6 as one Room-scoped JSONB draft. | One row per Tutti Frutti Room; host-only writes while Room is `lobby`; member reads remain available later. Each save atomically replaces rounds and ordered preset/custom categories. Defaults are returned without a row. Prior-value preselection remains `OPEN`. |
 | `tutti_frutti_sessions` | Implemented by Increment 7 and extended by Increment 9, keyed by shared `room_sessions.id`. | Stores configured round count, approved 20-letter pool snapshot, initiating Player, and immutable answer-normalization version (currently 1). Direct client access is closed. |
 | `tutti_frutti_session_categories` | Implemented by Increment 7 as ordered snapshot rows. | Stores effective category labels and preset/custom identity so lobby edits cannot alter the session. |
-| `tutti_frutti_rounds` | Implemented by Increment 7 and extended in Increment 10. | Round 1 begins in `LETTER_PENDING`; Increment 8 accepts one candidate into `PLAYING`. Increment 10 adds `FINAL_COUNTDOWN`, server deadline, first caller, and `locked_at`; expiry enters `REVIEWING` without a shared-answer read. |
+| `tutti_frutti_rounds` | Implemented by Increment 7 and extended in Increments 10 and 13. | Round 1 begins in `LETTER_PENDING`; Increment 8 accepts one candidate into `PLAYING`. Increment 10 adds `FINAL_COUNTDOWN`, server deadline, first caller, and `locked_at`; expiry enters `REVIEWING` without a shared-answer read. Increment 13 moves `REVIEWING` to `RESULT` atomically with `scored_at`. |
 | `tutti_frutti_letter_candidates` | Implemented by Increment 7 and extended in Increment 8. | Letter belongs to the session pool, is unique across the session, and has one server deadline. The current candidate moves to skipped or accepted; one pending candidate is allowed per session. |
 | `tutti_frutti_letter_skip_votes` | Implemented by Increment 8 with closed direct access. | Unique `(candidate_id, player_id)`, frozen-roster FK, server timestamp, and one immutable vote per candidate. Authorized RPC reads return aggregate counts only. |
-| `tutti_frutti_answers` | Implemented by Increment 9 for private answer entry; later increments may add final validity and immutable awarded points. | Columns: `session_id`, `round_id`, `player_id`, `category_position`, `original_text`, `normalized_value`, `updated_at`. Unique `(round_id, player_id, category_position)` and composite FKs ensure round, frozen participant, and category belong to the same session. Empty values persist as `''`; direct client grants are revoked. RPC writes are allowed in `PLAYING` and before the authoritative deadline in `FINAL_COUNTDOWN`. |
+| `tutti_frutti_answers` | Implemented by Increment 9; Increment 13 adds immutable `awarded_points`. | Columns: `session_id`, `round_id`, `player_id`, `category_position`, `original_text`, `normalized_value`, `updated_at`, `awarded_points`. A CHECK permits only 0/5/10, and a scored answer cannot be changed. Unique `(round_id, player_id, category_position)` and composite FKs ensure round, frozen participant, and category belong to the same session. Empty values persist as `''`; direct client grants are revoked. RPC writes are allowed in `PLAYING` and before the authoritative deadline in `FINAL_COUNTDOWN`. |
 | `tutti_frutti_answer_signals` | Implemented by Increment 9 as a private Realtime invalidation surface. | One row per `(session_id, player_id)` with revision and timestamp. RLS allows the corresponding frozen participant to read it; clients cannot write it. The signal contains no answer text or answer row and only prompts an authorized RPC reread. |
 | `tutti_frutti_round_completions` | Persist one completion indication per round participant if early close is supported. | Unique `(round_id, player_id)`; the first valid call establishes the round's one deadline. Later calls do not change it. Individual completion reversal and early-close eligibility remain `OPEN`. |
 | `tutti_frutti_challenges` | Implemented locally by Increment 12 on its branch; persists one dispute and final outcome. | FK to one answer and both frozen-roster participants; answer author differs from challenger; one open challenge per round and one challenge per answer; deadline is exactly 30 seconds after opening; status is immutable after resolution. |
 | `tutti_frutti_challenge_votes` | Implemented locally by Increment 12 on its branch; direct client access is closed. | Unique `(challenge_id, voter_player_id)`, immutable choices, and frozen-roster membership. Opening records challenger's `INVALID`. With 3+ players the author cannot vote and invalidation requires more than half of eligible roster; with two, the author explicitly accepts or rejects. |
-| `tutti_frutti_review_signals` | Implemented locally by Increment 12 on its branch as a roster-filtered Realtime invalidation surface. | One revision per `(session_id, round_id)`; clients can read only during locked review and cannot write. Carries no answers or ballots; causes an authorized review reread. |
+| `tutti_frutti_review_signals` | Implemented locally by Increment 12 and extended by Increment 13. | One revision per `(session_id, round_id)`; roster members can read during locked `REVIEWING` and `RESULT`, and clients cannot write. Carries no answers or ballots; causes an authorized review or result reread. |
 | `tutti_frutti_round_scores` | **Do not add initially.** | Per-answer awarded points are immutable scoring snapshots. Per-player round totals and cumulative totals derive by summing them, including zero for absent/empty answers. Add a separate snapshot only if measured read or historical needs justify it. |
 
 Draft configuration must not be the only source for a started session. At
@@ -219,16 +219,15 @@ impossible. Votes and partial counts remain private; the review read returns
 only the caller's choice, deadline and final outcome. Open challenges block
 future scoring.
 
-**RECOMMENDED scoring source of truth:** after all challenges resolve, compute
-10/5/0 from locked answers and final validity in one guarded transaction, then
-persist each answer's awarded points and a round `scored_at` marker. A unique
-round phase/marker makes retries return the existing result. Round totals,
-cumulative scores, and ranking are derived from these immutable points; no
-second mutable score counter is needed. This combines reproducible history
-with a single scoring application. Deriving points afresh on every read would
-risk changing old results after normalization or rule changes; persisting only
-round totals would lose the per-answer explanation and complicate correction
-of duplicates after invalidation.
+Increment 13 implements scoring: after the host closes review and all
+challenges resolve, one guarded transaction recomputes 10/5/0 from locked
+answers and final validity, persists points for saved answers, records
+`scored_at`, and moves the round to `RESULT`. A CHECK constrains point values;
+triggers protect the scored answer and round snapshot. A retry with the same
+round ID returns the existing result. Round and cumulative totals and ranking
+are derived with one grouped read. The result joins the frozen categories and
+roster so missing answers remain visible with zero points; no mutable total
+table is needed.
 
 ## Session finish, lobby return, and rematch
 
