@@ -219,7 +219,8 @@ preexistente. El smoke visual manual con dos sesiones móviles y un canal
 Realtime interrumpido está pendiente. No se reinició ni limpió la DB local; no
 hubo cambios remotos y la baseline productiva no cambió.
 
-El Incremento 15 se implementa en `codex/tutti-frutti-increment-15`. La
+El Incremento 15 quedó integrado en `main` local desde
+`codex/tutti-frutti-increment-15`. La
 puntuación de la última ronda finaliza la sesión y devuelve la Room al lobby en
 una transacción; el roster congelado conserva acceso a una URL estable con el
 ranking final. El lobby postpartida retiene participantes y slots, permite

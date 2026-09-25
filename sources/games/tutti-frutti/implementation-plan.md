@@ -106,7 +106,7 @@ revalidan contra las migrations y datos del destino antes de ejecutarse.
 2, 7–16 → 17 recuperación y cierre MVP
 ```
 
-Los Incrementos 0–14 están integrados en el `main` local antes de este corte;
+Los Incrementos 0–15 están integrados en el `main` local antes de este corte;
 sus migrations y validadores se ejecutaron sólo en Supabase local. La política
 de sucesión en `playing` está implementada en el
 código del 5, pero falta verificar la definición desplegada antes de atribuirla
@@ -638,6 +638,9 @@ para preservarlos. El Cron fue comprobado localmente, no en un destino real.
 - **Does not depend on:** resultado final ni revancha.
 
 ### 15. Resultado final y retorno a lobby
+
+**Estado de implementación:** integrado en el `main` local; ver
+`sources/project-status.md` para las validaciones y límites de entorno.
 
 - **Goal:** después de la última ronda puntuada, la sesión queda FINISHED
   y la misma Room vuelve a `lobby` de forma indivisible.
