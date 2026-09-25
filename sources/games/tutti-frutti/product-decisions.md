@@ -421,6 +421,9 @@ The first valid Tutti Frutti call starts a shared final countdown.
 
 45 seconds.
 
+For Increment 10, 45 seconds is the confirmed initial value. It remains
+tunable after observing real play; clients cannot change a running deadline.
+
 ## Rationale
 
 This preserves the pressure created by someone finishing first while giving the rest of the group a reasonable opportunity to complete their answers.
@@ -478,6 +481,10 @@ The button should preserve its semantic meaning: “I finished.”
 ## Status
 
 Considered the preferred product rule, subject to gameplay validation.
+
+Confirmed for Increment 10: the server requires a persisted non-empty answer
+in every active category before accepting the first call. Unsaved drafts do
+not qualify.
 
 ---
 
@@ -547,6 +554,10 @@ There is no gameplay value in forcing everyone to watch an unused timer.
 A disconnected participant should not cause the system to wait indefinitely for explicit completion.
 
 The countdown remains the guaranteed progress mechanism.
+
+Increment 10 intentionally closes only at the deadline. Individual completion
+markers and early close remain outside that increment until their presence and
+reversal policy is decided.
 
 ---
 
@@ -1088,7 +1099,7 @@ The following parameters have different decision statuses:
 ```text
 CONFIRMED: minimum players = 2
 CONFIRMED: scoring = 10 / 5 / 0 for the initial product
-WORKING HYPOTHESIS: final countdown = 45 seconds
+CONFIRMED FOR INCREMENT 10: initial final countdown = 45 seconds; tunable after real play
 CONFIRMED: letter-skip window = 5 seconds
 CONFIRMED: skip threshold = floor(frozen session roster size / 2) + 1
 ```

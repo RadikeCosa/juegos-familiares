@@ -28,8 +28,11 @@ close as host. The host configures and saves rounds and categories; members see
 the last confirmed configuration. Increment 7 starts with at least two
 participants and freezes the configuration and roster. Increment 8 resolves
 the 5-second skip vote. Increment 9 lets each player save and recover their
-own answers during `PLAYING`; countdown, lock, review, and scoring are not yet
-implemented.
+own answers during `PLAYING`. Increment 10 is implemented in its own local
+branch: a fully saved participant calls Tutti Frutti, everyone may edit during
+the 45-second countdown, and the server locks answers at expiry. The UI then
+shows each player's own confirmed answers and any unconfirmed edit while
+waiting for review; shared review reads and scoring are not yet implemented.
 
 ---
 

@@ -117,9 +117,10 @@ and defaults returned without persisting a row. Increment 7 adds the session,
 ordered category snapshot, round, and pending letter candidate described
 below. Increment 8 adds candidate deadlines and private fixed skip votes; the
 authorized read returns only aggregate counts. Increment 9 implements private
-persistent answer entry. The current answer-entry contract permits writes
-only during `PLAYING`; countdown, lock, review and scoring remain future
-design candidates. These migrations were validated only against local
+persistent answer entry. Increment 10 adds an authoritative 45-second
+countdown and a background lock. Writes are permitted in `PLAYING` and before
+the deadline in `FINAL_COUNTDOWN`; shared review reads and scoring remain
+future increments. These migrations were validated only against local
 Supabase; no remote migration is implied.
 
 | Candidate | Persist or derive? | Relationships and invariant |
@@ -127,10 +128,10 @@ Supabase; no remote migration is implied.
 | `tutti_frutti_room_setup` | Implemented in Increment 6 as one Room-scoped JSONB draft. | One row per Tutti Frutti Room; host-only writes while Room is `lobby`; member reads remain available later. Each save atomically replaces rounds and ordered preset/custom categories. Defaults are returned without a row. Prior-value preselection remains `OPEN`. |
 | `tutti_frutti_sessions` | Implemented by Increment 7 and extended by Increment 9, keyed by shared `room_sessions.id`. | Stores configured round count, approved 20-letter pool snapshot, initiating Player, and immutable answer-normalization version (currently 1). Direct client access is closed. |
 | `tutti_frutti_session_categories` | Implemented by Increment 7 as ordered snapshot rows. | Stores effective category labels and preset/custom identity so lobby edits cannot alter the session. |
-| `tutti_frutti_rounds` | Implemented by Increment 7; first row is created at start. | Round 1 begins in `LETTER_PENDING`; Increment 8 accepts one candidate into `PLAYING`; later phase transitions remain future increments. |
+| `tutti_frutti_rounds` | Implemented by Increment 7 and extended in Increment 10. | Round 1 begins in `LETTER_PENDING`; Increment 8 accepts one candidate into `PLAYING`. Increment 10 adds `FINAL_COUNTDOWN`, server deadline, first caller, and `locked_at`; expiry enters `REVIEWING` without a shared-answer read. |
 | `tutti_frutti_letter_candidates` | Implemented by Increment 7 and extended in Increment 8. | Letter belongs to the session pool, is unique across the session, and has one server deadline. The current candidate moves to skipped or accepted; one pending candidate is allowed per session. |
 | `tutti_frutti_letter_skip_votes` | Implemented by Increment 8 with closed direct access. | Unique `(candidate_id, player_id)`, frozen-roster FK, server timestamp, and one immutable vote per candidate. Authorized RPC reads return aggregate counts only. |
-| `tutti_frutti_answers` | Implemented by Increment 9 for private answer entry; later increments may add final validity and immutable awarded points. | Columns: `session_id`, `round_id`, `player_id`, `category_position`, `original_text`, `normalized_value`, `updated_at`. Unique `(round_id, player_id, category_position)` and composite FKs ensure round, frozen participant, and category belong to the same session. Empty values persist as `''`; direct client grants are revoked. RPC writes are currently allowed only in `PLAYING`. |
+| `tutti_frutti_answers` | Implemented by Increment 9 for private answer entry; later increments may add final validity and immutable awarded points. | Columns: `session_id`, `round_id`, `player_id`, `category_position`, `original_text`, `normalized_value`, `updated_at`. Unique `(round_id, player_id, category_position)` and composite FKs ensure round, frozen participant, and category belong to the same session. Empty values persist as `''`; direct client grants are revoked. RPC writes are allowed in `PLAYING` and before the authoritative deadline in `FINAL_COUNTDOWN`. |
 | `tutti_frutti_answer_signals` | Implemented by Increment 9 as a private Realtime invalidation surface. | One row per `(session_id, player_id)` with revision and timestamp. RLS allows the corresponding frozen participant to read it; clients cannot write it. The signal contains no answer text or answer row and only prompts an authorized RPC reread. |
 | `tutti_frutti_round_completions` | Persist one completion indication per round participant if early close is supported. | Unique `(round_id, player_id)`; the first valid call establishes the round's one deadline. Later calls do not change it. Individual completion reversal and early-close eligibility remain `OPEN`. |
 | `tutti_frutti_challenges` | Persist the dispute and final outcome. | FK to one non-empty answer and challenger; challenger differs from answer author; at most one open challenge per answer, with final resolution immutable. |
@@ -141,8 +142,9 @@ Draft configuration must not be the only source for a started session. At
 start, validate and copy round count, ordered category labels, custom labels,
 and letter pool into immutable session records. A rematch makes a new snapshot
 even if its draft happens to have the same values. Optional timer settings
-must also be copied if the product later makes them configurable; current
-10/45-second values are working hypotheses, not platform settings.
+must also be copied if the product later makes them configurable. The 5-second
+letter vote and initial 45-second final countdown are game rules, not platform
+settings; the latter may be tuned after real play.
 
 ## Letter pool and phase representation
 
@@ -190,13 +192,13 @@ on page load, visibility return, and network reconnection. Drafts stay local
 in memory and are marked stale when a newer confirmed server value arrives.
 
 The round stores one authoritative `countdown_started_at`, `countdown_ends_at`,
-and `triggered_by` as candidates. A first valid call locks the round row,
-checks eligibility, records the deadline, and advances to
-`FINAL_COUNTDOWN`; later calls cannot rewrite those fields. Deadline expiry or
-a valid early-close guard locks answers exactly once. Reconnect displays time
-remaining from the authoritative deadline. A client timer cannot lock the
-round. The first-call guard is a working product hypothesis until the
-all-fields-complete rule is validated; the deadline uniqueness is confirmed.
+and `called_by_player_id`. A first valid call checks persisted answers under
+the Room, session and round locks, records the deadline, and advances to
+`FINAL_COUNTDOWN`; later calls cannot rewrite those fields. Supabase Cron moves
+an expired round to `REVIEWING` once, while the write RPC rejects late saves
+even before the job runs. The client estimates the server-clock offset for its
+countdown display and rereads the authoritative phase. Early close remains a
+future option and is not part of Increment 10.
 
 Challenge resolution only changes an answer's final validity after authorized
 votes or mutual agreement. The two-player case can use the same vote table

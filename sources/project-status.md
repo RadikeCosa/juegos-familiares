@@ -165,6 +165,18 @@ completó el smoke visual del formulario con dos navegadores. No se limpiaron
 los fixtures locales del validador, no se aplicaron migrations remotas ni se
 modificó producción.
 
+El Incremento 10 está implementado en la rama local
+`codex/tutti-frutti-increment-10`, todavía no integrado a `main`. La primera
+llamada requiere todas las categorías guardadas y no vacías; fija un plazo de
+45 segundos. La DB permite editar durante la cuenta antes del vencimiento y
+un job de Supabase Cron bloquea la ronda sin clientes. El validador local
+comprobó privacidad, llamadas simultáneas, guardado en vuelo y bloqueo
+autónomo. La UI conserva un resumen de respuestas confirmadas y ediciones sin
+confirmar al cerrarse la ronda. Quedan pendientes el smoke visual de dos
+navegadores, la validación operacional del job en un destino real y cualquier
+aplicación remota. El `main` local sí integra `home-games-first`; la baseline
+productiva no cambió.
+
 Only observations confirmed against the current product should become active
 improvement work. Historical UX findings are evidence to revalidate, not an
 automatic backlog. No additional detailed post-beta UX/UI backlog is established

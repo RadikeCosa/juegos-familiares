@@ -11,12 +11,17 @@ proposed physical representation and alternatives are in
 
 The local `main` implements Impostor gameplay, game-aware Room routing, a
 Tutti Frutti coordination lobby, shared lobby configuration, session start,
-letter skipping, and private persistent answer entry. Increment 7 snapshots
+letter skipping, and private persistent answer entry. The local Increment 10
+branch adds the authoritative final countdown and answer lock. Increment 7
+snapshots
 configuration and roster while starting the first session and its initial
 `LETTER_PENDING` candidate. Increment 8 adds the 5-second strict-majority skip
 vote and lazy resolution on authorized state reads. Increment 9 adds
-participant-private answer reads and writes during `PLAYING`; countdown,
-locking, review, and scoring remain future increments. The `rooms` table
+participant-private answer reads and writes during `PLAYING`. Increment 10
+adds a first-call guard requiring every persisted category answer, a fixed
+45-second server deadline, editing before expiry, and an autonomous lock that
+enters `REVIEWING` without exposing other players' answers. Shared review
+reads, challenges, and scoring remain future increments. The `rooms` table
 persists an immutable game type and active-Room discovery returns it; the
 zero-argument create path remains Impostor-only.
 `game_sessions.state` and
@@ -112,10 +117,11 @@ product decision, not an implied result of multi-session Rooms.
 4. Increment 9 implements answers keyed by session round, frozen session
    participant, and category position. The original non-empty text is
    preserved; empty or whitespace-only input is persisted as empty. Only the
-   author can read or write their answers through RPCs. The implemented write
-   phase is exactly `PLAYING`; `LETTER_PENDING` and all later phases reject
-   writes. Increment 10 must explicitly extend the guard to `FINAL_COUNTDOWN`
-   if editing is to remain available until lock. Every round keeps its own
+   author can read or write their answers through RPCs. Increment 9 allowed
+   writes in `PLAYING`; Increment 10 extends the guard to `FINAL_COUNTDOWN`
+   strictly before
+   the server deadline; a queued write arriving later is rejected even if the
+   scheduled lock has not yet run. Every round keeps its own
    answer history. The session stores immutable normalization version 1:
    NFC, trimmed Unicode whitespace and case-insensitive comparison, while
    preserving accents, punctuation, and internal spaces. Input is limited to
@@ -133,11 +139,12 @@ product decision, not an implied result of multi-session Rooms.
    tab has a newer server value. Autosave waits 500 ms, serializes by category
    in one tab, and a retry uses the current draft. There is no offline queue.
 7. The first server-valid Tutti Frutti call starts exactly one irreversible
-   deadline. The preferred all-fields-complete eligibility rule remains a
-   `WORKING HYPOTHESIS` pending gameplay validation. Later calls cannot
-   extend or reset the deadline. All players may edit until the shared lock.
-   The 45-second duration is a tunable hypothesis; the authoritative deadline
-   is server-derived, never a client countdown.
+   deadline. The all-fields-complete eligibility rule is confirmed for
+   Increment 10. Only persisted non-empty answers qualify. Later calls cannot
+   extend or reset the deadline. All players may edit until the server
+   deadline. The initial 45-second duration may be revisited after real play;
+   it is server-derived,
+   never a client countdown.
 8. The round locks once at the deadline or a valid early-close condition.
    A disconnected participant keeps their roster place, previous answers,
    and score. If absent at lock, their latest persisted answers are used.

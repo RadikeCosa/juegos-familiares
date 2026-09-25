@@ -56,9 +56,11 @@ Rooms históricas se identifican como Impostor y la creación sin
 argumentos continúa creando Impostor. Las RPCs con intención de juego validan
 create/join, rechazan una Room activa de otro juego y mantienen opaco el código
 de otro Group. `get_my_active_room()` devuelve el tipo junto con la coordinación
-autorizada; la navegación recupera la ruta del juego. Tutti Frutti tiene una
-entrada y lobby de coordinación con un tópico Presence propio autorizado por
-membresía, sin configuración ni gameplay.
+autorizada; la navegación recupera la ruta del juego. Tutti Frutti tiene
+entrada, lobby, configuración por Room, inicio de sesión, votación de letra,
+respuestas privadas y countdown autoritativo hasta el bloqueo. Su tópico
+Presence de lobby está autorizado por membresía; una señal RLS-filtrada
+invalida sólo las respuestas propias.
 `player_active_room_slots` sigue imponiendo una sola Room activa
 por Player en toda la plataforma.
 

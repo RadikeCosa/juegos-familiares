@@ -443,6 +443,15 @@ aplicaron.
 
 ### 10. Llamada, countdown y lock
 
+**Estado local:** implementado en `codex/tutti-frutti-increment-10`. La primera
+llamada exige todas las respuestas persistidas y no vacías y fija 45 segundos.
+El cierre temprano queda fuera. Un job SQL de un segundo bloquea al vencer,
+con lectura autoritativa, guard de escrituras tardías y espera de review.
+La verificación local de DB cubrió llamadas simultáneas, privacidad, guardado
+en vuelo y lock sin cliente. Quedan el smoke visual de dos navegadores, la
+comprobación operacional de Cron en un destino real y la revisión de su cola
+antes de habilitarlo allí. No hay migration remota aplicada.
+
 - **Goal:** la primera llamada válida fija un deadline irreversible; al
   vencer, todas las respuestas quedan bloqueadas una sola vez.
 - **Scope:** elegibilidad de llamada, deadline servidor, edición hasta lock,
@@ -692,11 +701,15 @@ con `git diff --check`.
 
 ## Decisiones abiertas, punto exacto de bloqueo
 
+Para el Incremento 10 ya se confirmó la llamada con todas las categorías
+persistidas y no vacías, la duración inicial de 45 segundos y la exclusión
+del cierre temprano. La operación del job en un destino real sigue siendo una
+validación previa a cualquier aplicación remota, no una decisión de producto.
+
 | Decisión pendiente | Bloquea | No bloquea |
 | --- | --- | --- |
 | Datos reales del destino, estrategia de backfill y alternativa A de sesión mínima | 3/4 y constraints estrictas | 0–2 con migración local segura; el remoto requiere preflight antes de aplicar |
 | Normalización más allá de trim/case | 9/11/13 sólo si se pretende incluirla; si no, declarar versión mínima trim/case en 9 | 0–8 |
-| Elegibilidad de llamada con todos los campos (hipótesis preferida) y duración de countdown (45 s hipótesis) | 10 | 0–9 |
 | Cierre temprano al completar todos: elegibilidad con Presence cambiante y reversión de completion | Sólo implementación de ese guard; no se añade silenciosamente al 10 | Flujo con deadline como garantía de progreso |
 | Presentación de review y desafíos secuenciales/paralelos | 11/12, respectivamente | 0–10 |
 | Electores al desconectar, timeout/abstención, visibilidad de votos y acuerdo de dos | 12 y por dependencia 13–17 | 0–11 |

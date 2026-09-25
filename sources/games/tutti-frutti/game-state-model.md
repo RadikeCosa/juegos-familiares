@@ -248,6 +248,11 @@ reconnection, or answer invalidation. Other tabs' unsaved drafts are retained
 and marked stale until the player saves or reloads the server value. No
 countdown, lock, review, or score transition is implemented by this increment.
 
+Increment 10 subsequently adds the first-call transition to
+`FINAL_COUNTDOWN`, allows writes strictly before the 45-second server
+deadline, and advances autonomously to a locked `REVIEWING` phase. It does
+not yet expose another participant's answers; the review read is Increment 11.
+
 ---
 
 # 9. Player Completion State
@@ -321,7 +326,7 @@ Exact representation is implementation-specific.
 
 The countdown has started.
 
-Initial duration hypothesis:
+Initial duration confirmed for Increment 10:
 
 ```text
 45 seconds
