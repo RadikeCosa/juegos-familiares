@@ -165,8 +165,7 @@ completó el smoke visual del formulario con dos navegadores. No se limpiaron
 los fixtures locales del validador, no se aplicaron migrations remotas ni se
 modificó producción.
 
-El Incremento 10 está implementado en la rama local
-`codex/tutti-frutti-increment-10`, todavía no integrado a `main`. La primera
+El Incremento 10 está integrado a `main` local. La primera
 llamada requiere todas las categorías guardadas y no vacías; fija un plazo de
 45 segundos. La DB permite editar durante la cuenta antes del vencimiento y
 un job de Supabase Cron bloquea la ronda sin clientes. El validador local

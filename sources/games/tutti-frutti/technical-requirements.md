@@ -11,10 +11,9 @@ proposed physical representation and alternatives are in
 
 The local `main` implements Impostor gameplay, game-aware Room routing, a
 Tutti Frutti coordination lobby, shared lobby configuration, session start,
-letter skipping, and private persistent answer entry. The local Increment 10
-branch adds the authoritative final countdown and answer lock. Increment 7
-snapshots
-configuration and roster while starting the first session and its initial
+letter skipping, private persistent answer entry, and the authoritative final
+countdown and answer lock. Increment 7 snapshots configuration and roster
+while starting the first session and its initial
 `LETTER_PENDING` candidate. Increment 8 adds the 5-second strict-majority skip
 vote and lazy resolution on authorized state reads. Increment 9 adds
 participant-private answer reads and writes during `PLAYING`. Increment 10

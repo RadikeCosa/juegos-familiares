@@ -443,7 +443,7 @@ aplicaron.
 
 ### 10. Llamada, countdown y lock
 
-**Estado local:** implementado en `codex/tutti-frutti-increment-10`. La primera
+**Estado local:** integrado a `main`. La primera
 llamada exige todas las respuestas persistidas y no vacías y fija 45 segundos.
 El cierre temprano queda fuera. Un job SQL de un segundo bloquea al vencer,
 con lectura autoritativa, guard de escrituras tardías y espera de review.
