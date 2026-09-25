@@ -715,8 +715,15 @@ from the finished session; returning to the lobby does not erase it.
 A rematch in that Room starts a new session with a new roster and configuration
 snapshot. Previous configuration values may be offered as a convenience, but
 no gameplay record from the finished session is reset or reused. Closing the
-Room is a separate action. Who initiates the rematch, the exact lobby
-presentation, and behavior when someone leaves between matches remain `OPEN`.
+Room is a separate action.
+
+Increment 15 sends the roster to a stable result URL showing ranking, totals,
+winner or tied winners. **Ir al lobby** returns a current RoomParticipant to a
+post-game lobby with close or leave actions. Starting another session and
+editing setup are unavailable until Increment 16. A participant who leaves
+retains result access through the frozen session roster; a person who joins
+afterward cannot read that prior result. Who initiates the rematch,
+configuration preselection and its full lobby presentation remain `OPEN`.
 
 ---
 
@@ -844,5 +851,5 @@ before calling Tutti Frutti. Gameplay validation may motivate a later change.
 * early-close eligibility when presence changes;
 * who may initiate a rematch and whether that action is host-only;
 * whether previous configuration is preselected;
-* what happens when someone leaves between matches;
-* exact post-game lobby presentation and actions.
+* how membership changes affect the next-match roster;
+* rematch controls after the Increment 15 result-first postgame.

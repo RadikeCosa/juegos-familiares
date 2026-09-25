@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { getTuttiFruttiRoundResult, scoreTuttiFruttiRound,
+import { getTuttiFruttiFinalResult, getTuttiFruttiPostgameState,
+  getTuttiFruttiRoundResult, scoreTuttiFruttiRound,
   type TuttiFruttiResultClient } from "./tutti-frutti-result";
 
 const result = {
@@ -43,6 +44,46 @@ describe("Tutti Frutti result RPC adapter", () => {
     const denied = { rpc: vi.fn().mockResolvedValue({ data: null, error: { code: "P0049", message: "raw" } }) } as unknown as TuttiFruttiResultClient;
     await expect(scoreTuttiFruttiRound(denied, "room-1", "round-1")).rejects.toMatchObject({
       message: "Hay una impugnación pendiente. Resolvámosla antes de puntuar.", code: "P0049"
+    });
+  });
+
+  it("reads and validates a final result by frozen session identifier", async () => {
+    const finalResult = {
+      roomId: "room-1", roomCode: "TUTT1234", sessionId: "session-1",
+      finishedAt: "2026-09-25T13:00:00Z", serverNow: "2026-09-25T13:00:01Z",
+      roundCount: 3, totals: [
+        { playerId: "a", nickname: "Ana", totalPoints: 30, rank: 1 },
+        { playerId: "b", nickname: "Beto", totalPoints: 30, rank: 1 },
+        { playerId: "c", nickname: "Cata", totalPoints: 20, rank: 3 }
+      ], winnerPlayerIds: ["a", "b"], isTie: true, canReturnToRoom: true
+    };
+    const rpc = vi.fn().mockResolvedValue({ data: finalResult, error: null });
+    const client = { rpc } as unknown as TuttiFruttiResultClient;
+    await expect(getTuttiFruttiFinalResult(client, "session-1")).resolves.toEqual(finalResult);
+    expect(rpc).toHaveBeenCalledWith("get_tutti_frutti_final_result", {
+      target_session_id: "session-1"
+    });
+  });
+
+  it("rejects final results whose winners do not match rank one", async () => {
+    const malformed = {
+      roomId: "room-1", roomCode: null, sessionId: "session-1",
+      finishedAt: "2026-09-25T13:00:00Z", serverNow: "2026-09-25T13:00:01Z",
+      roundCount: 3, totals: [{ playerId: "a", nickname: "Ana", totalPoints: 30, rank: 1 }],
+      winnerPlayerIds: ["missing"], isTie: false, canReturnToRoom: false
+    };
+    const client = { rpc: vi.fn().mockResolvedValue({ data: malformed, error: null }) } as unknown as TuttiFruttiResultClient;
+    await expect(getTuttiFruttiFinalResult(client, "session-1"))
+      .rejects.toThrow("resultado final");
+  });
+
+  it("reads postgame discovery without exposing a session to a new member", async () => {
+    const data = { hasFinishedSession: true, latestFinishedSessionId: null };
+    const rpc = vi.fn().mockResolvedValue({ data, error: null });
+    const client = { rpc } as unknown as TuttiFruttiResultClient;
+    await expect(getTuttiFruttiPostgameState(client, "room-1")).resolves.toEqual(data);
+    expect(rpc).toHaveBeenCalledWith("get_tutti_frutti_postgame_state", {
+      target_room_id: "room-1"
     });
   });
 });

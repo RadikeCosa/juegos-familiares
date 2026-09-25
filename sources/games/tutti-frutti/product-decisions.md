@@ -1161,8 +1161,8 @@ confirmed in the challenge decisions above and implemented for Increment 12.
 
 * who may initiate the next match, including whether only the host may do so;
 * whether prior configuration is preselected as a UX convenience;
-* what happens when a participant leaves between matches;
-* the exact post-game lobby presentation and actions.
+* how membership changes affect the next-match roster;
+* the rematch controls shown after the Increment 15 result-first postgame.
 
 These decisions should be resolved before the corresponding implementation increment, but they do not currently block the high-level product model.
 
@@ -1234,12 +1234,21 @@ This decision applies to Tutti Frutti. Impostor retains its current behavior:
 its session completion closes its Room until a separate product decision
 changes that contract.
 
+**CONFIRMED FOR INCREMENT 15:** scoring the configured final round performs
+the session finish and Room return in the same transaction. The frozen
+`room_session_participants` roster remains the authorization source after a
+participant leaves or the Room closes. Players see a stable final-result URL
+before entering a post-game lobby. That lobby permits close or leave but does
+not start a rematch or edit the next configuration; Increment 16 replaces
+that temporary server guard.
+
 ## Open Follow-ups
 
 * who may initiate a rematch and whether that action is host-only;
 * whether previous configuration values appear preselected;
 * what happens when a participant leaves between matches;
-* the exact post-game lobby presentation and actions.
+* the rematch controls and broader post-game lobby presentation after the
+  Increment 15 result-first screen.
 
 # 46. Answers Are Private and Persisted Per Round
 

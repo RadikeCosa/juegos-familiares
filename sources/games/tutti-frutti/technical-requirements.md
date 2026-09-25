@@ -185,7 +185,8 @@ product decision, not an implied result of multi-session Rooms.
 12. When the configured number of rounds has been scored, mark the session
    finished and immutable, detach it as the active session, and return its
    Room from `playing` to `lobby` in one transaction. Retain finished results
-   for authorized session participants and create a new session for a rematch.
+   for the frozen session roster. Until Increment 16 defines rematch, reject a
+   new start in a Room with a finished Tutti Frutti session.
 
 ## Security and privacy requirements
 
@@ -243,9 +244,9 @@ Reconnect follows Auth → Player/Group → active Room with game type → that
 game's authorized loader. Tutti Frutti's loader reconstructs session, phase,
 round, candidate or accepted letter, authoritative deadline, the actor's
 answers, visible review/challenge state, and scores. A Room already returned
-to `lobby` may still expose the actor's latest finished result through a
-separate authorized session-history read; the exact post-game presentation is
-`OPEN`.
+to `lobby` exposes the actor's latest finished result through a separate
+roster-authorized read and stable session URL. Current Room membership controls
+only whether the UI can return to that lobby.
 
 ## Concurrency and validation expectations
 

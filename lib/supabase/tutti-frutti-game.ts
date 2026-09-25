@@ -51,7 +51,8 @@ export const TUTTI_FRUTTI_GAME_ERROR_MESSAGES: Record<string, string> = {
   P0051: "No quedan letras disponibles para otra ronda.",
   P0052: "La partida ya llegó a su última ronda.",
   P0053: "Solo el anfitrión puede avanzar a la siguiente ronda.",
-  P0054: "La ronda cambió en otro dispositivo. Actualizamos la partida."
+  P0054: "La ronda cambió en otro dispositivo. Actualizamos la partida.",
+  P0055: "Esta sala ya terminó una partida. La revancha todavía no está disponible."
 };
 export const TUTTI_FRUTTI_START_ERROR_MESSAGES = TUTTI_FRUTTI_GAME_ERROR_MESSAGES;
 

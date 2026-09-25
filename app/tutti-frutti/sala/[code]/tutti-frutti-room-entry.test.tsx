@@ -66,6 +66,24 @@ describe("Tutti Frutti lobby", () => {
     expect(markup).not.toContain("Iniciar partida");
   });
 
+  it("keeps only lobby exit actions after a finished session", () => {
+    const markup = render(lobby, new Set(), "online", null, { postgame: true });
+    expect(markup).toContain("La partida terminó.");
+    expect(markup).toContain("Cerrar sala");
+    expect(markup).not.toContain("Iniciar partida");
+  });
+
+  it("does not expose start while postgame recovery is pending or failed", () => {
+    const loading = render(lobby, new Set(), "online", null, { postgameLoading: true });
+    expect(loading).toContain("Comprobando el estado de la partida");
+    expect(loading).not.toContain("Iniciar partida");
+    const failed = render(lobby, new Set(), "online", null, {
+      postgameError: "No pudimos recuperar el estado de la sala."
+    });
+    expect(failed).toContain("No pudimos recuperar el estado de la sala.");
+    expect(failed).not.toContain("Iniciar partida");
+  });
+
   it("shows the shared candidate letter once the Room is playing", () => {
     const playingLobby: ActiveRoomLobby = {
       ...lobby,

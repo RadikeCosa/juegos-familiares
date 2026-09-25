@@ -55,7 +55,7 @@ este plan. La política de sucesión en `playing` está **CONFIRMED** en
   verifican tipo, Group, lobby y slot global; `get_my_active_room()` devuelve
   el tipo y las rutas actuales recuperan el juego correspondiente. Tutti
   Frutti tiene lobby, presencia, configuración compartida, sesión, respuestas,
-  bloqueo y lectura de revisión hasta el Incremento 11.
+  bloqueo, revisión, desafíos, puntuación y avance hasta el Incremento 14.
 - `game_sessions` tiene `unique(room_id)` y fases de Impostor;
   `session_players` incluye datos propios de ese juego. `start_session()` crea
   roster, estado y primera ronda de Impostor; `end_session()` termina la
@@ -106,7 +106,7 @@ revalidan contra las migrations y datos del destino antes de ejecutarse.
 2, 7–16 → 17 recuperación y cierre MVP
 ```
 
-Los Incrementos 0–13 están integrados en el `main` local antes de este corte;
+Los Incrementos 0–14 están integrados en el `main` local antes de este corte;
 sus migrations y validadores se ejecutaron sólo en Supabase local. La política
 de sucesión en `playing` está implementada en el
 código del 5, pero falta verificar la definición desplegada antes de atribuirla
@@ -641,28 +641,29 @@ para preservarlos. El Cron fue comprobado localmente, no en un destino real.
 
 - **Goal:** después de la última ronda puntuada, la sesión queda FINISHED
   y la misma Room vuelve a `lobby` de forma indivisible.
-- **Scope:** cierre autoritativo, read model de resultado final para roster
-  histórico, conservación de RoomParticipants/slots; close Room separado.
+- **Scope:** la puntuación final cierra sesión y devuelve la Room al lobby;
+  resultado estable para el roster congelado, lobby postpartida y close
+  separado.
 - **Explicitly out of scope:** iniciar otra sesión y rediseñar cierre Impostor.
-- **Likely files / areas:** RPC de cierre Tutti, sesiones/Rooms, pantalla
-  final y read model de historial autorizado.
-- **Database impact:** `finished_at` e invariantes de Room en una
-  transacción; cero sesión no finalizada en lobby.
-- **Application impact:** resultado visible, Room activa descubre lobby y
-  puede mostrar acceso al resultado según UX aprobada.
-- **Security requirements:** historial sólo a participantes autorizados de
-  esa sesión, no a nuevos miembros o sólo por código.
-- **Concurrency / idempotency:** final doble no cierra Room ni libera slots;
-  fallo intermedio revierte sesión y Room; slot permanece al volver lobby.
-- **Automated verification:** invariantes commit/rollback/retry, acceso a
-  historia, slot persistente y **Impostor regression = PASS** en end/close.
+- **Database impact:** locks Room → sesión compartida → sesión Tutti → ronda,
+  `UPDATE ... RETURNING` guardados y un timestamp para ronda/sesión. El
+  resultado se agrupa sin tabla de totales. `P0055` bloquea revancha hasta 16.
+- **Application impact:** URL estable de resultado, ganador o empate y lobby
+  postpartida sin inicio ni edición de configuración.
+- **Security requirements:** `room_session_participants` autoriza historia;
+  membresía actual sólo permite volver a la Room. Nuevos miembros no reciben
+  el ID ni el resultado anterior.
+- **Concurrency / idempotency:** Room serializa cierres; un retry valida el
+  estado guardado antes de devolverlo. Una inconsistencia falla sin reparación.
+- **Automated verification:** ronda intermedia, hueco sin puntuar, carrera,
+  retry tras lobby/close, empate múltiple, privacidad, slots y guard de revancha.
 - **Manual smoke:** última ronda → resultado → lobby; dos clientes recargan,
   host cierra Room aparte; completar también smoke fin Impostor.
 - **Documentation update:** contrato de lifecycle y flujo de resultado
   implementado.
 - **Exit criteria:** ninguna combinación `finished+playing` ni
   `unfinished+lobby`; Room conserva identidad y miembros.
-- **Depends on:** 14 y decisión mínima de exposición de resultado/lobby.
+- **Depends on:** 14.
 - **Does not depend on:** política de revancha.
 
 ### 16. Revancha como sesión nueva

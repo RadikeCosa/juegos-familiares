@@ -219,6 +219,18 @@ preexistente. El smoke visual manual con dos sesiones móviles y un canal
 Realtime interrumpido está pendiente. No se reinició ni limpió la DB local; no
 hubo cambios remotos y la baseline productiva no cambió.
 
+El Incremento 15 se implementa en `codex/tutti-frutti-increment-15`. La
+puntuación de la última ronda finaliza la sesión y devuelve la Room al lobby en
+una transacción; el roster congelado conserva acceso a una URL estable con el
+ranking final. El lobby postpartida retiene participantes y slots, permite
+cerrar o salir y bloquea revancha/configuración hasta el Incremento 16. La
+migration se aplicó en Supabase local y pasaron el validador 15, las regresiones
+Tutti Frutti 12–14 y el cierre Impostor 12.2. Pasaron 795 tests de aplicación,
+TypeScript, build con Webpack y lint sin errores; persiste una advertencia
+preexistente. El smoke visual mobile con dos sesiones aisladas no se completó:
+el runtime Playwright de la guía local no está instalado. No se reinició ni
+limpió la DB local, no hubo cambios remotos y la baseline productiva no cambió.
+
 Only observations confirmed against the current product should become active
 improvement work. Historical UX findings are evidence to revalidate, not an
 automatic backlog. No additional detailed post-beta UX/UI backlog is established

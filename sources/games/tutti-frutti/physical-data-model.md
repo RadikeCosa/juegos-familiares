@@ -246,17 +246,24 @@ idempotent: a retry sees the existing finished session and lobby Room and
 returns the same result. A failure rolls back both entities; neither
 `finished session + playing Room` nor `lobby Room + unfinished session` may be
 committed. Closing the Room is a separate lobby operation. Retaining the
-current host-only close permission is `RECOMMENDED`, pending confirmation of
-the Tutti Frutti post-game action policy.
+current host-only close permission is implemented for the Increment 15
+post-game lobby.
+
+Increment 15 implements idempotency under Room → shared session → Tutti
+session → round locks. The first close uses guarded `UPDATE ... RETURNING`
+operations for `scored_at`, `finished_at` and Room status. A retry locates the
+session from the supplied round, validates the persisted combination and
+returns the stored result; inconsistent state raises without repair or data.
 
 At rematch start, a new `room_sessions.id` and Tutti Frutti session snapshot
 are created in the same Room. The new roster is frozen from eligible current
 RoomParticipants and may differ from the prior roster. Finished results stay
 addressable by authorized prior session participants. The active-room read
 model reports the Room as `lobby`; a separate protected recent-session read
-may show its last result without pretending it is still active. Who initiates
-rematch, prior-config preselection, and departures between matches remain
-`OPEN` product choices.
+shows its last result without pretending it is still active. The Increment 15
+start RPC deliberately rejects a Room with finished Tutti sessions; Increment
+16 must replace that guard when it creates a new session. Who initiates
+rematch and prior-config preselection remain `OPEN` product choices.
 
 ## Authorization, Realtime, and recovery
 
@@ -265,10 +272,10 @@ must be verified by server operations. New tables should default to no client
 table privileges with RLS enabled; explicit read models expose only authorized
 views. A participant who joined the Room after a prior session may not read
 that session's private history merely because they now belong to the Room.
-A prior session participant who later leaves the Room must not be removed from
-historical roster records. The exact finished-history access policy after
-departure should be confirmed during security design, preserving at least the
-current authorized roster principle.
+A prior session participant who later leaves the Room is not removed from
+historical roster records and remains authorized for that result. Current
+membership and Presence never grant access to a prior session; a new member
+can learn only that the Room is in postgame.
 
 Existing Realtime on `rooms` and `room_participants` can invalidate
 coordination reads. For Tutti Frutti gameplay, a safe first design is

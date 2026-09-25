@@ -782,9 +782,11 @@ by session completion.
 
 A rematch in the same Room creates a new session, with a new roster and
 configuration snapshot. It does not reset the finished session or its rounds.
-Closing the Room is a separate action. Who may initiate the rematch and the
-exact post-game lobby behavior remain `OPEN`. Impostor's current close-on-finish
-contract is unaffected.
+Closing the Room is a separate action. Increment 15 shows the immutable final
+ranking first, then a lobby that permits close or leave while rematch and setup
+editing remain disabled. The frozen session roster authorizes the result even
+after Room membership changes. Who may initiate the rematch and its controls
+remain `OPEN`. Impostor's current close-on-finish contract is unaffected.
 
 ---
 
@@ -1171,8 +1173,8 @@ snapshots this pool in each session.
 * eligibility for early close when presence changes, without removing participation;
 * whether an individual completion indication can be reversed before lock (the countdown cannot);
 * normalization details and review ordering;
-* who may initiate a rematch, optional configuration preselection, participant
-  departure between matches, and exact post-game lobby behavior;
+* who may initiate a rematch, optional configuration preselection, next-roster
+  membership rules, and rematch lobby controls;
 * relationship between existing `game_sessions`, `rooms`, and the Tutti Frutti state machine.
 
 ---

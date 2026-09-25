@@ -27,8 +27,9 @@ import { TuttiFruttiRoomSetup } from "./tutti-frutti-room-setup";
 import { TuttiFruttiAnswerEntry } from "./tutti-frutti-answer-entry";
 import { TuttiFruttiReview } from "./tutti-frutti-review";
 import { TuttiFruttiRoundResultView } from "./tutti-frutti-round-result";
-import { getTuttiFruttiRoundResult, scoreTuttiFruttiRound,
-  subscribeToTuttiFruttiResultInvalidations, type TuttiFruttiRoundResult,
+import { getTuttiFruttiPostgameState, getTuttiFruttiRoundResult, scoreTuttiFruttiRound,
+  subscribeToTuttiFruttiResultInvalidations, type TuttiFruttiPostgameState,
+  type TuttiFruttiRoundResult,
   type TuttiFruttiResultClient } from "../../../../lib/supabase/tutti-frutti-result";
 import {
   closeRoom, getConnectedRoomParticipantIds, getMyActiveRoom, joinRoomByCode,
@@ -70,6 +71,11 @@ type ResultState =
   | { status: "error"; sessionId: string; roundNumber: number; message: string }
   | { status: "ready"; sessionId: string; roundNumber: number; result: TuttiFruttiRoundResult };
 
+type PostgameState =
+  | { status: "loading"; roomId: string }
+  | { status: "error"; roomId: string; message: string }
+  | { status: "ready"; roomId: string; postgame: TuttiFruttiPostgameState };
+
 function roomsClient(): ImpostorRoomsClient {
   return createBrowserSupabaseClient() as unknown as ImpostorRoomsClient;
 }
@@ -95,6 +101,9 @@ export function TuttiFruttiLobbyContent(options: {
   advancing?: boolean;
   advanceError?: string | null;
   onAdvance?: () => void;
+  postgame?: boolean;
+  postgameLoading?: boolean;
+  postgameError?: string | null;
   game: TuttiFruttiStartedGame | null;
   gameError: string | null;
   actionError: string | null;
@@ -113,6 +122,7 @@ export function TuttiFruttiLobbyContent(options: {
     callReady = false, calling = false, unconfirmedAnswers = false, reviewState = null,
     challengeSeconds = 0, challengeBusy = false, challengeError = null,
     resultState = null, scoring = false, advancing = false, advanceError = null,
+    postgame = false, postgameLoading = false, postgameError = null,
     game, gameError, actionError, onStart, onSkipVote, onCall = () => {},
     onAnswerSaveState = () => {}, onRetryReview = () => {}, onOpenChallenge = () => {},
     onVoteChallenge = () => {}, onScore = () => {}, onRetryResult = () => {}, onAdvance = () => {}, onExit } = options;
@@ -142,7 +152,13 @@ export function TuttiFruttiLobbyContent(options: {
       </ul>
       {lobby.room.status === "lobby" ? (
         <>
-          {isHost ? (
+          {postgameLoading ? (
+            <p aria-live="polite">Comprobando el estado de la partida…</p>
+          ) : postgameError ? (
+            <p role="alert">{postgameError}</p>
+          ) : postgame ? (
+            <p>La partida terminó. Podés permanecer en la sala, salir o cerrarla si sos host.</p>
+          ) : isHost ? (
             <>
               <p>{enoughPlayers ? "La sala está lista para empezar." : "Se necesitan al menos dos participantes para iniciar."}</p>
               <button
@@ -269,7 +285,10 @@ export function TuttiFruttiLobbyContent(options: {
   );
 }
 
-export function TuttiFruttiRoomEntry({ code }: { code: string }) {
+export function TuttiFruttiRoomEntry({ code, postgameSessionId = null }: {
+  code: string;
+  postgameSessionId?: string | null;
+}) {
   const router = useRouter();
   const [state, setState] = useState<RoomState>({ status: "loading" });
   const [presence, setPresence] = useState<RoomPresenceState>({});
@@ -283,6 +302,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const [resultState, setResultState] = useState<ResultState | null>(null);
   const [scoring, setScoring] = useState(false);
   const [scoreError, setScoreError] = useState<string | null>(null);
+  const [postgameState, setPostgameState] = useState<PostgameState | null>(null);
   const [advancing, setAdvancing] = useState(false);
   const [advanceError, setAdvanceError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -305,6 +325,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const setupRequestSequence = useRef(0);
   const gameRequestSequence = useRef(0);
   const reviewRequestSequence = useRef(0);
+  const postgameRequestSequence = useRef(0);
   const serverOffsetMs = useRef(0);
   const onAnswerSaveState = useCallback((ready: boolean, unconfirmed: boolean) => {
     setCallReady(ready);
@@ -422,6 +443,29 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
     }
   }, []);
 
+  const refreshPostgame = useCallback(async (roomId: string) => {
+    const request = ++postgameRequestSequence.current;
+    setPostgameState((current) => current?.roomId === roomId && current.status === "ready"
+      ? current : { status: "loading", roomId });
+    try {
+      const postgame = await getTuttiFruttiPostgameState(
+        createBrowserSupabaseClient() as unknown as TuttiFruttiResultClient,
+        roomId
+      );
+      if (request !== postgameRequestSequence.current) return;
+      setPostgameState({ status: "ready", roomId, postgame });
+      if (postgame.latestFinishedSessionId
+        && postgame.latestFinishedSessionId !== postgameSessionId) {
+        router.replace(`/tutti-frutti/resultado/${encodeURIComponent(postgame.latestFinishedSessionId)}`);
+      }
+    } catch (error) {
+      if (request === postgameRequestSequence.current) {
+        setPostgameState({ status: "error", roomId, message: error instanceof Error
+          ? error.message : "No pudimos recuperar el estado de la sala." });
+      }
+    }
+  }, [postgameSessionId, router]);
+
   const refresh = useCallback(async () => {
     const request = ++requestSequence.current;
     try {
@@ -433,6 +477,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         setGame(null);
         setReviewState(null);
         setResultState(null);
+        setPostgameState(null);
       }
       else if (lobby.room.gameType !== "tutti_frutti" || lobby.room.code !== normalizedCode) {
         router.replace(roomPath(lobby.room.gameType, lobby.room.code));
@@ -445,8 +490,14 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
           ? current
           : { status: "loading", roomId: activeRoomId });
         void refreshSetup(activeRoomId);
-        if (lobby.room.status === "playing") void refreshGame(activeRoomId);
-        else { setGame(null); setGameError(null); }
+        if (lobby.room.status === "playing") {
+          setPostgameState(null);
+          void refreshGame(activeRoomId);
+        } else {
+          setGame(null);
+          setGameError(null);
+          void refreshPostgame(activeRoomId);
+        }
       }
       setConnection("online");
     } catch {
@@ -454,7 +505,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         setState({ status: "error", message: "No pudimos recuperar la sala. Recargá la página para intentar de nuevo." });
       }
     }
-  }, [normalizedCode, refreshGame, refreshSetup, router]);
+  }, [normalizedCode, refreshGame, refreshPostgame, refreshSetup, router]);
 
   useEffect(() => {
     void Promise.resolve().then(refresh);
@@ -545,6 +596,10 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         createBrowserSupabaseClient() as unknown as TuttiFruttiResultClient, roomId, reviewState.review.roundId
       );
       serverOffsetMs.current = Date.parse(result.serverNow) - Date.now();
+      if (game && result.roundNumber === game.roundCount) {
+        router.replace(`/tutti-frutti/resultado/${encodeURIComponent(result.sessionId)}`);
+        return;
+      }
       setResultState({ status: "ready", sessionId: result.sessionId,
         roundNumber: result.roundNumber, result });
       if (gameSessionId && gameRoundNumber) reviewRequestSequence.current += 1;
@@ -600,9 +655,12 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
 
   useEffect(() => {
     if (!roomId || gamePhase !== "RESULT" || connection !== "online") return;
-    const interval = window.setInterval(() => { void refreshGame(roomId); }, 15_000);
+    const interval = window.setInterval(() => {
+      void refresh();
+      void refreshGame(roomId);
+    }, 15_000);
     return () => window.clearInterval(interval);
-  }, [roomId, gamePhase, connection, refreshGame]);
+  }, [roomId, gamePhase, connection, refresh, refreshGame]);
 
   const activeChallenge = reviewState?.status === "ready" ? reviewState.review.activeChallenge : null;
   const activeChallengeId = activeChallenge?.id;
@@ -896,6 +954,14 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
 
   const isHost = state.lobby.participants.some((participant) => participant.isSelf && participant.isHost);
   const setupForRoom = setupState?.roomId === state.lobby.room.id ? setupState : null;
+  const postgameForRoom = postgameState?.roomId === state.lobby.room.id ? postgameState : null;
+  const isLobby = state.lobby.room.status === "lobby";
+  const hasFinishedSession = postgameForRoom?.status === "ready"
+    && postgameForRoom.postgame.hasFinishedSession;
+  const postgameLoading = isLobby && (!postgameForRoom || postgameForRoom.status === "loading");
+  const postgameError = postgameForRoom?.status === "error" ? postgameForRoom.message : null;
+  const postgameBlocksSetup = isLobby
+    && (postgameLoading || Boolean(postgameError) || hasFinishedSession);
 
   return (
     <>
@@ -922,6 +988,9 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         advancing={advancing}
         advanceError={advanceError}
         onAdvance={() => { void advanceRound(); }}
+        postgame={hasFinishedSession}
+        postgameLoading={postgameLoading}
+        postgameError={postgameError}
         game={game}
         gameError={gameError}
         actionError={actionError}
@@ -944,8 +1013,9 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         }}
         onExit={(asHost) => { void exitRoom(asHost); }}
       />
-      {setupForRoom?.status === "loading" ? <p aria-live="polite">Recuperando configuración…</p> : null}
-      {setupForRoom?.status === "error" ? (
+      {!postgameBlocksSetup && setupForRoom?.status === "loading"
+        ? <p aria-live="polite">Recuperando configuración…</p> : null}
+      {!postgameBlocksSetup && setupForRoom?.status === "error" ? (
         <section className="tutti-setup tutti-setup--error" aria-labelledby="tutti-setup-error-title">
           <h2 id="tutti-setup-error-title">No pudimos recuperar la configuración</h2>
           <p role="alert">{setupForRoom.message}</p>
@@ -954,7 +1024,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
           </button>
         </section>
       ) : null}
-      {setupForRoom?.status === "ready" ? (
+      {!postgameBlocksSetup && setupForRoom?.status === "ready" ? (
         <TuttiFruttiRoomSetup
           configuration={setupForRoom.draft}
           isHost={isHost}
