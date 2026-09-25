@@ -2,9 +2,10 @@
 
 ## Status and design criteria
 
-This is a reviewable proposal, not executable SQL or an applied schema. Names,
-keys, and constraints below are candidates for a later migration plan. Product
-decisions are in `product-decisions.md`; shared/game ownership is in
+This document distinguishes implemented local schema from reviewable future
+proposals. Names, keys, and constraints for unimplemented entities remain
+candidates for later migrations. Product decisions are in
+`product-decisions.md`; shared/game ownership is in
 `room-session-boundary.md`; operational guards are in
 `technical-requirements.md`. `OPEN` items must not be silently decided by a
 migration.
@@ -107,21 +108,26 @@ then Tutti Frutti creation and loaders. Compatibility-only columns or nullable
 constraints may be necessary during the transition, with strict constraints
 added after backfill. No historical migration is rewritten.
 
-## Tutti Frutti entity candidates
+## Tutti Frutti entities and candidates
 
 Increment 6 implements `tutti_frutti_room_setup` locally as one Room-scoped
 JSONB row, with atomic replacement, host-only writes in `lobby`, member reads,
-and defaults returned without persisting a row. The session and gameplay
-entities below remain design candidates for later increments.
+and defaults returned without persisting a row. Increment 7 adds the session,
+ordered category snapshot, round, and pending letter candidate described
+below. Increment 8 adds candidate deadlines and private fixed skip votes; the
+authorized read returns only aggregate counts. These changes are present on
+`codex/tutti-frutti-increment-7` and were validated only against local
+Supabase; they are not yet integrated in `main` or applied remotely. Remaining
+answer and later gameplay entities are future design candidates.
 
 | Candidate | Persist or derive? | Relationships and invariant |
 | --- | --- | --- |
 | `tutti_frutti_room_setup` | Implemented in Increment 6 as one Room-scoped JSONB draft. | One row per Tutti Frutti Room; host-only writes while Room is `lobby`; member reads remain available later. Each save atomically replaces rounds and ordered preset/custom categories. Defaults are returned without a row. Prior-value preselection remains `OPEN`. |
-| `tutti_frutti_sessions` | Persist one game-specific snapshot keyed by the shared `room_sessions.id`. | Immutable configured round count, letter-pool snapshot, scoring/normalization rule version, and any game-specific configuration. No Impostor phase. |
-| `tutti_frutti_session_categories` | Persist ordered snapshot rows at game start. | Belong to one Tutti Frutti session; immutable after start; unique position per session. Store display label and optional preset source key so later catalog edits cannot alter history. Category limits and duplicate-name validation are confirmed in `product-decisions.md`. |
-| `tutti_frutti_rounds` | Persist one row per scored letter cycle, created when preparing its first candidate. | Unique `(session_id, number)` and at most one unresolved round per session. Owns game-specific phase, deadline, lock time, scoring time, and accepted letter reference. Skipping a letter leaves the same round number. |
-| `tutti_frutti_letter_candidates` | Persist one row per selected candidate letter. | FK to session and round; unique `(session_id, letter)` across played and skipped letters, plus at most one pending candidate per round. Candidate status moves to skipped or accepted; letters never return to available. |
-| `tutti_frutti_letter_skip_votes` | Persist votes for a pending candidate. | Unique `(candidate_id, player_id)` and roster membership; only the candidate's open window accepts votes. Majority is authoritative, with both votes required for a two-player session. |
+| `tutti_frutti_sessions` | Implemented by Increment 7, keyed by shared `room_sessions.id`. | Stores configured round count, approved 20-letter pool snapshot, and initiating Player. Direct client access is closed. |
+| `tutti_frutti_session_categories` | Implemented by Increment 7 as ordered snapshot rows. | Stores effective category labels and preset/custom identity so lobby edits cannot alter the session. |
+| `tutti_frutti_rounds` | Implemented by Increment 7; first row is created at start. | Round 1 begins in `LETTER_PENDING`; later phase transitions and gameplay fields remain future increments. |
+| `tutti_frutti_letter_candidates` | Implemented by Increment 7 and extended in Increment 8. | Letter belongs to the session pool, is unique across the session, and has one server deadline. The current candidate moves to skipped or accepted; one pending candidate is allowed per session. |
+| `tutti_frutti_letter_skip_votes` | Implemented by Increment 8 with closed direct access. | Unique `(candidate_id, player_id)`, frozen-roster FK, server timestamp, and one immutable vote per candidate. Authorized RPC reads return aggregate counts only. |
 | `tutti_frutti_answers` | Persist latest accepted original text during entry, deterministic normalized value, final validity, and immutable awarded points after scoring. | Unique `(round_id, player_id, category_id)` with composite session-consistency checks. Author can write only before lock. Missing/empty values score zero. Open challenge status can be derived. |
 | `tutti_frutti_round_completions` | Persist one completion indication per round participant if early close is supported. | Unique `(round_id, player_id)`; the first valid call establishes the round's one deadline. Later calls do not change it. Individual completion reversal and early-close eligibility remain `OPEN`. |
 | `tutti_frutti_challenges` | Persist the dispute and final outcome. | FK to one non-empty answer and challenger; challenger differs from answer author; at most one open challenge per answer, with final resolution immutable. |

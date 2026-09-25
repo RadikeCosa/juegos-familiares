@@ -196,21 +196,13 @@ A letter already played or skipped during the current game should not appear aga
 
 The initial letter pool should prioritize letters that produce playable rounds in Spanish.
 
-The exact default pool remains to be defined.
-
-Rare or difficult letters may be excluded from the default pool.
-
-Examples requiring explicit consideration include:
+The initial session pool is **CONFIRMED** as:
 
 ```text
-K
-Ñ
-Q
-W
-X
-Y
-Z
+A B C D E F G H I J L M N O P R S T U V
 ```
+
+K, Ñ, Q, W, X, Y, and Z are intentionally excluded from this initial pool.
 
 ---
 
@@ -225,10 +217,17 @@ A skipped letter:
 * is replaced by another random letter;
 * does not count as a played round.
 
-`CONFIRMED`: skipping is a group decision by simple majority; with exactly two
-players, both must agree. Voter eligibility when presence changes remains
-`OPEN`. A short pre-round window is confirmed, with 10 seconds as a
-`WORKING HYPOTHESIS`.
+Skipping requires a strict majority, calculated as floor(frozen roster size / 2)
++ 1; this means 2/3, 3/4, and unanimity for two players. The frozen session
+roster remains the denominator after a disconnect or Room departure. If the
+connected players cannot reach the threshold, the timeout accepts the letter.
+Each player may cast one fixed vote per candidate. The interface shows only
+the aggregate count and threshold, not voter names. The window lasts 5 seconds.
+
+Skipped candidates consume letters from the session-wide 20-letter pool and
+are never reused. A skip is blocked when it would leave fewer distinct unused
+letters than configured rounds remaining; the current letter is accepted when
+its window expires.
 
 ---
 
@@ -620,7 +619,6 @@ The following are preferred directions but should still be validated during deta
 
 * “Tutti Frutti” can only be called after all category fields contain an answer.
 * the countdown lasts 45 seconds;
-* the letter-skip window lasts 10 seconds;
 
 ---
 
@@ -633,12 +631,6 @@ The next design phase should resolve:
 * How should mutual agreement be captured for a two-player challenge?
 * Who is eligible for early close when presence changes during the countdown?
 
-### Letters
-
-* What is the initial Spanish letter pool?
-* Which difficult letters are excluded by default?
-* Who is eligible to vote on a skip when presence changes?
-* What exact duration should the short skip window use after gameplay validation?
 
 ### Playing
 
@@ -651,11 +643,11 @@ The next design phase should resolve:
 * Can several answers be challenged before voting begins?
 * Are challenges resolved sequentially or in parallel?
 * How should normalization treat accents, punctuation, plurals, and minor spelling variants?
-* How do voter eligibility, timeout, and abstention work when presence changes?
+* How do challenge-voter eligibility, timeout, and abstention work when presence changes?
 
 ### Recovery
 
-* How should the game distinguish temporarily disconnected players from abandoned participants for voting eligibility?
+* How should challenge voting distinguish temporarily disconnected players from abandoned participants?
 * Who may initiate a rematch and is it host-only?
 * Are previous configuration values preselected?
 * What happens when someone leaves between matches?

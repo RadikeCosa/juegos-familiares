@@ -505,7 +505,8 @@ Game starts
 Session participant set
 ```
 
-The exact snapshot semantics need technical validation against current room behavior.
+The session roster is frozen transactionally at start; later disconnection or
+Room-roster changes do not change session participation.
 
 ---
 
@@ -598,7 +599,9 @@ new candidate
 
 This avoids polluting the round history with non-played rounds.
 
-Implementation may persist candidate state elsewhere if necessary.
+Increment 8 persists each candidate and its deadline. Skip votes are unique
+per candidate and frozen session participant; they are not exposed as
+individual identities in the game-state read.
 
 ---
 
@@ -1420,7 +1423,8 @@ The following still require design:
 
 ## Letter candidates
 
-* whether skip votes require a persisted candidate-letter entity or can remain session runtime state.
+* whether later gameplay needs any additional candidate history beyond the
+  persisted session-level pool.
 
 ## Completion
 

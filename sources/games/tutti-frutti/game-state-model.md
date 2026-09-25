@@ -161,20 +161,27 @@ LETTER_PENDING
 
 # 6. LETTER_PENDING
 
+Increment 7 initializes the first round in this state with one server-selected
+pending candidate and a frozen session roster. Increment 8 adds a 5-second
+server deadline and a fixed vote per roster member. Any authorized game-state
+read resolves an expired candidate, so recovery does not depend on a separate
+timer RPC. The client countdown and 1-second polling are for presentation and
+aggregate tally refresh only; the server decides the result.
+
 A candidate letter has been selected but answer entry has not started.
 
 State contains conceptually:
 
 * selected letter;
 * current round number;
-* active-player snapshot or current active-player set;
-* skip-vote state;
-* a pre-round skip decision deadline (`WORKING HYPOTHESIS`: 10 seconds).
+* frozen session-player roster;
+* aggregate skip-vote count and threshold (individual voter identities are not returned);
+* the 5-second server deadline for the current candidate.
 
 Allowed actions:
 
 * vote/request skip;
-* start answer entry automatically if the skip threshold is not reached before the deadline.
+* accept the letter and enter PLAYING when the deadline expires without a strict majority.
 
 Not allowed:
 
@@ -200,14 +207,19 @@ LETTER_PENDING
 
 The skipped letter becomes unavailable for the rest of the game.
 
-`CONFIRMED`: skipping requires a simple majority; with exactly two players,
-both must agree. The precise voter set when presence changes remains `OPEN`.
+`CONFIRMED`: skipping requires floor(frozen roster size / 2) + 1 votes;
+with exactly two players, both must agree. Disconnection and Room departure do
+not change the denominator; if connected members cannot reach it, timeout
+accepts the current candidate.
 
 Invariants:
 
 * skipped letter does not increment round number;
-* skipped letter is never reused during the same game;
-* no answers are persisted for a skipped candidate letter.
+* skipped letter is never reused anywhere in the session;
+* each replacement starts with zero votes;
+* no answers are persisted for a skipped candidate letter;
+* a skip is blocked if it would leave fewer unused session letters than
+  configured rounds remaining.
 
 ---
 
@@ -1108,15 +1120,23 @@ ROUND: LETTER_PENDING
 * the initial category catalog and 3–6 category limit, custom-name rules, and
   3/5/10 round options with 5 selected initially are confirmed in
   `product-decisions.md`.
+* letter-skip window is 5 seconds; required votes are floor(frozen roster / 2) + 1;
+* disconnected participants remain in the denominator, votes are fixed and
+  private, and clients receive aggregate counts only;
+* a skip is blocked when the global unused pool would not cover all remaining
+  configured rounds; any authorized read accepts an expired candidate lazily.
 
 `WORKING HYPOTHESIS`:
 
-* 10-second letter-skip window and 45-second final countdown;
+* 45-second final countdown;
 * all active category answers must be non-empty to call Tutti Frutti, pending gameplay validation;
+
+`CONFIRMED` for the initial session pool: `A B C D E F G H I J L M N O P R
+S T U V`; K, Ñ, Q, W, X, Y, and Z are intentionally excluded. Increment 7
+snapshots this pool in each session.
 
 `OPEN` before the corresponding implementation increment:
 
-* exact letter pool;
 * eligibility for early close when presence changes, without removing participation;
 * challenge voter eligibility, quorum, timeout or abstention during disconnect;
 * whether an individual completion indication can be reversed before lock (the countdown cannot);

@@ -289,21 +289,20 @@ Played and skipped letters do not appear again during the same game.
 
 The goal is not alphabetic purity but enjoyable gameplay.
 
-## Open Detail
+## Confirmed Initial Pool
 
-The exact default letter pool remains to be defined.
-
-Letters such as the following require explicit evaluation:
+The initial session pool is **CONFIRMED** as:
 
 ```text
-K
-Ñ
-Q
-W
-X
-Y
-Z
+A B C D E F G H I J L M N O P R S T U V
 ```
+
+K, Ñ, Q, W, X, Y, and Z are intentionally excluded from the initial pool.
+Letters already selected, accepted, or skipped cannot be selected again
+during the same session. Before accepting a skip, the server checks that the
+unused pool after discarding the current candidate still has at least as many
+letters as the configured rounds remaining, including the current round. If
+not, the skip is unavailable and the current letter is accepted on timeout.
 
 ---
 
@@ -326,9 +325,19 @@ Requiring unanimity for larger groups could create unnecessary friction.
 
 ## Decision
 
-Letter skipping is a group decision using simple majority.
+Letter skipping is a group decision using a strict majority:
+floor(frozen session roster size / 2) + 1.
 
 For exactly two players, both players must agree.
+
+The denominator is the roster frozen at session start. Disconnecting or
+leaving the mutable Room roster does not remove a voter or lower the threshold.
+If too few players remain connected to reach the threshold, the candidate is
+accepted when the window expires.
+
+Each player may cast one fixed vote per candidate; votes cannot be withdrawn
+or changed. The UI shows only the aggregate vote count and threshold, never
+individual voter identities. A replacement candidate starts with zero votes.
 
 ## Rationale
 
@@ -357,9 +366,9 @@ Without a time limit, letter discussion could stall the beginning of each round.
 
 There should be a short pre-round period during which players may request skipping the selected letter.
 
-## Current Hypothesis
+## Confirmed Duration
 
-10 seconds.
+5 seconds.
 
 If the required majority is not reached, the round starts automatically.
 
@@ -369,7 +378,7 @@ This keeps the interaction lightweight and avoids adding a second explicit “ac
 
 ## Status
 
-The exact duration remains a tunable hypothesis.
+The 5-second duration is CONFIRMED for Increment 8.
 
 ---
 
@@ -1082,7 +1091,8 @@ The following parameters have different decision statuses:
 CONFIRMED: minimum players = 2
 CONFIRMED: scoring = 10 / 5 / 0 for the initial product
 WORKING HYPOTHESIS: final countdown = 45 seconds
-WORKING HYPOTHESIS: letter-skip window = 10 seconds
+CONFIRMED: letter-skip window = 5 seconds
+CONFIRMED: skip threshold = floor(frozen session roster size / 2) + 1
 ```
 
 The working durations are tunable; none of these values is a shared-platform rule.
@@ -1092,11 +1102,6 @@ The working durations are tunable; none of these values is a shared-platform rul
 # 42. Decisions Still Open
 
 The following details remain intentionally unresolved:
-
-## Letter pool
-
-* exact Spanish default letter set;
-* treatment of difficult letters.
 
 ## Review UX
 

@@ -21,11 +21,15 @@ It focuses on:
 
 It intentionally avoids defining persistence or database implementation details.
 
-Current local implementation reaches the shared lobby and configuration:
-players can see the code, members, host, and visual connection indicators,
-recover on refresh, leave, or close as host. The host can configure and save
-rounds and categories; members see the last confirmed configuration. Starting
-the game and all later gameplay steps below describe planned increments.
+Current local `main` reaches the shared lobby and configuration: players can
+see the code, members, host, and visual connection indicators, recover on
+refresh, leave, or close as host. The host can configure and save rounds and
+categories; members see the last confirmed configuration. Increment 7 is
+implemented in `codex/tutti-frutti-increment-7`, not yet integrated into
+`main`: the host can start with at least two participants, and all frozen
+participants load the same first pending letter. Reopening or reconnecting
+reconstructs that state. Letter skipping is implemented by Increment 8;
+answer entry and later gameplay remain future increments.
 
 ---
 
@@ -190,17 +194,23 @@ Lobby
   ↓
 Game starts
   ↓
-Round 1 preparation
+Round 1 — letter pending
 ```
 
-All active players enter the game session.
+The current participants enter the frozen session roster.
 
 The system prepares:
 
 * current round number;
 * remaining rounds;
 * active category set;
-* remaining available letters.
+* the first pending letter from the session's frozen pool.
+
+The host's start action is serialized with Room membership changes. If the
+Room is no longer in `lobby`, a repeated start by the recorded initiator
+returns the existing session without replacing its roster or letter. Each
+participant reconstructs state from the authorized session read; Realtime
+serves as invalidation, and opening or reconnecting triggers a fresh read.
 
 ---
 
@@ -247,20 +257,21 @@ Skip threshold reached?
 
 A skipped letter does not count as a completed round.
 
-`CONFIRMED`: skipping requires a simple majority. With exactly two players,
-both must agree. The exact eligible-voter set when presence changes remains
-`OPEN`.
+`CONFIRMED`: skipping requires floor(frozen roster size / 2) + 1 votes.
+With exactly two players, both must agree. The frozen roster still counts
+after a disconnect or Room departure. The 5-second deadline accepts the
+current letter if the connected players cannot reach the threshold. Votes are
+fixed per candidate and the UI shows an aggregate only, without voter names.
+The server also blocks a skip if it would leave fewer unused letters than
+configured rounds remaining.
 
 Example:
 
 ```text
 Skip H?
 
-Camila     ✓
-Pedro      ✓
-Ramiro
-
-2 / 3 → Skip approved
+Votes to skip: 2 / 3
+5 seconds remaining
 ```
 
 A skip request should only be possible during the pre-round letter phase.
@@ -777,7 +788,8 @@ invalidation, simple-majority letter skipping (both votes with two players),
 editing by every player until lock, one irreversible countdown, and preserved
 participation and persisted answers across disconnects.
 
-`WORKING HYPOTHESIS`: 10-second letter-skip window, 45-second final countdown,
+`CONFIRMED`: 5-second letter-skip window.
+`WORKING HYPOTHESIS`: 45-second final countdown,
 and all active categories non-empty before calling Tutti Frutti.
 
 `OPEN` before the corresponding implementation increment:

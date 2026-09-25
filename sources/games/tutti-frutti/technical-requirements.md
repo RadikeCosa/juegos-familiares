@@ -2,18 +2,23 @@
 
 ## Purpose and authority
 
-This document specifies requirements for the Tutti Frutti gameplay that is
-still to be implemented. `CONFIRMED` means a product decision in
+This document specifies Tutti Frutti gameplay requirements and records the
+current implementation boundary. `CONFIRMED` means a product decision in
 `product-decisions.md`; `RECOMMENDED` means a technical design choice to review
 before migrations; `OPEN` means an unresolved product or policy question. The
 proposed physical representation and alternatives are in
 `physical-data-model.md`; the domain flow is in `game-state-model.md`.
 
-The current local `main` implements Impostor gameplay, game-aware Room
-routing, a Tutti Frutti coordination lobby, and shared lobby configuration.
-The `rooms` table persists an immutable game type and active-Room discovery
-returns it; the zero-argument create path remains Impostor-only. Tutti Frutti
-session start and gameplay remain future increments.
+The local `main` implements Impostor gameplay, game-aware Room routing, a
+Tutti Frutti coordination lobby, and shared lobby configuration. Increment 7
+is implemented in branch `codex/tutti-frutti-increment-7`, not yet integrated
+into `main`: it starts the first Tutti Frutti session and exposes its initial
+`LETTER_PENDING` candidate. Answer entry and later gameplay remain future
+increments. Increment 8 is also implemented in that branch, not yet
+integrated into `main`: it adds the 5-second strict-majority skip vote and
+lazy resolution on authorized state reads. The `rooms` table persists an
+immutable game type and active-Room discovery returns it; the zero-argument
+create path remains Impostor-only.
 `game_sessions.state` and
 `session_players` contain Impostor rules. The
 source baseline and the distinction between confirmed host-succession policy,
@@ -69,6 +74,16 @@ bank, role assignment, and first round remain Impostor rules. Tutti Frutti
 requires at least two players and a valid frozen configuration. Failed or
 retried starts must not create duplicate sessions or leave a half-started Room.
 
+For Tutti Frutti Increment 7, the Room lock precedes validation of the current
+roster and minimum of two participants. One transaction snapshots the
+effective lobby configuration and the approved 20-letter pool, freezes the
+session roster, creates round 1 in `LETTER_PENDING` with one pending
+candidate, and changes the Room to `playing`. The snapshot is independent of
+later lobby changes. A start retry in `playing` returns the existing session
+only to its recorded starter; it neither changes the roster nor draws a new
+candidate. Session-state reads authorize against the frozen session roster,
+not the mutable lobby membership.
+
 `RECOMMENDED`: preserve the current no-join-during-`playing` behavior while
 adding Tutti Frutti. Allowing late spectators or participants is a separate
 product decision, not an implied result of multi-session Rooms.
@@ -82,40 +97,48 @@ product decision, not an implied result of multi-session Rooms.
    category catalog, 3–6 active-category limit, custom-name validation, and
    3/5/10 round options are confirmed in `product-decisions.md`.
 2. One round number represents one scored letter cycle. Skipping candidate
-   letters does not increment that number. Every played or skipped letter is
-   excluded from future selection within that session. A server-chosen
-   candidate, skip votes, acceptance, and replacement must be authoritative.
-   Skip requires a simple majority; with two players, both must agree.
-3. Answers are keyed by session round, session participant, and frozen
+   letters does not increment that number. Every played, accepted, or skipped
+   letter is excluded from future selection across the whole session. Skip
+   votes use the frozen session roster and strict majority floor(roster size /
+   2) + 1; with two players, both must agree. A disconnected participant
+   remains in the denominator, so the deadline may accept a candidate if
+   connected players cannot reach the threshold.
+3. Increment 8 fixes a 5-second server deadline, one immutable vote per
+   participant/candidate, anonymous aggregate tally, and acceptance when the
+   deadline expires without majority. A skip is rejected if the remaining
+   unused pool would be smaller than the number of configured rounds still to
+   play. The authorized state read resolves expired deadlines lazily; client
+   polling never decides the outcome.
+4. Answers are keyed by session round, session participant, and frozen
    category. The original text is preserved. Only its author may change it,
    and only while the round is `PLAYING` or `FINAL_COUNTDOWN` and not locked.
    Each accepted write is durable so reconnect can recover the latest
    persisted value. Autosave presentation and exact normalization remain
    outside this contract.
-4. The first server-valid Tutti Frutti call starts exactly one irreversible
+5. The first server-valid Tutti Frutti call starts exactly one irreversible
    deadline. The preferred all-fields-complete eligibility rule remains a
    `WORKING HYPOTHESIS` pending gameplay validation. Later calls cannot
    extend or reset the deadline. All players may edit until the shared lock.
    The 45-second duration is a tunable hypothesis; the authoritative deadline
    is server-derived, never a client countdown.
-5. The round locks once at the deadline or a valid early-close condition.
+6. The round locks once at the deadline or a valid early-close condition.
    A disconnected participant keeps their roster place, previous answers,
    and score. If absent at lock, their latest persisted answers are used.
    Presence alone never erases game participation. Eligibility for early
    close when presence changes remains `OPEN`.
-6. Non-empty answers begin review valid. A challenge targets one answer;
+7. Non-empty answers begin review valid. A challenge targets one answer;
    at most one challenge on that answer may be open. For three or more
    players, the answer author is excluded and invalidity requires a simple
    majority; a tie leaves it valid. With two players, invalidation requires
    mutual agreement. Voter eligibility, timeout, and abstention on disconnect
    remain `OPEN` and block finalizing those transition guards.
-7. Scoring occurs only after all challenges are resolved. Duplicate comparison
+8. Scoring occurs only after all challenges are resolved. Duplicate comparison
    is within one round and category, using deterministic normalization.
    Recompute uniqueness from final valid answers. The initial rule is
    10/5/0; the first caller receives no speed bonus. Persist an immutable
    scoring snapshot so later normalization or code changes cannot alter
    historical results. Round and game totals can be derived from it.
-8. When the configured number of rounds has been scored, mark the session
+9. When the configured number of rounds has been scored, mark the session
    finished and immutable, detach it as the active session, and return its
    Room from `playing` to `lobby` in one transaction. Retain finished results
    for authorized session participants and create a new session for a rematch.
@@ -195,8 +218,7 @@ authorization and destination confirmation.
 `OPEN`: who initiates a rematch, whether it is host-only, configuration
 preselection, departure between matches, and post-game lobby UI; challenge
 voter eligibility and timeout/abstention on disconnect; early-close
-eligibility under changing Presence; exact letter pool; normalization beyond
-trim/case; review ordering; and the precise
-individual-completion interaction. These must be resolved before implementing
+eligibility under changing Presence; normalization beyond trim/case; review ordering;
+and the precise individual-completion interaction. These must be resolved before implementing
 the transitions they govern. They do not change the confirmed Session-finish
 and Room-return lifecycle.

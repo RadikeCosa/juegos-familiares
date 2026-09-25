@@ -105,12 +105,13 @@ revalidan contra las migrations y datos del destino antes de ejecutarse.
 2, 7–16 → 17 recuperación y cierre MVP
 ```
 
-Los Incrementos 0–6 están integrados en el `main` local. La política de
-sucesión en `playing` está implementada en el código del 5, pero falta verificar
-la definición desplegada antes de atribuirla a producción. El Incremento 7
-puede desarrollarse localmente y depende de 4, 5 y 6; la decisión exacta del
-pool de letras sigue abierta. Los cortes 8 y 9 pueden diseñarse en paralelo
-después del 7, pero sólo se integran respetando las fases. El 17 completa la
+Los Incrementos 0–6 están integrados en el `main` local. Los Incrementos 7 y 8
+están implementados en `codex/tutti-frutti-increment-7`, pero aún no
+integrados en `main`; sus migrations y validadores se ejecutaron sólo en
+Supabase local. La política de sucesión en `playing` está implementada en el
+código del 5, pero falta verificar la definición desplegada antes de atribuirla
+a producción. El pool de letras del 7 quedó definido como `A B C D E F G H I
+J L M N O P R S T U V`. El Incremento 9 depende del 8; el 17 completa la
 verificación de recuperación construida desde cada corte.
 
 ## Incrementos
@@ -333,6 +334,10 @@ el smoke manual de dos identidades; no hay migration remota aplicada.
 
 ### 7. Inicio Tutti y primera letra candidata
 
+**Estado:** implementado en la rama `codex/tutti-frutti-increment-7`; no
+integrado en `main`. Migration y pruebas DB ejecutadas contra Supabase local;
+sin aplicación remota ni smoke visual manual en dos navegadores.
+
 - **Goal:** host inicia una sesión con mínimo dos jugadores y primera letra
   preparada, sin saltar ni responder aún.
 - **Scope:** freeze transaccional de roster/configuración/pool, nueva sesión
@@ -347,8 +352,10 @@ el smoke manual de dos identidades; no hay migration remota aplicada.
   directa restaura sesión.
 - **Security requirements:** host-only, tipo Tutti, roster Room vigente;
   configuración/pool no controlados por IDs del cliente.
-- **Concurrency / idempotency:** lock Room; dos starts crean una sesión y
-  una candidata, sin Room `playing` huérfana.
+- **Concurrency / idempotency:** lock Room; una sola sesión y candidata. Un
+  retry en `playing` devuelve lo existente sólo al participante congelado
+  registrado como iniciador; no vuelve a congelar el roster ni sortea otra
+  letra.
 - **Automated verification:** mínimo 2, 1 jugador rechazado, tipo/host/Group,
   start doble, rollback y snapshot; Impostor regression = PASS por lifecycle.
 - **Manual smoke:** dos jugadores inician, ven misma candidata y recargan;
@@ -356,31 +363,43 @@ el smoke manual de dos identidades; no hay migration remota aplicada.
 - **Documentation update:** flujo/estado físico si el inicio concreto difiere.
 - **Exit criteria:** una Room playing tiene una sesión Tutti no finalizada,
   roster y snapshot inmutables.
-- **Depends on:** 4, 5, 6 y decisión del pool de letras.
+- **Depends on:** 4, 5 y 6. Pool confirmado: `A B C D E F G H I J L M N O
+  P R S T U V` (sin K, Ñ, Q, W, X, Y, Z).
 - **Does not depend on:** desafíos, puntuación o revancha.
 
 ### 8. Ventana y voto para saltar letra
 
+**Estado:** implementado en `codex/tutti-frutti-increment-7`; validado en
+Supabase local. No integrado en `main` ni aplicado remotamente.
+
 - **Goal:** jugadores saltan una candidata por mayoría antes de comenzar la
   ronda; si no se alcanza, la misma candidata queda aceptada.
-- **Scope:** ventana autoritativa, votos por candidata, dos jugadores ambos;
-  siguiente candidata sin incrementar número de ronda; agotamiento de pool.
+- **Scope:** ventana de 5 segundos; umbral floor(roster/2)+1, con roster
+  congelado aunque haya desconexiones; votos anónimos e inmutables; siguiente
+  candidata sin incrementar ronda. Bloquear skips que dejen menos letras no
+  usadas que rondas restantes.
 - **Explicitly out of scope:** respuestas y scoring.
 - **Likely files / areas:** votos/candidatas, RPC de voto/avance, loader/UI.
-- **Database impact:** unicidad candidato-letra por sesión y voto por
-  candidato/jugador; reglas de fase y vencimiento en DB.
-- **Application impact:** ventana visible y refresh desde reloj del servidor.
+- **Database impact:** deadline por candidata y voto único por
+  candidata/jugador; RLS cerrado; resolución perezosa por lectura autorizada
+  de estado vencido.
+- **Application impact:** UI mobile-first con tally agregado y cuenta regresiva
+  aproximada desde el deadline del servidor; polling RPC de 1 s sólo mientras
+  la candidata espera.
 - **Security requirements:** voto sólo del roster Tutti; no votar candidato
   vencido ni elegir letra propia desde cliente.
 - **Concurrency / idempotency:** mayoría y timeout simultáneos resuelven una
   sola vez; skip repetido nunca reutiliza letra jugada/saltada.
-- **Automated verification:** umbrales 2/3/4, carreras, pool agotado, actor
-  ajeno y candidato antiguo.
-- **Manual smoke:** dos votan y salta; falta voto y arranca; recarga durante
-  ventana muestra tiempo/candidata correctos.
+- **Automated verification:** umbrales 2/3/4, empate 2/4, voto concurrente,
+  desconexión sin cambiar el denominador, voto duplicado/antiguo, reserva para
+  rondas restantes, privacidad del tally y lectura perezosa tras vencimiento.
+- **Manual smoke:** pendiente; con dos identidades, votar hasta saltar, dejar
+  vencer sin mayoría, y actualizar o reabrir para recuperar el estado.
 - **Documentation update:** duración final elegida y política de elegibles.
-- **Exit criteria:** ronda entra a respuesta con letra aceptada única.
-- **Depends on:** 7 y decisión del tiempo de ventana/elegibilidad de skip.
+- **Exit criteria:** la candidata queda aceptada y la ronda pasa a `PLAYING`,
+  o una mayoría crea una nueva candidata para la misma ronda.
+- **Depends on:** 7. La duración, elegibilidad, visibilidad y regla de
+  preservación de rondas ya están decididas.
 - **Does not depend on:** respuestas, countdown o review.
 
 ### 9. Respuestas privadas y persistentes
@@ -664,9 +683,6 @@ con `git diff --check`.
 | Decisión pendiente | Bloquea | No bloquea |
 | --- | --- | --- |
 | Datos reales del destino, estrategia de backfill y alternativa A de sesión mínima | 3/4 y constraints estrictas | 0–2 con migración local segura; el remoto requiere preflight antes de aplicar |
-| Catálogo, cantidad/límites de categorías, nombres duplicados y número permitido de rondas | 6/7 | 0–5 |
-| Pool de letras y tratamiento de letras difíciles | 7/8 | 0–6 |
-| Duración de ventana de skip (10 s es hipótesis) y elegibilidad si cambia conectividad | 8 | 0–7 |
 | Normalización más allá de trim/case | 9/11/13 sólo si se pretende incluirla; si no, declarar versión mínima trim/case en 9 | 0–8 |
 | Elegibilidad de llamada con todos los campos (hipótesis preferida) y duración de countdown (45 s hipótesis) | 10 | 0–9 |
 | Cierre temprano al completar todos: elegibilidad con Presence cambiante y reversión de completion | Sólo implementación de ese guard; no se añade silenciosamente al 10 | Flujo con deadline como garantía de progreso |
@@ -678,10 +694,10 @@ con `git diff --check`.
 
 La política de sucesión en `playing` está **CONFIRMED** y ya no bloquea 5 ni
 el guard requerido por 7. Persisten las dependencias técnicas: 5 necesita 4,
-roster común y verificación del deploy/destino; 7 necesita 4, 5, 6 y la
-decisión del pool de letras. El 17 debe comprobar recovery y smoke de esa
-política en ambos juegos. La comprobación del deploy es evidencia operativa,
-no una nueva decisión de producto.
+roster común y verificación del deploy/destino; el código de 7 está en su rama
+y se validó localmente. El 17 debe comprobar recovery y smoke de esa política
+en ambos juegos. La comprobación del deploy es evidencia operativa, no una
+nueva decisión de producto.
 
 Una pregunta abierta bloquea **su guard o UX concretos**, no todos los
 incrementos anteriores. Si el producto decide que el cierre temprano es
