@@ -32,7 +32,10 @@ own answers during `PLAYING`. Increment 10 is integrated into local `main`:
 a fully saved participant calls Tutti Frutti, everyone may edit during
 the 45-second countdown, and the server locks answers at expiry. The UI then
 shows each player's own confirmed answers and any unconfirmed edit while
-waiting for review; shared review reads and scoring are not yet implemented.
+waiting for review. Increment 11 adds a read-only review of all frozen-roster
+answers, one category at a time in configured order, after lock. Empty answers
+and provisional matches identify the matching participants; challenges and
+scoring are not yet implemented.
 
 ---
 
@@ -805,14 +808,12 @@ invalidation, simple-majority letter skipping (both votes with two players),
 editing by every player until lock, one irreversible countdown, and preserved
 participation and persisted answers across disconnects.
 
-`CONFIRMED`: 5-second letter-skip window.
-`WORKING HYPOTHESIS`: 45-second final countdown,
-and all active categories non-empty before calling Tutti Frutti.
+`CONFIRMED` in the local implementation: 5-second letter-skip window,
+45-second final countdown, and every active category saved and non-empty
+before calling Tutti Frutti. Gameplay validation may motivate a later change.
 
 `OPEN` before the corresponding implementation increment:
 
-* default letter pool;
-* review layout;
 * whether challenges are resolved sequentially or in parallel;
 * eligibility and timeout during challenge voting when presence changes;
 * early-close eligibility when presence changes;

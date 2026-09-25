@@ -172,9 +172,33 @@ describe("Tutti Frutti lobby", () => {
         lockedAt: "2026-09-25T12:00:45.100Z", letterDecision: null }
     };
     const markup = render(playingLobby, new Set(), "online", game, { unconfirmedAnswers: true });
-    expect(markup).toContain("Respuestas bloqueadas. Esperando la revisión.");
+    expect(markup).toContain("Respuestas bloqueadas. Revisá las respuestas de la ronda.");
+    expect(markup).toContain('href="#tutti-review"');
     expect(markup).toContain("Alguna edición no alcanzó a guardarse");
+    expect(markup).toContain("Recuperando respuestas de la ronda");
     expect(markup).not.toContain("Tutti Frutti</button>");
+  });
+
+  it("renders shared answers only in REVIEWING, even if a stale review snapshot remains in memory", () => {
+    const playingLobby = { ...lobby, room: { ...lobby.room, status: "playing" as const } };
+    const game: TuttiFruttiStartedGame = {
+      roomId: "room-1", roomStatus: "playing", sessionId: "session-1",
+      serverNow: "2026-09-25T12:00:46.000Z", startedByPlayerId: "host", roundCount: 5,
+      categories: [{ position: 1, kind: "preset", key: "name", label: "Nombre" }],
+      participants: [{ playerId: "host", nickname: "Ana" }, { playerId: "member", nickname: "Beto" }],
+      round: { number: 1, phase: "REVIEWING", letter: "M",
+        countdownEndsAt: "2026-09-25T12:00:45.000Z", calledByPlayerId: "host",
+        lockedAt: "2026-09-25T12:00:45.100Z", letterDecision: null }
+    };
+    const review = { roomId: "room-1", sessionId: "session-1", roundId: "round-1", roundNumber: 1,
+      phase: "REVIEWING" as const, categories: [{ position: 1, label: "Nombre", entries: [
+        { playerId: "host", nickname: "Ana", answerText: "Mono", isEmpty: false,
+          duplicateGroupId: null, duplicateCount: 0 }
+      ] }] };
+    const reviewState = { status: "ready" as const, sessionId: "session-1", roundNumber: 1, review };
+    expect(render(playingLobby, new Set(), "online", game, { reviewState })).toContain("Mono");
+    const countdown = { ...game, round: { ...game.round, phase: "FINAL_COUNTDOWN" as const, lockedAt: null } };
+    expect(render(playingLobby, new Set(), "online", countdown, { reviewState })).not.toContain("Mono");
   });
 
   it("keeps a submitted vote fixed and disables the action for that candidate", () => {

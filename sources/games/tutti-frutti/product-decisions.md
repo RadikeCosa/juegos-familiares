@@ -848,6 +848,11 @@ The system should:
 
 The review phase must remain part of the game rather than becoming administrative overhead.
 
+For Increment 11, review shows one category at a time in the configured
+order. Empty answers and provisional matches identify the matching
+participants without displaying normalized values. This read-only step does
+not resolve challenges or award points.
+
 ---
 
 # 31. Disconnect Does Not Remove Round Participation
@@ -1114,7 +1119,6 @@ The following details remain intentionally unresolved:
 
 ## Review UX
 
-* category-by-category review versus complete-round view;
 * whether several challenges may be opened before voting;
 * sequential versus parallel challenge resolution.
 

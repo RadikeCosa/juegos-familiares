@@ -19,8 +19,11 @@ import {
   type TuttiFruttiGameClient,
   type TuttiFruttiStartedGame
 } from "../../../../lib/supabase/tutti-frutti-game";
+import { getTuttiFruttiReview, type TuttiFruttiReview as Review,
+  type TuttiFruttiReviewClient } from "../../../../lib/supabase/tutti-frutti-review";
 import { TuttiFruttiRoomSetup } from "./tutti-frutti-room-setup";
 import { TuttiFruttiAnswerEntry } from "./tutti-frutti-answer-entry";
+import { TuttiFruttiReview } from "./tutti-frutti-review";
 import {
   closeRoom, getConnectedRoomParticipantIds, getMyActiveRoom, joinRoomByCode,
   leaveRoom, normalizeRoomJoinCode, reassignRoomHostIfStale,
@@ -51,6 +54,11 @@ type SetupState =
       notice: string | null;
     };
 
+type ReviewState =
+  | { status: "loading"; sessionId: string; roundNumber: number }
+  | { status: "error"; sessionId: string; roundNumber: number; message: string }
+  | { status: "ready"; sessionId: string; roundNumber: number; review: Review };
+
 function roomsClient(): ImpostorRoomsClient {
   return createBrowserSupabaseClient() as unknown as ImpostorRoomsClient;
 }
@@ -67,6 +75,7 @@ export function TuttiFruttiLobbyContent(options: {
   callReady?: boolean;
   calling?: boolean;
   unconfirmedAnswers?: boolean;
+  reviewState?: ReviewState | null;
   game: TuttiFruttiStartedGame | null;
   gameError: string | null;
   actionError: string | null;
@@ -74,11 +83,13 @@ export function TuttiFruttiLobbyContent(options: {
   onSkipVote: (candidateId: string) => void;
   onCall?: () => void;
   onAnswerSaveState?: (ready: boolean, unconfirmed: boolean) => void;
+  onRetryReview?: () => void;
   onExit: (asHost: boolean) => void;
 }) {
   const { lobby, connected, connection, busy, starting, voting, skipSeconds, countdownSeconds = 45,
-    callReady = false, calling = false, unconfirmedAnswers = false, game, gameError, actionError,
-    onStart, onSkipVote, onCall = () => {}, onAnswerSaveState = () => {}, onExit } = options;
+    callReady = false, calling = false, unconfirmedAnswers = false, reviewState = null,
+    game, gameError, actionError, onStart, onSkipVote, onCall = () => {},
+    onAnswerSaveState = () => {}, onRetryReview = () => {}, onExit } = options;
   const isHost = lobby.participants.some((participant) => participant.isSelf && participant.isHost);
   const selfPlayerId = lobby.participants.find((participant) => participant.isSelf)?.playerId;
   const enoughPlayers = lobby.participants.length >= 2;
@@ -159,7 +170,12 @@ export function TuttiFruttiLobbyContent(options: {
                       <p>{game.participants.find((participant) => participant.playerId === game.round.calledByPlayerId)?.nickname ?? "Un participante"} llamó Tutti Frutti.</p>
                       <p role="timer">{countdownSeconds > 0 ? `${countdownSeconds} segundos restantes` : "Cerrando respuestas…"}</p>
                     </div>
-                  ) : <p role="status">Respuestas bloqueadas. Esperando la revisión.</p>}
+                  ) : (
+                    <>
+                      <p role="status">Respuestas bloqueadas. Revisá las respuestas de la ronda.</p>
+                      <a className="impostor-action" href="#tutti-review">Ir a revisión</a>
+                    </>
+                  )}
                   {lobby.room.id && selfPlayerId ? (
                     <TuttiFruttiAnswerEntry
                       roomId={lobby.room.id}
@@ -180,6 +196,20 @@ export function TuttiFruttiLobbyContent(options: {
                   ) : null}
                   {game.round.phase === "REVIEWING" && unconfirmedAnswers ? (
                     <p role="alert">Alguna edición no alcanzó a guardarse antes del cierre.</p>
+                  ) : null}
+                  {game.round.phase === "REVIEWING" ? (
+                    <div id="tutti-review">
+                      {reviewState?.status === "ready" ? (
+                        <TuttiFruttiReview key={`${reviewState.sessionId}:${reviewState.roundNumber}`}
+                          review={reviewState.review} />
+                      ) : reviewState?.status === "error" ? (
+                        <div role="alert">
+                          <p>{reviewState.message}</p>
+                          <button type="button" className="impostor-action" onClick={onRetryReview}
+                            disabled={connection !== "online"}>Volver a intentar</button>
+                        </div>
+                      ) : <p aria-live="polite">Recuperando respuestas de la ronda…</p>}
+                    </div>
                   ) : null}
                 </>
               ) : null}
@@ -206,6 +236,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [game, setGame] = useState<TuttiFruttiStartedGame | null>(null);
   const [gameError, setGameError] = useState<string | null>(null);
+  const [reviewState, setReviewState] = useState<ReviewState | null>(null);
   const [starting, setStarting] = useState(false);
   const [votingCandidateId, setVotingCandidateId] = useState<string | null>(null);
   const [skipSeconds, setSkipSeconds] = useState(5);
@@ -222,6 +253,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const requestSequence = useRef(0);
   const setupRequestSequence = useRef(0);
   const gameRequestSequence = useRef(0);
+  const reviewRequestSequence = useRef(0);
   const serverOffsetMs = useRef(0);
   const onAnswerSaveState = useCallback((ready: boolean, unconfirmed: boolean) => {
     setCallReady(ready);
@@ -292,6 +324,28 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
     }
   }, []);
 
+  const refreshReview = useCallback(async (roomId: string, sessionId: string, roundNumber: number) => {
+    const request = ++reviewRequestSequence.current;
+    setReviewState((current) => current?.status === "ready"
+      && current.sessionId === sessionId && current.roundNumber === roundNumber
+      ? current : { status: "loading", sessionId, roundNumber });
+    try {
+      const review = await getTuttiFruttiReview(
+        createBrowserSupabaseClient() as unknown as TuttiFruttiReviewClient, roomId
+      );
+      if (request !== reviewRequestSequence.current) return;
+      if (review.roomId !== roomId || review.sessionId !== sessionId || review.roundNumber !== roundNumber) {
+        throw new Error("La revisión pertenece a otra ronda. Actualizá la partida.");
+      }
+      setReviewState({ status: "ready", sessionId, roundNumber, review });
+    } catch (error) {
+      if (request === reviewRequestSequence.current) {
+        setReviewState({ status: "error", sessionId, roundNumber,
+          message: error instanceof Error ? error.message : "No pudimos recuperar la revisión." });
+      }
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     const request = ++requestSequence.current;
     try {
@@ -301,6 +355,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         setState({ status: "absent" });
         setSetupState(null);
         setGame(null);
+        setReviewState(null);
       }
       else if (lobby.room.gameType !== "tutti_frutti" || lobby.room.code !== normalizedCode) {
         router.replace(roomPath(lobby.room.gameType, lobby.room.code));
@@ -332,6 +387,18 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const lobby = state.status === "ready" ? state.lobby : null;
   const roomId = lobby?.room.id;
   const selfPlayerId = lobby?.participants.find((participant) => participant.isSelf)?.playerId;
+  const gamePhase = game?.round.phase;
+  const gameSessionId = game?.sessionId;
+  const gameRoundNumber = game?.round.number;
+
+  useEffect(() => {
+    if (!roomId || gamePhase !== "REVIEWING" || !gameSessionId || !gameRoundNumber) {
+      setReviewState(null);
+      return;
+    }
+    void refreshReview(roomId, gameSessionId, gameRoundNumber);
+    return () => { reviewRequestSequence.current += 1; };
+  }, [roomId, gamePhase, gameSessionId, gameRoundNumber, refreshReview]);
 
   useEffect(() => {
     function onVisibility() {
@@ -339,12 +406,18 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         setConnection("reconnecting");
         void roomPresenceRef.current?.recoverPresence();
         void refresh();
+        if (roomId && gamePhase === "REVIEWING" && gameSessionId && gameRoundNumber) {
+          void refreshReview(roomId, gameSessionId, gameRoundNumber);
+        }
       }
     }
     function onOnline() {
       setConnection("reconnecting");
       void roomPresenceRef.current?.recoverPresence();
       void refresh();
+      if (roomId && gamePhase === "REVIEWING" && gameSessionId && gameRoundNumber) {
+        void refreshReview(roomId, gameSessionId, gameRoundNumber);
+      }
     }
     function onOffline() { setConnection("offline"); }
     document.addEventListener("visibilitychange", onVisibility);
@@ -355,7 +428,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
     };
-  }, [refresh]);
+  }, [refresh, refreshReview, roomId, gamePhase, gameSessionId, gameRoundNumber]);
 
   const pendingCandidateId = game?.round.phase === "LETTER_PENDING"
     ? game.round.letterDecision?.candidateId ?? null
@@ -377,7 +450,6 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
     return () => window.clearInterval(interval);
   }, [roomId, pendingCandidateId, pendingDeadline, connection, refreshGame]);
 
-  const gamePhase = game?.round.phase;
   const countdownDeadline = game?.round.countdownEndsAt;
   useEffect(() => {
     if (!roomId || connection !== "online"
@@ -605,6 +677,8 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         callReady={callReady}
         calling={calling}
         unconfirmedAnswers={unconfirmedAnswers}
+        reviewState={reviewState?.sessionId === game?.sessionId && reviewState?.roundNumber === game?.round.number
+          ? reviewState : null}
         game={game}
         gameError={gameError}
         actionError={actionError}
@@ -612,6 +686,11 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         onSkipVote={(candidateId) => { void voteToSkip(candidateId); }}
         onCall={() => { void callRound(); }}
         onAnswerSaveState={onAnswerSaveState}
+        onRetryReview={() => {
+          if (roomId && gameSessionId && gameRoundNumber) {
+            void refreshReview(roomId, gameSessionId, gameRoundNumber);
+          }
+        }}
         onExit={(asHost) => { void exitRoom(asHost); }}
       />
       {setupForRoom?.status === "loading" ? <p aria-live="polite">Recuperando configuración…</p> : null}

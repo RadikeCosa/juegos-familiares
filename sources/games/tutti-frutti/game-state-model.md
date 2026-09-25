@@ -253,6 +253,10 @@ Increment 10 subsequently adds the first-call transition to
 deadline, and advances autonomously to a locked `REVIEWING` phase. It does
 not yet expose another participant's answers; the review read is Increment 11.
 
+Increment 11 adds a read-only, frozen-roster review snapshot after the committed
+lock. It exposes original answers and provisional duplicate groups, including
+empty answers, without changing validation or score state.
+
 ---
 
 # 9. Player Completion State

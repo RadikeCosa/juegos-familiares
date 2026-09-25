@@ -119,7 +119,7 @@ already owned by the roadmap above.
 
 ## Current improvement work
 
-El `main` local integra los Incrementos 0–9 de Tutti Frutti y el traslado de
+El `main` local integra los Incrementos 0–11 de Tutti Frutti y el traslado de
 la gestión de grupos a la portada. Los Incrementos 7–9 se integraron desde
 `codex/tutti-frutti-increment-9`. Este estado local no equivale a una
 publicación: la baseline productiva indicada arriba no cambió y no se
@@ -155,11 +155,11 @@ El Incremento 9 guarda cada respuesta bajo la ronda, participante y posición
 de categoría; sólo su autor la lee mediante RPC y las respuestas no tienen
 acceso directo desde clientes. La UI guarda tras 500 ms, conserva cambios no
 confirmados en memoria y relee tras carga, reconexión o invalidación Realtime.
-Las respuestas se pueden editar únicamente en `PLAYING`; countdown, lock,
-revisión y puntaje continúan pendientes. Las migrations y validadores de DB
-de estos incrementos se ejecutaron en Supabase local. Los tests del proyecto
-y la regresión automatizada de Impostor pasaron; el chequeo de tipos directo
-pasó. Lint terminó sin errores, con una advertencia preexistente. El build
+El Incremento 9 habilitó edición únicamente en `PLAYING`. Las migrations y
+validadores de DB de estos incrementos se ejecutaron en Supabase local. Los
+tests del proyecto y la regresión automatizada de Impostor pasaron; el
+chequeo de tipos directo pasó. Lint terminó sin errores, con una advertencia
+preexistente. El build
 compiló el bundle, pero Next falló al interpretar `tsc --showConfig`. No se
 completó el smoke visual del formulario con dos navegadores. No se limpiaron
 los fixtures locales del validador, no se aplicaron migrations remotas ni se
@@ -175,6 +175,16 @@ confirmar al cerrarse la ronda. Quedan pendientes el smoke visual de dos
 navegadores, la validación operacional del job en un destino real y cualquier
 aplicación remota. El `main` local sí integra `home-games-first`; la baseline
 productiva no cambió.
+
+El Incremento 11 está integrado al `main` local. La revisión
+compartida se abre sólo tras el bloqueo confirmado, para el roster congelado.
+Presenta originales, vacíos y participantes con coincidencias provisionales
+por categoría sin exponer valores normalizados ni habilitar desafíos o
+puntajes. La validación local incluyó acceso por actor y fase y una lectura
+mientras la transición de
+bloqueo estaba sin commit. Se revisó la UI móvil con una identidad; quedó
+pendiente el smoke visual de dos sesiones aisladas. No se aplicó migration
+remota.
 
 Only observations confirmed against the current product should become active
 improvement work. Historical UX findings are evidence to revalidate, not an

@@ -263,11 +263,8 @@ The first player to press it does **not** immediately end the round.
 
 Instead, it starts a shared final countdown.
 
-Current working hypothesis:
-
-> 45-second countdown.
-
-The duration should initially be treated as a product hypothesis rather than a permanent rule.
+The current local rule uses a 45-second countdown. Its duration remains
+subject to gameplay validation.
 
 Example:
 
@@ -295,9 +292,10 @@ If all active players finish before the timer expires, the round should close im
 
 ## 12. Eligibility to Call “Tutti Frutti”
 
-`WORKING HYPOTHESIS` (preferred product rule, pending gameplay validation):
+The current local rule is:
 
-> the button is enabled only when the player has entered a non-empty answer in every active category.
+> the button is enabled only when the player's answer in every active category
+> has been saved and is non-empty.
 
 Advantages:
 
@@ -307,8 +305,7 @@ Advantages:
 
 However, empty answers during the countdown remain valid game outcomes for players who do not finish in time.
 
-If adopted, the server must enforce this rule; disabling the button in the UI
-is insufficient.
+The server enforces this rule; disabling the button in the UI is insufficient.
 
 ---
 
@@ -587,7 +584,7 @@ The following decisions are currently considered established:
 6. Preset category selection belongs in the initial scope.
 7. Simple game-local custom categories should also be targeted for the initial scope.
 8. The first player to complete their answers activates a final countdown rather than immediately ending the round.
-9. The first valid call starts one irreversible countdown; 45 seconds is a working duration hypothesis.
+9. The first valid call starts one irreversible 45-second countdown.
 10. If all active players finish before the countdown ends, the round closes immediately.
 11. Semantic answer validity is not automatically determined by the system.
 12. Answers are valid by default unless challenged.
@@ -613,12 +610,11 @@ The following decisions are currently considered established:
 
 ---
 
-## 25. Working Hypotheses
+## 25. Gameplay Validation Questions
 
-The following are preferred directions but should still be validated during detailed design:
-
-* “Tutti Frutti” can only be called after all category fields contain an answer.
-* the countdown lasts 45 seconds;
+The current rules require every category answer to be saved and non-empty
+before a call and give the round a 45-second final countdown. Real play should
+validate whether that completion rule and duration feel right.
 
 ---
 
@@ -639,11 +635,15 @@ The next design phase should resolve:
 
 ### Review
 
-* Are answers reviewed category-by-category or on one complete review screen?
 * Can several answers be challenged before voting begins?
 * Are challenges resolved sequentially or in parallel?
-* How should normalization treat accents, punctuation, plurals, and minor spelling variants?
+* Should a later normalization version treat accents, punctuation, plurals, or minor spelling variants differently?
 * How do challenge-voter eligibility, timeout, and abstention work when presence changes?
+
+The read-only review presents one configured category at a time after answers
+are locked. It shows each player's original answer, empty entries, and which
+participants provisionally match. Challenge interaction and scoring are later
+steps.
 
 ### Recovery
 

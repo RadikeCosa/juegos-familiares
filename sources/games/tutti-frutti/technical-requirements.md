@@ -19,8 +19,10 @@ vote and lazy resolution on authorized state reads. Increment 9 adds
 participant-private answer reads and writes during `PLAYING`. Increment 10
 adds a first-call guard requiring every persisted category answer, a fixed
 45-second server deadline, editing before expiry, and an autonomous lock that
-enters `REVIEWING` without exposing other players' answers. Shared review
-reads, challenges, and scoring remain future increments. The `rooms` table
+enters `REVIEWING` without exposing other players' answers. Increment 11 adds
+a roster-only review read of original answers and provisional duplicate groups
+after the committed lock. Challenges and scoring remain future increments. The
+`rooms` table
 persists an immutable game type and active-Room discovery returns it; the
 zero-argument create path remains Impostor-only.
 `game_sessions.state` and

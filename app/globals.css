@@ -1285,6 +1285,72 @@ body {
   padding-inline-start: var(--space-3);
 }
 
+.tutti-review {
+  display: grid;
+  gap: var(--space-3);
+  width: min(100%, 40rem);
+  margin-top: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: clamp(var(--space-4), 5vw, var(--space-6));
+}
+
+.tutti-review h2,
+.tutti-review h3,
+.tutti-review p {
+  margin: 0;
+}
+
+.tutti-review select {
+  width: 100%;
+  min-height: 3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--background);
+  color: var(--foreground);
+  padding: 0 var(--space-3);
+  font: inherit;
+}
+
+.tutti-review__navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.tutti-review__navigation .impostor-action {
+  min-width: 0;
+}
+
+.tutti-review__entries {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tutti-review__entry {
+  display: grid;
+  gap: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.tutti-review__entry small {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.tutti-review__empty {
+  color: var(--foreground-muted);
+  font-style: italic;
+}
+
 @media (min-width: 30rem) {
   .tutti-setup__preset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -33,10 +33,11 @@ está integrado en el `main` local; la baseline de producción descrita en
 
 Las decisiones de producto vigentes están en `product-decisions.md`; fases en
 `game-state-model.md`; límites en `room-session-boundary.md`; requisitos en
-`technical-requirements.md`; el esquema de `physical-data-model.md` es una
-**recomendación pendiente de validación contra datos reales**, no un contrato
-SQL aplicado. Cada corte debe distinguir esas categorías antes de fijar una
-migration. La baseline productiva registrada en `sources/project-status.md` es
+`technical-requirements.md`; `physical-data-model.md` distingue esquema local
+implementado de propuestas futuras. Las migrations son el contrato SQL local;
+no se validaron contra datos remotos. Cada corte debe distinguir esas
+categorías antes de fijar una migration. La baseline productiva registrada en
+`sources/project-status.md` es
 Impostor en `main@7431605`; el estado de una DB remota no se inspeccionó para
 este plan. La política de sucesión en `playing` está **CONFIRMED** en
 `product-decisions.md`; la RPC Impostor versionada la implementa con
@@ -44,8 +45,8 @@ este plan. La política de sucesión en `playing` está **CONFIRMED** en
 
 ## Baseline técnica comprobada en el repositorio
 
-- `rooms` conserva Group, host, miembros y `lobby | playing | closed`; en la
-  rama del Incremento 0 incorpora `game_type` inmutable.
+- `rooms` conserva Group, host, miembros, `lobby | playing | closed` y
+  `game_type` inmutable.
   `player_active_room_slots` impone una Room activa por Player en
   toda la plataforma; `lobby` y `playing` son activos. Al volver de `playing`
   a `lobby`, el slot debe permanecer.
@@ -53,8 +54,8 @@ este plan. La política de sucesión en `playing` está **CONFIRMED** en
   exclusivas de Impostor. Las nuevas firmas reciben intención de juego y
   verifican tipo, Group, lobby y slot global; `get_my_active_room()` devuelve
   el tipo y las rutas actuales recuperan el juego correspondiente. Tutti
-  Frutti ya tiene lobby, presencia y configuración compartida; todavía no
-  tiene inicio de sesión ni gameplay.
+  Frutti tiene lobby, presencia, configuración compartida, sesión, respuestas,
+  bloqueo y lectura de revisión hasta el Incremento 11.
 - `game_sessions` tiene `unique(room_id)` y fases de Impostor;
   `session_players` incluye datos propios de ese juego. `start_session()` crea
   roster, estado y primera ronda de Impostor; `end_session()` termina la
@@ -105,7 +106,7 @@ revalidan contra las migrations y datos del destino antes de ejecutarse.
 2, 7–16 → 17 recuperación y cierre MVP
 ```
 
-Los Incrementos 0–9 están integrados en el `main` local al cerrar esta entrega;
+Los Incrementos 0–11 están integrados en el `main` local al cerrar esta entrega;
 sus migrations y validadores se ejecutaron sólo en Supabase local. La política
 de sucesión en `playing` está implementada en el
 código del 5, pero falta verificar la definición desplegada antes de atribuirla
@@ -483,6 +484,16 @@ antes de habilitarlo allí. No hay migration remota aplicada.
   del primer MVP si se acuerda explícitamente ese alcance.
 
 ### 11. Lectura de review y duplicados provisionales
+
+**Estado local:** integrado en `main`. La RPC
+exige `REVIEWING` y bloqueo confirmado, autoriza sólo al roster congelado y
+devuelve originales, vacíos y grupos provisionales sin valores normalizados.
+La UI muestra una categoría por vez en orden configurado, con recuperación
+tras reconexión y reintento, e identifica a los participantes coincidentes.
+La validación de DB local incluye lectura durante
+una transición SQL sin commit. No se aplicó migration remota; desafíos y
+puntaje siguen pendientes. La UI se revisó visualmente a 390 px con una
+identidad; queda pendiente el smoke visual de dos sesiones aisladas.
 
 - **Goal:** tras lock, el roster ve respuestas de la ronda y posibles
   duplicados normalizados sin juicio semántico automático.

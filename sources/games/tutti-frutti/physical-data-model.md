@@ -13,8 +13,9 @@ migration.
 The Increment 3 local migration applies the recommended minimal session
 identity and Impostor backfill with explicit linkage, atomic retry checks, and
 closed-by-default access. Later local increments consume that identity for
-Tutti Frutti configuration, session start, letter skipping, and private answer
-entry. These local migrations are not a production baseline; no remote
+Tutti Frutti configuration, session start, letter skipping, private answer
+entry, autonomous locking, and roster-gated review. These local migrations are
+not a production baseline; no remote
 migration is implied.
 
 The design must allow multiple sequential Tutti Frutti sessions in one Room,
@@ -119,8 +120,10 @@ below. Increment 8 adds candidate deadlines and private fixed skip votes; the
 authorized read returns only aggregate counts. Increment 9 implements private
 persistent answer entry. Increment 10 adds an authoritative 45-second
 countdown and a background lock. Writes are permitted in `PLAYING` and before
-the deadline in `FINAL_COUNTDOWN`; shared review reads and scoring remain
-future increments. These migrations were validated only against local
+the deadline in `FINAL_COUNTDOWN`. Increment 11 adds a read-only, roster-gated
+review RPC after lock; it derives provisional duplicate groups from persisted
+normalization v1 without exposing normalized values. Challenges and scoring
+remain future increments. These migrations were validated only against local
 Supabase; no remote migration is implied.
 
 | Candidate | Persist or derive? | Relationships and invariant |
@@ -180,10 +183,11 @@ preserves accents, punctuation, and internal whitespace. The original text is
 preserved for display, except empty or whitespace-only input is stored as the
 empty string. Both client and server limit input to 200 Unicode code points
 after NFC. The read model returns only the actor's answers. At `REVIEWING`, a
-separate authorized read may expose the answer set and duplicate groups needed
-for social review; that read is not part of Increment 9. Duplicate groups are
-derived from final valid normalized answers in the same round/category, not
-stored while validity can change.
+separate authorized read exposes the answer set and provisional duplicate groups
+needed for social review. Provisional groups use all non-empty persisted
+answers in the same round/category. Final scoring must recompute groups from
+answers that remain valid after challenges; no group is persisted while
+validity can change.
 
 The Realtime publication includes only `tutti_frutti_answer_signals`, never
 the answer table. Its own-player RLS policy protects each invalidation row.
