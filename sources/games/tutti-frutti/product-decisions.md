@@ -1159,12 +1159,9 @@ confirmed in the challenge decisions above and implemented for Increment 12.
 
 ## Post-game lifecycle
 
-* who may initiate the next match, including whether only the host may do so;
-* whether prior configuration is preselected as a UX convenience;
-* how membership changes affect the next-match roster;
-* the rematch controls shown after the Increment 15 result-first postgame.
-
-These decisions should be resolved before the corresponding implementation increment, but they do not currently block the high-level product model.
+Resolved in Decision 45 and implemented by Increment 16: current-host start,
+editable Room draft, RoomParticipants snapshot at start, and result-first
+post-game controls.
 
 ---
 
@@ -1242,13 +1239,17 @@ before entering a post-game lobby. That lobby permits close or leave but does
 not start a rematch or edit the next configuration; Increment 16 replaces
 that temporary server guard.
 
-## Open Follow-ups
+**CONFIRMED FOR INCREMENT 16:** only the current Room host may start a rematch.
+The host may edit the persistent Room draft in the post-game lobby; the next
+session freezes the edited configuration and the RoomParticipants present at
+start. The roster counts registered membership regardless of Presence. A
+retry by the original starter or current host returns the active session when
+the caller belongs to its frozen roster. Previous sessions and results remain
+immutable and are never listed as a Room-wide history.
 
-* who may initiate a rematch and whether that action is host-only;
-* whether previous configuration values appear preselected;
-* what happens when a participant leaves between matches;
-* the rematch controls and broader post-game lobby presentation after the
-  Increment 15 result-first screen.
+The open follow-ups for this decision are resolved: host authority, Room draft
+reuse/editing, between-game membership, and post-game rematch controls are
+specified by Increment 16.
 
 # 46. Answers Are Private and Persisted Per Round
 

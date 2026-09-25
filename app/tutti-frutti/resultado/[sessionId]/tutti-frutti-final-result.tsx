@@ -1,8 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { createBrowserSupabaseClient } from "../../../../lib/supabase/browser-client";
+import {
+  getMyActiveRoom,
+  roomPath,
+  subscribeToRoomChanges,
+  type ActiveRoomLobby,
+  type ImpostorRoomChangesClient,
+  type ImpostorRoomsClient
+} from "../../../../lib/supabase/impostor-rooms";
 import {
   getTuttiFruttiFinalResult,
   type TuttiFruttiFinalResult as FinalResult,
@@ -14,7 +23,14 @@ type State =
   | { status: "error"; message: string }
   | { status: "ready"; result: FinalResult };
 
+export function getPlayingRoomRouteForResult(roomId: string, activeRoom: ActiveRoomLobby | null) {
+  if (!activeRoom || activeRoom.room.id !== roomId
+    || activeRoom.room.gameType !== "tutti_frutti" || activeRoom.room.status !== "playing") return null;
+  return roomPath("tutti_frutti", activeRoom.room.code);
+}
+
 export function TuttiFruttiFinalResult({ sessionId }: { sessionId: string }) {
+  const router = useRouter();
   const [state, setState] = useState<State>({ status: "loading" });
   const load = useCallback(async () => {
     setState({ status: "loading" });
@@ -31,6 +47,49 @@ export function TuttiFruttiFinalResult({ sessionId }: { sessionId: string }) {
   }, [sessionId]);
 
   useEffect(() => { void Promise.resolve().then(load); }, [load]);
+
+  useEffect(() => {
+    if (state.status !== "ready" || !state.result.canReturnToRoom) return;
+    const { roomId } = state.result;
+    const client = createBrowserSupabaseClient();
+    let disposed = false;
+    let checking = false;
+    const reconcileRoom = async () => {
+      if (disposed || checking) return;
+      checking = true;
+      try {
+        const activeRoom = await getMyActiveRoom(client as unknown as ImpostorRoomsClient);
+        if (disposed) return;
+        const route = getPlayingRoomRouteForResult(roomId, activeRoom);
+        if (route) router.replace(route);
+      } catch {
+        // The final result remains available; a later event, poll, or reconnect retries.
+      } finally {
+        checking = false;
+      }
+    };
+    const subscription = subscribeToRoomChanges(
+      client as unknown as ImpostorRoomChangesClient,
+      roomId,
+      () => { void reconcileRoom(); },
+      "tutti_frutti"
+    );
+    const interval = window.setInterval(() => { void reconcileRoom(); }, 15_000);
+    const onOnline = () => { void reconcileRoom(); };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void reconcileRoom();
+    };
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    void reconcileRoom();
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      void subscription.unsubscribe();
+    };
+  }, [router, state]);
 
   if (state.status === "loading") return <p aria-live="polite">Recuperando resultado final…</p>;
   if (state.status === "error") return (

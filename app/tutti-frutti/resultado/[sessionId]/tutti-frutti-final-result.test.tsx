@@ -1,8 +1,9 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import type { ActiveRoomLobby } from "../../../../lib/supabase/impostor-rooms";
 import type { TuttiFruttiFinalResult } from "../../../../lib/supabase/tutti-frutti-result";
-import { TuttiFruttiFinalResultView } from "./tutti-frutti-final-result";
+import { getPlayingRoomRouteForResult, TuttiFruttiFinalResultView } from "./tutti-frutti-final-result";
 
 const result: TuttiFruttiFinalResult = {
   roomId: "room-1", roomCode: "TUTT1234", sessionId: "session-1",
@@ -15,6 +16,18 @@ const result: TuttiFruttiFinalResult = {
 };
 
 describe("Tutti Frutti final result", () => {
+  it("routes a result viewer into the matching Room after a new session starts", () => {
+    const active: ActiveRoomLobby = {
+      room: { id: "room-1", code: "TUTT1234", status: "playing", gameType: "tutti_frutti" },
+      participants: []
+    };
+    expect(getPlayingRoomRouteForResult("room-1", active)).toBe("/tutti-frutti/sala/TUTT1234");
+    expect(getPlayingRoomRouteForResult("room-other", active)).toBeNull();
+    expect(getPlayingRoomRouteForResult("room-1", {
+      ...active, room: { ...active.room, status: "lobby" }
+    })).toBeNull();
+  });
+
   it("shows a multi-player tie and a stable return-to-lobby link", () => {
     const markup = renderToStaticMarkup(createElement(TuttiFruttiFinalResultView, { result }));
     expect(markup).toContain("Empate entre Ana, Beto");

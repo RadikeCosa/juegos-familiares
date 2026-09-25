@@ -134,7 +134,7 @@ Supabase; no remote migration is implied.
 
 | Candidate | Persist or derive? | Relationships and invariant |
 | --- | --- | --- |
-| `tutti_frutti_room_setup` | Implemented in Increment 6 as one Room-scoped JSONB draft. | One row per Tutti Frutti Room; host-only writes while Room is `lobby`; member reads remain available later. Each save atomically replaces rounds and ordered preset/custom categories. Defaults are returned without a row. Prior-value preselection remains `OPEN`. |
+| `tutti_frutti_room_setup` | Implemented in Increment 6 as one Room-scoped JSONB draft. | One row per Tutti Frutti Room; host-only writes while Room is `lobby`; member reads remain available later. Each save atomically replaces rounds and ordered preset/custom categories. Defaults are returned without a row. Increment 16 reuses this editable draft for each rematch; the started session keeps its own immutable snapshot. |
 | `tutti_frutti_sessions` | Implemented by Increment 7 and extended by Increment 9, keyed by shared `room_sessions.id`. | Stores configured round count, approved 20-letter pool snapshot, initiating Player, and immutable answer-normalization version (currently 1). Direct client access is closed. |
 | `tutti_frutti_session_categories` | Implemented by Increment 7 as ordered snapshot rows. | Stores effective category labels and preset/custom identity so lobby edits cannot alter the session. |
 | `tutti_frutti_rounds` | Implemented by Increment 7 and extended in Increments 10 and 13. | Round 1 begins in `LETTER_PENDING`; Increment 8 accepts one candidate into `PLAYING`. Increment 10 adds `FINAL_COUNTDOWN`, server deadline, first caller, and `locked_at`; expiry enters `REVIEWING` without a shared-answer read. Increment 13 moves `REVIEWING` to `RESULT` atomically with `scored_at`. |
@@ -256,14 +256,17 @@ session from the supplied round, validates the persisted combination and
 returns the stored result; inconsistent state raises without repair or data.
 
 At rematch start, a new `room_sessions.id` and Tutti Frutti session snapshot
-are created in the same Room. The new roster is frozen from eligible current
-RoomParticipants and may differ from the prior roster. Finished results stay
-addressable by authorized prior session participants. The active-room read
-model reports the Room as `lobby`; a separate protected recent-session read
-shows its last result without pretending it is still active. The Increment 15
-start RPC deliberately rejects a Room with finished Tutti sessions; Increment
-16 must replace that guard when it creates a new session. Who initiates
-rematch and prior-config preselection remain `OPEN` product choices.
+are created in the same Room. The current host starts it after editing the
+Room draft if desired. The new roster is frozen from current RoomParticipants,
+regardless of Presence, and may differ from the prior roster. Finished results
+stay addressable by authorized prior session participants. The active-room
+read model reports the Room as `lobby`; a separate protected recent-session
+read shows the last result without pretending it is active. Increment 16
+replaces the temporary Increment 15 finished-session guard. The Room lock
+serializes starts; the original starter or current host can retry against the
+same active session when in its roster. The start path rejects a lobby that
+still has an unfinished session, but relies on the atomic finish checks rather
+than rescanning completed session history.
 
 ## Authorization, Realtime, and recovery
 

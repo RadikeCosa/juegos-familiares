@@ -169,15 +169,9 @@ await rejects(newcomer, "get_tutti_frutti_final_result", {
   target_session_id: started.sessionId
 }, "P0032");
 
-const startAttempts = await Promise.all([
-  host.instance.rpc("start_tutti_frutti_session", { target_room_id: room.room_id }),
-  host.instance.rpc("start_tutti_frutti_session", { target_room_id: room.room_id })
-]);
-assert(startAttempts.every(result => result.data === null && result.error?.code === "P0055"),
-  "concurrent rematch attempts return P0055 without creating a session");
 await rejects(member, "start_tutti_frutti_session", { target_room_id: room.room_id }, "P0033");
 equal(psql("select count(*) from public.room_sessions where room_id=" + quote(room.room_id) + "::uuid"),
-  "1", "blocked rematch attempts create no session");
+  "1", "unauthorized rematch attempts create no session");
 
 psql("update public.rooms set status='playing' where id=" + quote(room.room_id) + "::uuid");
 await rejects(member, "score_tutti_frutti_round", closeArgs, "P0056");
@@ -208,4 +202,4 @@ equal(psql("select has_table_privilege('authenticated','public.room_sessions','U
 equal(psql("select has_table_privilege('authenticated','public.tutti_frutti_rounds','UPDATE')"),
   "f", "clients cannot score rounds directly");
 
-console.log("Tutti Frutti increment 15 local final scoring, atomic lobby return, historical roster privacy, rematch guard, and retry validation passed.");
+console.log("Tutti Frutti increment 15 local final scoring, atomic lobby return, historical roster privacy, and retry validation passed.");

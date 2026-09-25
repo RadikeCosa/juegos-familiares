@@ -722,8 +722,15 @@ winner or tied winners. **Ir al lobby** returns a current RoomParticipant to a
 post-game lobby with close or leave actions. Starting another session and
 editing setup are unavailable until Increment 16. A participant who leaves
 retains result access through the frozen session roster; a person who joins
-afterward cannot read that prior result. Who initiates the rematch,
-configuration preselection and its full lobby presentation remain `OPEN`.
+afterward cannot read that prior result.
+
+Increment 16 enables the current host to edit the Room's saved round/category
+draft and start a new session. The new roster is the set of registered Room
+participants at start, including disconnected members and excluding anyone
+who left. The previous result remains on its stable URL; it is not carried
+into the new score. Other clients still viewing that result follow the Room
+change into the new game after an authorized state read, with polling and
+reconnect as recovery.
 
 ---
 
@@ -849,7 +856,3 @@ before calling Tutti Frutti. Gameplay validation may motivate a later change.
 `OPEN` before the corresponding implementation increment:
 
 * early-close eligibility when presence changes;
-* who may initiate a rematch and whether that action is host-only;
-* whether previous configuration is preselected;
-* how membership changes affect the next-match roster;
-* rematch controls after the Increment 15 result-first postgame.

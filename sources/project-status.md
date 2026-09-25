@@ -232,6 +232,19 @@ preexistente. El smoke visual mobile con dos sesiones aisladas no se completó:
 el runtime Playwright de la guía local no está instalado. No se reinició ni
 limpió la DB local, no hubo cambios remotos y la baseline productiva no cambió.
 
+El Incremento 16 implementa revancha en la misma Room desde una sesión nueva:
+el host actual puede editar el borrador y el roster se congela desde los
+RoomParticipants registrados al iniciar. El score y los snapshots anteriores
+no se reutilizan. La RPC conserva el retry del iniciador original y también
+permite recuperar la sesión al host sucesor; separa config inválida (`P0038`)
+de lifecycle inconsistente (`P0056`). La migration se aplicó a Supabase local;
+pasaron los validadores Tutti Frutti 12–16 y cierre Impostor 12.2. Pasaron 802
+tests de aplicación, TypeScript, build con Webpack y lint sin errores (queda
+una advertencia preexistente). El smoke visual con dos sesiones no se completó:
+se abrió una segunda sesión aislada, pero no se pudo establecer la identidad y
+el flujo compartido desde esa sesión. No se reinició ni limpió la DB local, no
+se aplicaron migrations remotas ni cambió la baseline productiva.
+
 Only observations confirmed against the current product should become active
 improvement work. Historical UX findings are evidence to revalidate, not an
 automatic backlog. No additional detailed post-beta UX/UI backlog is established

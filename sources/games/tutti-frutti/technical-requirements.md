@@ -185,8 +185,13 @@ product decision, not an implied result of multi-session Rooms.
 12. When the configured number of rounds has been scored, mark the session
    finished and immutable, detach it as the active session, and return its
    Room from `playing` to `lobby` in one transaction. Retain finished results
-   for the frozen session roster. Until Increment 16 defines rematch, reject a
-   new start in a Room with a finished Tutti Frutti session.
+   for the frozen session roster. Increment 16 allows the current host to start
+   a new immutable session from that lobby using the editable Room draft and
+   the current registered RoomParticipants, regardless of Presence. Reject a
+   lobby that still has an unfinished session as an integrity error; completed
+   history is not rescanned on the start path because final scoring enforces
+   completeness atomically. Retries by the original starter or current host
+   return the active session if the actor belongs to its roster.
 
 ## Security and privacy requirements
 
@@ -267,9 +272,7 @@ authorization and destination confirmation.
 
 ## Unresolved decisions
 
-`OPEN`: who initiates a rematch, whether it is host-only, configuration
-preselection, departure between matches, and post-game lobby UI; challenge
-voter eligibility and timeout/abstention on disconnect; early-close
+`OPEN`: challenge voter eligibility and timeout/abstention on disconnect; early-close
 eligibility under changing Presence; semantic normalization such as
 plural/singular equivalence or spelling tolerance; review ordering; and the
 precise individual-completion interaction. These must be resolved before

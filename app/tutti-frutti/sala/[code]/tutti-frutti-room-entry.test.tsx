@@ -66,22 +66,34 @@ describe("Tutti Frutti lobby", () => {
     expect(markup).not.toContain("Iniciar partida");
   });
 
-  it("keeps only lobby exit actions after a finished session", () => {
+  it("lets the host edit and start another session after a finished result", () => {
     const markup = render(lobby, new Set(), "online", null, { postgame: true });
-    expect(markup).toContain("La partida terminó.");
+    expect(markup).toContain("La partida anterior terminó.");
     expect(markup).toContain("Cerrar sala");
-    expect(markup).not.toContain("Iniciar partida");
+    expect(markup).toContain("Nueva partida");
+  });
+
+  it("keeps non-hosts waiting while the host prepares a rematch", () => {
+    const memberLobby: ActiveRoomLobby = {
+      ...lobby,
+      participants: lobby.participants.map((participant) => ({
+        ...participant, isSelf: participant.playerId === "member"
+      }))
+    };
+    const markup = render(memberLobby, new Set(), "online", null, { postgame: true });
+    expect(markup).toContain("Esperando a que el anfitrión configure e inicie otra.");
+    expect(markup).not.toContain("Nueva partida");
   });
 
   it("does not expose start while postgame recovery is pending or failed", () => {
     const loading = render(lobby, new Set(), "online", null, { postgameLoading: true });
     expect(loading).toContain("Comprobando el estado de la partida");
-    expect(loading).not.toContain("Iniciar partida");
+    expect(loading).not.toContain("Nueva partida");
     const failed = render(lobby, new Set(), "online", null, {
       postgameError: "No pudimos recuperar el estado de la sala."
     });
     expect(failed).toContain("No pudimos recuperar el estado de la sala.");
-    expect(failed).not.toContain("Iniciar partida");
+    expect(failed).not.toContain("Nueva partida");
   });
 
   it("shows the shared candidate letter once the Room is playing", () => {

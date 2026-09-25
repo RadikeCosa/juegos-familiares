@@ -650,7 +650,7 @@ para preservarlos. El Cron fue comprobado localmente, no en un destino real.
 - **Explicitly out of scope:** iniciar otra sesión y rediseñar cierre Impostor.
 - **Database impact:** locks Room → sesión compartida → sesión Tutti → ronda,
   `UPDATE ... RETURNING` guardados y un timestamp para ronda/sesión. El
-  resultado se agrupa sin tabla de totales. `P0055` bloquea revancha hasta 16.
+  resultado se agrupa sin tabla de totales. `P0055` bloqueó revancha hasta 16.
 - **Application impact:** URL estable de resultado, ganador o empate y lobby
   postpartida sin inicio ni edición de configuración.
 - **Security requirements:** `room_session_participants` autoriza historia;
@@ -671,30 +671,39 @@ para preservarlos. El Cron fue comprobado localmente, no en un destino real.
 
 ### 16. Revancha como sesión nueva
 
+**Estado de implementación:** integrado en esta rama; ver
+`sources/project-status.md` para las validaciones y límites de entorno.
+
 - **Goal:** desde la misma Room en lobby comenzar otra partida Tutti sin
   reusar estado, puntos o roster anterior.
-- **Scope:** autoridad de inicio, draft/preselección aprobados, altas/bajas
-  permitidas entre partidas, nuevo ID/roster/snapshot; historial anterior.
+- **Scope:** sólo el host actual inicia; el setup persistido queda editable en
+  lobby y se congela al inicio; el roster se toma de RoomParticipants actuales
+  registrados, independientemente de Presence; historial anterior.
 - **Explicitly out of scope:** cambiar juego de la Room, reabrir Room cerrada
   o migrar Impostor a varias partidas por Room.
 - **Likely files / areas:** UI postgame/lobby, RPC start Tutti, draft,
   loaders de sesión reciente y tests.
 - **Database impact:** múltiples sesiones finalizadas por Room y máximo una
-  activa; slots existentes siguen globales.
-- **Application impact:** lobby distingue nueva partida de resultado previo;
-  recovery abre sólo la sesión activa.
-- **Security requirements:** actor/host según política, roster nuevo desde
-  Room actual; participante nuevo no lee datos privados previos.
-- **Concurrency / idempotency:** dos rematches crean una sola sesión nueva;
-  nunca resetean filas de la anterior.
-- **Automated verification:** IDs distintos, roster cambiado según regla,
-  snapshots/historial intactos, carrera y aislamiento histórico.
-- **Manual smoke:** terminar partida, unirse/salir según política, jugar otra
-  en misma Room y comprobar resultado anterior.
-- **Documentation update:** autoridad, preselección, salidas y lobby final
-  decididos en producto/flujo/estado.
-- **Exit criteria:** segunda partida inicia en misma Room y primera es
-  inmutable y accesible sólo a quien corresponde.
+  activa; una Room en lobby con sesión sin `finished_at` falla `P0056`; la
+  configuración inválida conserva `P0038`. No se reescanea el historial
+  finalizado porque el cierre 15 garantiza rondas puntuadas atómicamente.
+- **Application impact:** host edita setup y ve «Nueva partida»; roster previo
+  que continúa en el resultado sigue la Room a `playing` tras una lectura
+  autorizada, con refresh/reconnect como recuperación.
+- **Security requirements:** actor/host actual y roster de sesión verificados;
+  miembro nuevo puede jugar pero no lee resultados anteriores.
+- **Concurrency / idempotency:** Room lock serializa; starter original o host
+  actual, si pertenecen al roster activo, recuperan el mismo estado. No se
+  crea una segunda sesión ni se reinicia la anterior.
+- **Automated verification:** config distinta, marcador nuevo en cero, roster
+  cambiado, error `P0056` vs `P0038`, carrera/retry tras sucesión, rollback,
+  historial y permisos.
+- **Manual smoke:** terminar partida, cambiar setup y roster, iniciar otra;
+  verificar resultado previo y navegación automática de dos sesiones.
+- **Documentation update:** política de revancha, config editable, roster,
+  retry y navegación implementados.
+- **Exit criteria:** nueva sesión jugable en la misma Room; sesiones y
+  resultados previos siguen inmutables y scoped a su roster.
 - **Depends on:** 15 y decisiones postgame indicadas abajo.
 - **Does not depend on:** cambios al lifecycle Impostor.
 
@@ -767,7 +776,7 @@ validación previa a cualquier aplicación remota, no una decisión de producto.
 | Reglas de desafío social | Confirmadas e implementadas en 12 | 0–11 |
 | Autoridad de avance a ronda siguiente | 14 si requiere acción de usuario | 0–13 |
 | Acceso a resultado final tras salir y presentación mínima postgame | 15 en el read model/UX respectivo | 0–14 |
-| Quién inicia revancha, preselección de configuración, salida entre partidas y lobby postgame | 16 | 0–15 |
+| Quién inicia revancha, borrador editable, roster entre partidas y lobby postgame | Resuelto en 16 | 0–15 |
 
 La política de sucesión en `playing` está **CONFIRMED** y ya no bloquea 5 ni
 el guard requerido por 7. Persisten las dependencias técnicas: 5 necesita 4,

@@ -103,13 +103,14 @@ describe("Tutti Frutti game RPC adapter", () => {
       message: TUTTI_FRUTTI_START_ERROR_MESSAGES.P0037,
       code: "P0037"
     });
-    const finished = {
-      rpc: vi.fn().mockResolvedValue({ data: null, error: { code: "P0055", message: "raw" } })
+    const inconsistent = {
+      rpc: vi.fn().mockResolvedValue({ data: null, error: { code: "P0056", message: "raw" } })
     } as unknown as TuttiFruttiGameClient;
-    await expect(startTuttiFruttiSession(finished, "room-1")).rejects.toMatchObject({
-      message: TUTTI_FRUTTI_START_ERROR_MESSAGES.P0055,
-      code: "P0055"
+    await expect(startTuttiFruttiSession(inconsistent, "room-1")).rejects.toMatchObject({
+      message: TUTTI_FRUTTI_START_ERROR_MESSAGES.P0056,
+      code: "P0056"
     });
+    expect(TUTTI_FRUTTI_START_ERROR_MESSAGES).not.toHaveProperty("P0055");
   });
 
   it("maps stale-candidate and letter-reserve errors without exposing database text", async () => {

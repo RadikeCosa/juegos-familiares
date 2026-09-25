@@ -156,20 +156,26 @@ export function TuttiFruttiLobbyContent(options: {
             <p aria-live="polite">Comprobando el estado de la partida…</p>
           ) : postgameError ? (
             <p role="alert">{postgameError}</p>
-          ) : postgame ? (
-            <p>La partida terminó. Podés permanecer en la sala, salir o cerrarla si sos host.</p>
           ) : isHost ? (
             <>
-              <p>{enoughPlayers ? "La sala está lista para empezar." : "Se necesitan al menos dos participantes para iniciar."}</p>
+              <p>{postgame
+                ? enoughPlayers
+                  ? "La partida anterior terminó. Podés editar la configuración e iniciar una nueva."
+                  : "La partida anterior terminó. Se necesitan al menos dos participantes para iniciar otra."
+                : enoughPlayers
+                  ? "La sala está lista para empezar."
+                  : "Se necesitan al menos dos participantes para iniciar."}</p>
               <button
                 className="impostor-action impostor-action--primary"
                 type="button"
                 disabled={busy || starting || !enoughPlayers || connection !== "online"}
                 onClick={onStart}
               >
-                {starting ? "Iniciando partida…" : "Iniciar partida"}
+                {starting ? "Iniciando partida…" : postgame ? "Nueva partida" : "Iniciar partida"}
               </button>
             </>
+          ) : postgame ? (
+            <p>La partida anterior terminó. Esperando a que el anfitrión configure e inicie otra.</p>
           ) : <p>Esperando a que el anfitrión inicie la partida.</p>}
         </>
       ) : (
@@ -961,7 +967,7 @@ export function TuttiFruttiRoomEntry({ code, postgameSessionId = null }: {
   const postgameLoading = isLobby && (!postgameForRoom || postgameForRoom.status === "loading");
   const postgameError = postgameForRoom?.status === "error" ? postgameForRoom.message : null;
   const postgameBlocksSetup = isLobby
-    && (postgameLoading || Boolean(postgameError) || hasFinishedSession);
+    && (postgameLoading || Boolean(postgameError));
 
   return (
     <>
