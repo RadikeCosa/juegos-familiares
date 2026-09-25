@@ -171,7 +171,18 @@ product decision, not an implied result of multi-session Rooms.
    result. Round and game totals are derived in one grouped read joining the
    frozen roster and categories, so absent answers remain visible as zero.
    The round enters `RESULT` atomically with scoring.
-11. When the configured number of rounds has been scored, mark the session
+11. From the latest scored `RESULT`, only the current Room host may advance
+   while configured rounds remain. Lock Room → shared session → Tutti Frutti
+   session → latest round; create the consecutive round and a letter not
+   selected, accepted, or skipped earlier in the same transaction. The latest
+   round is the one with greatest `round_number`. An immediate retry using the
+   previous scored round returns its unique unscored successor; older bases
+   fail. Roster and categories remain frozen, and result reads include scores
+   only through their requested round. On unexpected pool exhaustion, roll
+   back and keep the host on `RESULT` with an error. Reuse the roster-filtered
+   result invalidation signal; refresh and reconnection rebuild state through
+   authorized reads, with periodic recovery while on `RESULT`.
+12. When the configured number of rounds has been scored, mark the session
    finished and immutable, detach it as the active session, and return its
    Room from `playing` to `lobby` in one transaction. Retain finished results
    for authorized session participants and create a new session for a rematch.

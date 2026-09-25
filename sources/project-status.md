@@ -208,6 +208,16 @@ preexistente. No se completó un smoke visual manual con dos sesiones aisladas.
 Los fixtures locales del validador se conservaron; no se reinició ni limpió la
 DB. No se aplicó remotamente y la baseline productiva no cambió.
 
+El Incremento 14 se implementa en `codex/tutti-frutti-increment-14`. Agrega
+avance host-only desde `RESULT`, selecciona la ronda vigente por número,
+preserva resultados históricos y usa el invalidation signal existente para
+recuperación. La migration y los validadores DB de los incrementos 12, 13 y 14
+pasaron en Supabase local. Pasaron los 783 tests de aplicación, TypeScript y
+build con Webpack; lint no reporta errores y conserva una advertencia
+preexistente. El smoke visual manual con dos sesiones móviles y un canal
+Realtime interrumpido está pendiente. No se reinició ni limpió la DB local; no
+hubo cambios remotos y la baseline productiva no cambió.
+
 Only observations confirmed against the current product should become active
 improvement work. Historical UX findings are evidence to revalidate, not an
 automatic backlog. No additional detailed post-beta UX/UI backlog is established

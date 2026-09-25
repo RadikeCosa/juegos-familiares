@@ -3,10 +3,16 @@
 import type { TuttiFruttiRoundResult } from "../../../../lib/supabase/tutti-frutti-result";
 
 export function TuttiFruttiRoundResultView({
-  result, currentPlayerId
+  result, currentPlayerId, isHost, canAdvance, advancing, advanceError, connection, onAdvance
 }: {
   result: TuttiFruttiRoundResult;
   currentPlayerId: string;
+  isHost: boolean;
+  canAdvance: boolean;
+  advancing: boolean;
+  advanceError: string | null;
+  connection: "online" | "offline" | "reconnecting";
+  onAdvance: () => void;
 }) {
   return (
     <section className="tutti-review" aria-labelledby="tutti-result-title">
@@ -33,6 +39,15 @@ export function TuttiFruttiRoundResultView({
           </ul>
         </section>
       ))}
+      {isHost && canAdvance ? (
+        <div>
+          {advanceError ? <p role="alert">{advanceError}</p> : null}
+          <button className="impostor-action impostor-action--primary" type="button"
+            disabled={advancing || connection !== "online"} onClick={onAdvance}>
+            {advancing ? "Preparando ronda…" : "Siguiente ronda"}
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

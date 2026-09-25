@@ -1196,6 +1196,20 @@ the existing Impostor schema.
 
 ---
 
+## Host Advances to the Next Round
+
+**CONFIRMED:** after a scored round, the current Room host advances to the
+next configured round. The server chooses a letter not previously selected,
+accepted, or skipped in that session; categories and frozen roster do not
+change. One transaction creates the consecutive round and its pending letter
+candidate. The current round is the greatest round number. A retry against the
+latest scored round returns its single unscored successor; an older base is
+rejected. The round result total includes scores only through that round, so a
+previous result remains historically stable. If the pool is unexpectedly
+empty, the advance fails without a partial round and the host stays on the
+result screen with an error. The final-round result has no next-round action;
+finalization belongs to Increment 15.
+
 # 45. Finished Session Returns the Same Room to Lobby
 
 ## Context

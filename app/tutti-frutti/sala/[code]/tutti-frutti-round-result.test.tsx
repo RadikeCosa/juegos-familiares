@@ -20,12 +20,29 @@ const result: TuttiFruttiRoundResult = {
 describe("Tutti Frutti round result", () => {
   it("explains awarded points and keeps participants with no saved answer visible", () => {
     const markup = renderToStaticMarkup(createElement(TuttiFruttiRoundResultView, {
-      result, currentPlayerId: "b"
+      result, currentPlayerId: "b", isHost: false, canAdvance: true, advancing: false,
+      advanceError: null, connection: "online", onAdvance: () => {}
     }));
     expect(markup).toContain("Resultado de la ronda 1");
     expect(markup).toContain("+10 puntos · 20 acumulados");
     expect(markup).toContain("Mono");
     expect(markup).toContain("Sin respuesta · 0 puntos");
     expect(markup).toContain("(vos)");
+    expect(markup).not.toContain("Siguiente ronda");
+  });
+
+  it("offers next round only to the host before the final round and shows advance errors", () => {
+    const render = (options: { isHost: boolean; canAdvance: boolean; connection: "online" | "offline" | "reconnecting" }) =>
+      renderToStaticMarkup(createElement(TuttiFruttiRoundResultView, {
+        result, currentPlayerId: "a", advancing: false, advanceError: "No quedan letras disponibles.",
+        onAdvance: () => {}, ...options
+      }));
+    const host = render({ isHost: true, canAdvance: true, connection: "online" });
+    expect(host).toContain("Siguiente ronda");
+    expect(host).toContain("No quedan letras disponibles.");
+    const offline = render({ isHost: true, canAdvance: true, connection: "offline" });
+    expect(offline).toMatch(/disabled=""[^>]*>Siguiente ronda/);
+    expect(render({ isHost: true, canAdvance: false, connection: "online" })).not.toContain("Siguiente ronda");
+    expect(render({ isHost: false, canAdvance: true, connection: "online" })).not.toContain("Siguiente ronda");
   });
 });

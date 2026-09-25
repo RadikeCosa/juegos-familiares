@@ -648,6 +648,14 @@ The host can then advance.
 
 # 24. Next Round
 
+After a scored round, the current Room host sees **Siguiente ronda** only when
+more configured rounds remain. The next round reuses the frozen categories and
+roster and starts with a letter that has not appeared as played or skipped.
+Every client reconstructs the new `LETTER_PENDING` state from the server after
+the existing roster-filtered result invalidation, refresh, or reconnection. If
+no unused letter is available, the host stays on the result screen and sees an
+error. The final round has no next-round action.
+
 If rounds remain:
 
 ```text

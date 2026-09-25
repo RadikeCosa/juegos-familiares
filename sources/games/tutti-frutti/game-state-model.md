@@ -726,6 +726,14 @@ No further answer or challenge mutation is allowed.
 
 # 27. Next Round Transition
 
+The current Room host may advance only from the latest scored `RESULT` while
+configured rounds remain. The server locks Room → shared session → Tutti
+Frutti session → current round, creates the consecutive round and one unused
+letter candidate atomically, and signals the roster through the existing
+result invalidation row. A retry with the immediately previous scored round
+returns the unscored successor; an older base is rejected. Recovery reads and
+letter-skip voting target the round with the greatest number in the session.
+
 If:
 
 ```text

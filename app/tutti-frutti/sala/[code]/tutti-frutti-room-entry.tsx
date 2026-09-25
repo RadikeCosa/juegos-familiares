@@ -15,6 +15,7 @@ import {
   callTuttiFrutti,
   getTuttiFruttiGameState,
   startTuttiFruttiSession,
+  advanceTuttiFruttiRound,
   submitTuttiFruttiLetterSkipVote,
   type TuttiFruttiGameClient,
   type TuttiFruttiStartedGame
@@ -91,6 +92,9 @@ export function TuttiFruttiLobbyContent(options: {
   challengeError?: string | null;
   resultState?: ResultState | null;
   scoring?: boolean;
+  advancing?: boolean;
+  advanceError?: string | null;
+  onAdvance?: () => void;
   game: TuttiFruttiStartedGame | null;
   gameError: string | null;
   actionError: string | null;
@@ -108,10 +112,10 @@ export function TuttiFruttiLobbyContent(options: {
   const { lobby, connected, connection, busy, starting, voting, skipSeconds, countdownSeconds = 45,
     callReady = false, calling = false, unconfirmedAnswers = false, reviewState = null,
     challengeSeconds = 0, challengeBusy = false, challengeError = null,
-    resultState = null, scoring = false,
+    resultState = null, scoring = false, advancing = false, advanceError = null,
     game, gameError, actionError, onStart, onSkipVote, onCall = () => {},
     onAnswerSaveState = () => {}, onRetryReview = () => {}, onOpenChallenge = () => {},
-    onVoteChallenge = () => {}, onScore = () => {}, onRetryResult = () => {}, onExit } = options;
+    onVoteChallenge = () => {}, onScore = () => {}, onRetryResult = () => {}, onAdvance = () => {}, onExit } = options;
   const isHost = lobby.participants.some((participant) => participant.isSelf && participant.isHost);
   const selfPlayerId = lobby.participants.find((participant) => participant.isSelf)?.playerId;
   const enoughPlayers = lobby.participants.length >= 2;
@@ -240,7 +244,9 @@ export function TuttiFruttiLobbyContent(options: {
               ) : game.round.phase === "RESULT" ? (
                 resultState?.status === "ready" && resultState.sessionId === game.sessionId
                   && resultState.roundNumber === game.round.number ? (
-                    <TuttiFruttiRoundResultView result={resultState.result} currentPlayerId={selfPlayerId ?? ""} />
+                    <TuttiFruttiRoundResultView result={resultState.result} currentPlayerId={selfPlayerId ?? ""}
+                      isHost={isHost} canAdvance={game.round.number < game.roundCount}
+                      advancing={advancing} advanceError={advanceError} connection={connection} onAdvance={onAdvance} />
                   ) : resultState?.status === "error" ? (
                     <div role="alert"><p>{resultState.message}</p>
                       <button type="button" className="impostor-action" onClick={onRetryResult}
@@ -277,6 +283,8 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const [resultState, setResultState] = useState<ResultState | null>(null);
   const [scoring, setScoring] = useState(false);
   const [scoreError, setScoreError] = useState<string | null>(null);
+  const [advancing, setAdvancing] = useState(false);
+  const [advanceError, setAdvanceError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [votingCandidateId, setVotingCandidateId] = useState<string | null>(null);
   const [skipSeconds, setSkipSeconds] = useState(5);
@@ -292,6 +300,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const callInFlight = useRef(false);
   const challengeInFlight = useRef(false);
   const scoreInFlight = useRef(false);
+  const advanceInFlight = useRef(false);
   const requestSequence = useRef(0);
   const setupRequestSequence = useRef(0);
   const gameRequestSequence = useRef(0);
@@ -458,6 +467,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const gamePhase = game?.round.phase;
   const gameSessionId = game?.sessionId;
   const gameRoundNumber = game?.round.number;
+  useEffect(() => { setAdvanceError(null); }, [gameSessionId, gameRoundNumber]);
 
   const openChallenge = useCallback(async (playerId: string, categoryPosition: number) => {
     if (!roomId || challengeInFlight.current || connection !== "online") return;
@@ -498,6 +508,29 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
       setChallengeBusy(false);
     }
   }, [roomId, connection, gameSessionId, gameRoundNumber, refreshReview]);
+
+  async function advanceRound() {
+    if (!roomId || !game || game.round.phase !== "RESULT" || game.round.number >= game.roundCount
+      || advanceInFlight.current || connection !== "online") return;
+    advanceInFlight.current = true;
+    setAdvancing(true);
+    setAdvanceError(null);
+    try {
+      const snapshot = await advanceTuttiFruttiRound(
+        createBrowserSupabaseClient() as unknown as TuttiFruttiGameClient, roomId, game.round.id
+      );
+      gameRequestSequence.current += 1;
+      setGame(snapshot);
+      setGameError(null);
+      setResultState(null);
+    } catch (error) {
+      setAdvanceError(error instanceof Error ? error.message : "No pudimos preparar la siguiente ronda.");
+      await refreshGame(roomId);
+    } finally {
+      advanceInFlight.current = false;
+      setAdvancing(false);
+    }
+  }
 
   async function scoreRound() {
     if (!roomId || !gameSessionId || !gameRoundNumber || reviewState?.status !== "ready"
@@ -564,6 +597,12 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
     });
     return () => { void subscription.unsubscribe(); };
   }, [roomId, gamePhase, gameSessionId, gameRoundNumber, refreshGame, refreshResult]);
+
+  useEffect(() => {
+    if (!roomId || gamePhase !== "RESULT" || connection !== "online") return;
+    const interval = window.setInterval(() => { void refreshGame(roomId); }, 15_000);
+    return () => window.clearInterval(interval);
+  }, [roomId, gamePhase, connection, refreshGame]);
 
   const activeChallenge = reviewState?.status === "ready" ? reviewState.review.activeChallenge : null;
   const activeChallengeId = activeChallenge?.id;
@@ -880,6 +919,9 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         resultState={resultState?.sessionId === game?.sessionId && resultState?.roundNumber === game?.round.number
           ? resultState : null}
         scoring={scoring}
+        advancing={advancing}
+        advanceError={advanceError}
+        onAdvance={() => { void advanceRound(); }}
         game={game}
         gameError={gameError}
         actionError={actionError}

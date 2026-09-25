@@ -20,6 +20,7 @@ export type TuttiFruttiStartedGame = {
   categories: TuttiFruttiGameCategory[];
   participants: TuttiFruttiGameParticipant[];
   round: {
+    id: string;
     number: number;
     phase: "LETTER_PENDING" | "PLAYING" | "FINAL_COUNTDOWN" | "REVIEWING" | "RESULT";
     letter: string;
@@ -46,15 +47,19 @@ export const TUTTI_FRUTTI_GAME_ERROR_MESSAGES: Record<string, string> = {
   P0038: "No pudimos preparar la partida. Revisá la configuración e intentá de nuevo.",
   P0039: "La letra cambió en otro dispositivo. Actualizamos la partida.",
   P0040: "No se puede saltar esta letra y conservar las rondas restantes.",
-  P0044: "Completá y guardá todas las categorías antes de llamar Tutti Frutti."
+  P0044: "Completá y guardá todas las categorías antes de llamar Tutti Frutti.",
+  P0051: "No quedan letras disponibles para otra ronda.",
+  P0052: "La partida ya llegó a su última ronda.",
+  P0053: "Solo el anfitrión puede avanzar a la siguiente ronda.",
+  P0054: "La ronda cambió en otro dispositivo. Actualizamos la partida."
 };
 export const TUTTI_FRUTTI_START_ERROR_MESSAGES = TUTTI_FRUTTI_GAME_ERROR_MESSAGES;
 
 type RpcResult = { data: unknown; error: unknown };
 export type TuttiFruttiGameClient = {
   rpc: (
-    fn: "get_tutti_frutti_game_state" | "start_tutti_frutti_session" | "submit_tutti_frutti_letter_skip_vote" | "call_tutti_frutti",
-    params: { target_room_id: string; target_candidate_id?: string }
+    fn: "get_tutti_frutti_game_state" | "start_tutti_frutti_session" | "submit_tutti_frutti_letter_skip_vote" | "call_tutti_frutti" | "advance_tutti_frutti_round",
+    params: { target_room_id: string; target_candidate_id?: string; target_base_round_id?: string }
   ) => PromiseLike<RpcResult>;
 };
 
@@ -88,6 +93,7 @@ function parseStartedGame(value: unknown): TuttiFruttiStartedGame {
     || typeof game.round !== "object"
     || game.round === null
     || !["LETTER_PENDING", "PLAYING", "FINAL_COUNTDOWN", "REVIEWING", "RESULT"].includes(game.round.phase ?? "")
+    || typeof game.round.id !== "string"
     || !Number.isInteger(game.round.number)
     || typeof game.round.letter !== "string"
     || !/^[A-Z]$/.test(game.round.letter)
@@ -123,13 +129,15 @@ function parseStartedGame(value: unknown): TuttiFruttiStartedGame {
 
 async function callGameRpc(
   client: TuttiFruttiGameClient,
-  fn: "get_tutti_frutti_game_state" | "start_tutti_frutti_session" | "submit_tutti_frutti_letter_skip_vote" | "call_tutti_frutti",
+  fn: "get_tutti_frutti_game_state" | "start_tutti_frutti_session" | "submit_tutti_frutti_letter_skip_vote" | "call_tutti_frutti" | "advance_tutti_frutti_round",
   roomId: string,
-  candidateId?: string
+  candidateId?: string,
+  baseRoundId?: string
 ): Promise<TuttiFruttiStartedGame> {
   const { data, error } = await client.rpc(fn, {
     target_room_id: roomId,
-    ...(candidateId ? { target_candidate_id: candidateId } : {})
+    ...(candidateId ? { target_candidate_id: candidateId } : {}),
+    ...(baseRoundId ? { target_base_round_id: baseRoundId } : {})
   });
   if (error) throw operationError(error);
   return parseStartedGame(data);
@@ -153,4 +161,8 @@ export function submitTuttiFruttiLetterSkipVote(
   candidateId: string
 ) {
   return callGameRpc(client, "submit_tutti_frutti_letter_skip_vote", roomId, candidateId);
+}
+
+export function advanceTuttiFruttiRound(client: TuttiFruttiGameClient, roomId: string, baseRoundId: string) {
+  return callGameRpc(client, "advance_tutti_frutti_round", roomId, undefined, baseRoundId);
 }

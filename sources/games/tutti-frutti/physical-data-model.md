@@ -112,6 +112,12 @@ added after backfill. No historical migration is rewritten.
 
 ## Tutti Frutti entities and candidates
 
+Increment 14 locally implements advancement from a scored round with an
+atomic next-round and unused-letter candidate insert. The shared game-state
+read and skip-vote RPC select the greatest round number; the read includes its
+round ID for authorized advance intent. Result totals stop at the round being
+read.
+
 Increment 6 implements `tutti_frutti_room_setup` locally as one Room-scoped
 JSONB row, with atomic replacement, host-only writes in `lobby`, member reads,
 and defaults returned without persisting a row. Increment 7 adds the session,

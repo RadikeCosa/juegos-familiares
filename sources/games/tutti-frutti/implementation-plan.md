@@ -106,7 +106,7 @@ revalidan contra las migrations y datos del destino antes de ejecutarse.
 2, 7–16 → 17 recuperación y cierre MVP
 ```
 
-Los Incrementos 0–12 están integrados en el `main` local al cerrar esta entrega;
+Los Incrementos 0–13 están integrados en el `main` local antes de este corte;
 sus migrations y validadores se ejecutaron sólo en Supabase local. La política
 de sucesión en `playing` está implementada en el
 código del 5, pero falta verificar la definición desplegada antes de atribuirla
@@ -573,9 +573,8 @@ para preservarlos. El Cron fue comprobado localmente, no en un destino real.
 
 ### 13. Puntuación inmutable de ronda
 
-**Estado de implementación:** implementado en `codex/tutti-frutti-increment-13`.
-La migration y el validador DB pasaron en Supabase local; la integración a
-`main` no forma parte de este cambio.
+**Estado de implementación:** integrado en el `main` local; ver
+`sources/project-status.md` para las validaciones y límites de entorno.
 
 - **Goal:** calcular 10/5/0 después de resolver desafíos y ofrecer totales
   reproducibles sin doble adjudicación.
@@ -608,27 +607,35 @@ La migration y el validador DB pasaron en Supabase local; la integración a
 
 ### 14. Siguiente ronda y agotamiento de letras
 
-- **Goal:** continuar hasta la cantidad configurada con mismo snapshot de
-  categorías y una letra nueva no usada.
-- **Scope:** desde resultado de ronda, crear siguiente número/candidata;
-  mantener letras jugadas y saltadas excluidas.
-- **Explicitly out of scope:** resultado final y revancha.
-- **Likely files / areas:** RPC de avance, rondas/candidatas, UI de transición.
-- **Database impact:** unicidad número y letra por sesión; guard de máximo
-  configurado y pool suficiente.
-- **Application impact:** navegación/loader reanuda ronda actual.
-- **Security requirements:** avance autorizado por regla acordada; cliente
-  no elige letra ni altera snapshot.
-- **Concurrency / idempotency:** dos avances crean una sola ronda; no saltar
-  número ni duplicar letra.
-- **Automated verification:** dos rondas, categorías iguales, letra no
-  repetida, pool insuficiente y carrera de avance.
-- **Manual smoke:** completar una ronda, iniciar otra y recargar; no cambia
-  configuración ni historial.
-- **Documentation update:** autoridad de avance si se define al implementar.
-- **Exit criteria:** segunda ronda jugable y primera inmutable.
-- **Depends on:** 13 y decisión de autoridad de avance si UI la requiere.
-- **Does not depend on:** retorno lobby/rematch.
+- **Goal:** continuar con el mismo snapshot de categorías y roster, y una
+  letra distinta de las jugadas o saltadas.
+- **Scope:** el host actual avanza desde `RESULT`; la RPC bloquea Room → sesión
+  compartida → sesión Tutti Frutti → ronda y crea ronda/candidata atómicamente.
+  La vigente es la de mayor número. Un reintento con la última ronda puntuada
+  devuelve su sucesora única sin puntuar; bases anteriores se rechazan.
+- **Explicitly out of scope:** resultado final, retorno al lobby e historial
+  navegable.
+- **Database impact:** se reemplazan lecturas y voto de letra que apuntaban a
+  ronda 1; la lectura expone el ID de ronda, limita acumulados históricos a la
+  ronda consultada y usa la señal existente para invalidar. Se valida máximo,
+  agotamiento y unicidad del número y la letra.
+- **Application impact:** el host ve «Siguiente ronda» sólo antes de la final.
+  Falta de letras deja `RESULT` y muestra un error; el refresco periódico cubre
+  señales Realtime perdidas.
+- **Security requirements:** actor desde `auth.uid()`, host actual y roster
+  verificados; grants cerrados y cliente sin escritura directa.
+- **Concurrency / idempotency:** locks preceden lectura e insert; la sucesora
+  inmediata no puntuada define el reintento. Constraints únicas protegen
+  número y letra.
+- **Automated verification:** carrera/reintento, base antigua, fase/rol/roster,
+  agotamiento sin fila parcial, número consecutivo, letra única, recuperación y
+  voto en ronda 2, acumulado histórico y última ronda.
+- **Manual smoke:** dos sesiones aisladas, avance y señal; repetir con canal
+  interrumpido y recuperar por refresh/reconexión.
+- **Exit criteria:** siguiente ronda jugable; ronda anterior y su acumulado
+  permanecen inmutables.
+- **Depends on:** 13.
+- **Does not depend on:** resultado final ni revancha.
 
 ### 15. Resultado final y retorno a lobby
 
