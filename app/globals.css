@@ -1049,6 +1049,31 @@ body {
   box-shadow: var(--shadow-soft);
 }
 
+.tutti-letter-decision {
+  display: grid;
+  width: min(100%, 30rem);
+  gap: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: var(--space-4);
+}
+
+.tutti-letter-decision h3,
+.tutti-letter-decision p {
+  margin: 0;
+}
+
+.tutti-letter-decision p {
+  color: var(--foreground-muted);
+  line-height: 1.5;
+}
+
+.tutti-letter-decision .impostor-action {
+  width: 100%;
+  min-height: 2.875rem;
+}
+
 @media (min-width: 30rem) {
   .tutti-setup__preset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -14,6 +14,7 @@ import {
 import {
   getTuttiFruttiGameState,
   startTuttiFruttiSession,
+  submitTuttiFruttiLetterSkipVote,
   type TuttiFruttiGameClient,
   type TuttiFruttiStartedGame
 } from "../../../../lib/supabase/tutti-frutti-game";
@@ -58,13 +59,16 @@ export function TuttiFruttiLobbyContent(options: {
   connection: "online" | "offline" | "reconnecting";
   busy: boolean;
   starting: boolean;
+  voting: boolean;
+  skipSeconds: number;
   game: TuttiFruttiStartedGame | null;
   gameError: string | null;
   actionError: string | null;
   onStart: () => void;
+  onSkipVote: (candidateId: string) => void;
   onExit: (asHost: boolean) => void;
 }) {
-  const { lobby, connected, connection, busy, starting, game, gameError, actionError, onStart, onExit } = options;
+  const { lobby, connected, connection, busy, starting, voting, skipSeconds, game, gameError, actionError, onStart, onSkipVote, onExit } = options;
   const isHost = lobby.participants.some((participant) => participant.isSelf && participant.isHost);
   const enoughPlayers = lobby.participants.length >= 2;
   return (
@@ -113,6 +117,31 @@ export function TuttiFruttiLobbyContent(options: {
               <p>Letra preparada</p>
               <p aria-label={`Letra ${game.round.letter}`} className="tutti-game-letter">{game.round.letter}</p>
               <p>Categorías: {game.categories.map((category) => category.label).join(", ")}</p>
+              {game.round.phase === "LETTER_PENDING" && game.round.letterDecision ? (
+                <section className="tutti-letter-decision" aria-labelledby="tutti-letter-decision-title">
+                  <h3 id="tutti-letter-decision-title">¿Saltamos esta letra?</h3>
+                  <p aria-live="polite">
+                    Votos para saltar: {game.round.letterDecision.votes} de {game.round.letterDecision.votesRequired} necesarios.
+                  </p>
+                  <p role="timer" aria-label={`La decisión se cierra en aproximadamente ${skipSeconds} segundos`}>
+                    La letra se acepta en {skipSeconds} {skipSeconds === 1 ? "segundo" : "segundos"} si no se alcanza la mayoría.
+                  </p>
+                  {game.round.letterDecision.canSkip ? (
+                    <button
+                      className="impostor-action impostor-action--primary"
+                      type="button"
+                      disabled={voting || game.round.letterDecision.hasVoted || connection !== "online"}
+                      onClick={() => onSkipVote(game.round.letterDecision!.candidateId)}
+                    >
+                      {voting ? "Registrando voto…" : game.round.letterDecision.hasVoted ? "Voto registrado" : "Votar para saltarla"}
+                    </button>
+                  ) : (
+                    <p>Esta letra se necesita para completar las rondas restantes y no se puede saltar.</p>
+                  )}
+                </section>
+              ) : game.round.phase === "PLAYING" ? (
+                <p role="status">Letra confirmada. La ronda está lista.</p>
+              ) : null}
             </>
           ) : <p aria-live="polite">Recuperando la partida…</p>}
           {gameError ? <p role="alert">{gameError}</p> : null}
@@ -137,13 +166,17 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const [game, setGame] = useState<TuttiFruttiStartedGame | null>(null);
   const [gameError, setGameError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [votingCandidateId, setVotingCandidateId] = useState<string | null>(null);
+  const [skipSeconds, setSkipSeconds] = useState(5);
   const [busy, setBusy] = useState(false);
   const [connection, setConnection] = useState<"online" | "offline" | "reconnecting">("online");
   const [setupState, setSetupState] = useState<SetupState | null>(null);
   const actionInFlight = useRef(false);
+  const skipVoteInFlight = useRef(false);
   const requestSequence = useRef(0);
   const setupRequestSequence = useRef(0);
   const gameRequestSequence = useRef(0);
+  const serverOffsetMs = useRef(0);
   const roomPresenceRef = useRef<RoomPresenceSubscription | null>(null);
   const normalizedCode = normalizeRoomJoinCode(code);
 
@@ -197,6 +230,7 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         roomId
       );
       if (request === gameRequestSequence.current) {
+        serverOffsetMs.current = Date.parse(snapshot.serverNow) - Date.now();
         setGame(snapshot);
         setGameError(null);
       }
@@ -273,6 +307,26 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
     };
   }, [refresh]);
 
+  const pendingCandidateId = game?.round.phase === "LETTER_PENDING"
+    ? game.round.letterDecision?.candidateId ?? null
+    : null;
+  const pendingDeadline = pendingCandidateId && game?.round.letterDecision
+    ? game.round.letterDecision.deadlineAt
+    : null;
+
+  useEffect(() => {
+    if (!roomId || !pendingCandidateId || !pendingDeadline || connection !== "online") return;
+    const serverTimeOffset = serverOffsetMs.current;
+    const updateAndRefresh = () => {
+      const remainingMs = Date.parse(pendingDeadline) - (Date.now() + serverTimeOffset);
+      setSkipSeconds(Math.max(0, Math.ceil(remainingMs / 1000)));
+      void refreshGame(roomId);
+    };
+    updateAndRefresh();
+    const interval = window.setInterval(updateAndRefresh, 1_000);
+    return () => window.clearInterval(interval);
+  }, [roomId, pendingCandidateId, pendingDeadline, connection, refreshGame]);
+
   useEffect(() => {
     if (!roomId || !selfPlayerId) return;
     const client = createBrowserSupabaseClient();
@@ -334,6 +388,32 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
       await refresh();
     } finally {
       setStarting(false);
+    }
+  }
+
+  async function voteToSkip(candidateId: string) {
+    const roomId = lobby?.room.id;
+    if (!roomId || skipVoteInFlight.current || connection !== "online") return;
+    skipVoteInFlight.current = true;
+    setVotingCandidateId(candidateId);
+    setActionError(null);
+    try {
+      const snapshot = await submitTuttiFruttiLetterSkipVote(
+        createBrowserSupabaseClient() as unknown as TuttiFruttiGameClient,
+        roomId,
+        candidateId
+      );
+      gameRequestSequence.current += 1;
+      serverOffsetMs.current = Date.parse(snapshot.serverNow) - Date.now();
+      setGame(snapshot);
+      setGameError(null);
+      await refreshGame(roomId);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "No pudimos registrar el voto.");
+      await refreshGame(roomId);
+    } finally {
+      skipVoteInFlight.current = false;
+      setVotingCandidateId(null);
     }
   }
 
@@ -423,10 +503,13 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         connection={connection}
         busy={busy}
         starting={starting}
+        voting={votingCandidateId !== null}
+        skipSeconds={skipSeconds}
         game={game}
         gameError={gameError}
         actionError={actionError}
         onStart={() => { void startGame(); }}
+        onSkipVote={(candidateId) => { void voteToSkip(candidateId); }}
         onExit={(asHost) => { void exitRoom(asHost); }}
       />
       {setupForRoom?.status === "loading" ? <p aria-live="polite">Recuperando configuración…</p> : null}
