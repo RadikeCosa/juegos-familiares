@@ -21,8 +21,11 @@ export type TuttiFruttiStartedGame = {
   participants: TuttiFruttiGameParticipant[];
   round: {
     number: number;
-    phase: "LETTER_PENDING" | "PLAYING";
+    phase: "LETTER_PENDING" | "PLAYING" | "FINAL_COUNTDOWN" | "REVIEWING";
     letter: string;
+    countdownEndsAt: string | null;
+    calledByPlayerId: string | null;
+    lockedAt: string | null;
     letterDecision: {
       candidateId: string;
       deadlineAt: string;
@@ -42,14 +45,15 @@ export const TUTTI_FRUTTI_GAME_ERROR_MESSAGES: Record<string, string> = {
   P0037: "Se necesitan al menos dos participantes para iniciar.",
   P0038: "No pudimos preparar la partida. Revisá la configuración e intentá de nuevo.",
   P0039: "La letra cambió en otro dispositivo. Actualizamos la partida.",
-  P0040: "No se puede saltar esta letra y conservar las rondas restantes."
+  P0040: "No se puede saltar esta letra y conservar las rondas restantes.",
+  P0044: "Completá y guardá todas las categorías antes de llamar Tutti Frutti."
 };
 export const TUTTI_FRUTTI_START_ERROR_MESSAGES = TUTTI_FRUTTI_GAME_ERROR_MESSAGES;
 
 type RpcResult = { data: unknown; error: unknown };
 export type TuttiFruttiGameClient = {
   rpc: (
-    fn: "get_tutti_frutti_game_state" | "start_tutti_frutti_session" | "submit_tutti_frutti_letter_skip_vote",
+    fn: "get_tutti_frutti_game_state" | "start_tutti_frutti_session" | "submit_tutti_frutti_letter_skip_vote" | "call_tutti_frutti",
     params: { target_room_id: string; target_candidate_id?: string }
   ) => PromiseLike<RpcResult>;
 };
@@ -83,10 +87,13 @@ function parseStartedGame(value: unknown): TuttiFruttiStartedGame {
     || !Array.isArray(game.participants)
     || typeof game.round !== "object"
     || game.round === null
-    || !["LETTER_PENDING", "PLAYING"].includes(game.round.phase ?? "")
+    || !["LETTER_PENDING", "PLAYING", "FINAL_COUNTDOWN", "REVIEWING"].includes(game.round.phase ?? "")
     || !Number.isInteger(game.round.number)
     || typeof game.round.letter !== "string"
     || !/^[A-Z]$/.test(game.round.letter)
+    || (game.round.countdownEndsAt != null && (typeof game.round.countdownEndsAt !== "string" || Number.isNaN(Date.parse(game.round.countdownEndsAt))))
+    || (game.round.calledByPlayerId != null && typeof game.round.calledByPlayerId !== "string")
+    || (game.round.lockedAt != null && (typeof game.round.lockedAt !== "string" || Number.isNaN(Date.parse(game.round.lockedAt))))
   ) {
     throw new Error("No pudimos reconstruir la partida de Tutti Frutti.");
   }
@@ -101,12 +108,22 @@ function parseStartedGame(value: unknown): TuttiFruttiStartedGame {
   } else if (game.round.letterDecision !== null) {
     throw new Error("No pudimos reconstruir la partida de Tutti Frutti.");
   }
-  return game as TuttiFruttiStartedGame;
+  if ((game.round.phase === "FINAL_COUNTDOWN" || game.round.phase === "REVIEWING")
+    && (!game.round.countdownEndsAt || !game.round.calledByPlayerId
+      || game.round.phase === "REVIEWING" && !game.round.lockedAt)) {
+    throw new Error("No pudimos reconstruir la cuenta de Tutti Frutti.");
+  }
+  return { ...game, round: {
+    ...game.round,
+    countdownEndsAt: game.round.countdownEndsAt ?? null,
+    calledByPlayerId: game.round.calledByPlayerId ?? null,
+    lockedAt: game.round.lockedAt ?? null
+  } } as TuttiFruttiStartedGame;
 }
 
 async function callGameRpc(
   client: TuttiFruttiGameClient,
-  fn: "get_tutti_frutti_game_state" | "start_tutti_frutti_session" | "submit_tutti_frutti_letter_skip_vote",
+  fn: "get_tutti_frutti_game_state" | "start_tutti_frutti_session" | "submit_tutti_frutti_letter_skip_vote" | "call_tutti_frutti",
   roomId: string,
   candidateId?: string
 ): Promise<TuttiFruttiStartedGame> {
@@ -124,6 +141,10 @@ export function getTuttiFruttiGameState(client: TuttiFruttiGameClient, roomId: s
 
 export function startTuttiFruttiSession(client: TuttiFruttiGameClient, roomId: string) {
   return callGameRpc(client, "start_tutti_frutti_session", roomId);
+}
+
+export function callTuttiFrutti(client: TuttiFruttiGameClient, roomId: string) {
+  return callGameRpc(client, "call_tutti_frutti", roomId);
 }
 
 export function submitTuttiFruttiLetterSkipVote(

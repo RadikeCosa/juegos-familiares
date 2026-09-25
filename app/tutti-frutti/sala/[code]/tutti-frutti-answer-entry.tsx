@@ -56,7 +56,9 @@ export function TuttiFruttiAnswerEntry({
   playerId,
   roundNumber,
   categories,
-  connection
+  connection,
+  editable,
+  onSaveState
 }: {
   roomId: string;
   sessionId: string;
@@ -64,6 +66,8 @@ export function TuttiFruttiAnswerEntry({
   roundNumber: number;
   categories: TuttiFruttiGameCategory[];
   connection: ConnectionState;
+  editable: boolean;
+  onSaveState: (ready: boolean, unconfirmed: boolean) => void;
 }) {
   const [fields, setFields] = useState<AnswerFields>(() => emptyFields(categories));
   const [loaded, setLoaded] = useState(false);
@@ -77,6 +81,15 @@ export function TuttiFruttiAnswerEntry({
   const inFlightRef = useRef(new Set<number>());
   const queuedRef = useRef(new Set<number>());
   const readSequenceRef = useRef(0);
+
+  useEffect(() => {
+    const values = categories.map((category) => fields[category.position]);
+    onSaveState(
+      loaded && values.every((field) => field?.status === "saved" && !field.stale
+        && field.saved.normalize("NFC").trim().length > 0),
+      loaded && values.some((field) => field && (field.status !== "saved" || field.stale || field.draft !== field.saved))
+    );
+  }, [categories, fields, loaded, onSaveState]);
 
   const updateFields = useCallback((update: (current: AnswerFields) => AnswerFields) => {
     setFields((current) => {
@@ -162,7 +175,12 @@ export function TuttiFruttiAnswerEntry({
     };
   }, [playerId, refreshAnswers]);
 
+  useEffect(() => {
+    if (!editable) void refreshAnswers();
+  }, [editable, refreshAnswers]);
+
   saveRunnerRef.current = async (position: number) => {
+    if (!editable) return;
     if (inFlightRef.current.has(position)) {
       queuedRef.current.add(position);
       return;
@@ -227,6 +245,9 @@ export function TuttiFruttiAnswerEntry({
           }
         };
       });
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "P0042") {
+        void refreshAnswers();
+      }
     } finally {
       inFlightRef.current.delete(position);
       if (queuedRef.current.delete(position)) {
@@ -249,6 +270,7 @@ export function TuttiFruttiAnswerEntry({
   }
 
   function changeAnswer(position: number, value: string) {
+    if (!editable) return;
     const field = fieldsRef.current[position];
     if (!field) return;
     updateFields((current) => ({
@@ -292,7 +314,10 @@ export function TuttiFruttiAnswerEntry({
   return (
     <section className="tutti-answer-entry" aria-labelledby="tutti-answer-entry-title">
       <h2 id="tutti-answer-entry-title">Tus respuestas · Ronda {roundNumber}</h2>
-      <p>Solo vos podés ver tus respuestas durante la ronda. Se guardan automáticamente.</p>
+      <p>{editable ? "Solo vos podés ver tus respuestas durante la ronda. Se guardan automáticamente." : "La ronda ya no acepta respuestas."}</p>
+      {!editable && Object.values(fields).some((field) => field.status !== "saved" || field.stale || field.draft !== field.saved) ? (
+        <p role="alert">Algunas ediciones todavía no tienen confirmación de guardado.</p>
+      ) : null}
       {connection === "offline" ? <p className="tutti-answer-entry__offline" role="status">Sin conexión. Los cambios que no se guardaron quedan en esta pantalla hasta que vuelvas a conectarte.</p> : null}
       {!loaded && !loadError ? <p aria-live="polite">Recuperando tus respuestas…</p> : null}
       {loadError ? (
@@ -301,7 +326,25 @@ export function TuttiFruttiAnswerEntry({
           <button type="button" className="impostor-action" onClick={() => void refreshAnswers()} disabled={connection !== "online"}>Volver a intentar</button>
         </div>
       ) : null}
-      {loaded ? (
+      {loaded && !editable ? (
+        <div className="tutti-answer-entry__fields">
+          {categories.map((category) => {
+            const field = fields[category.position];
+            const confirmed = field?.stale ? field.remoteDraft : field?.saved;
+            const unconfirmed = field && (field.status !== "saved" || field.stale || field.draft !== field.saved);
+            return (
+              <div className="tutti-answer-field" key={category.position}>
+                <strong>{category.label}</strong>
+                <p>Guardado confirmado: {confirmed || "Sin respuesta"}</p>
+                {unconfirmed ? (
+                  <p role="status">Última edición sin confirmar: {field.draft || "Respuesta vacía"}</p>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+      {loaded && editable ? (
         <div className="tutti-answer-entry__fields">
           {categories.map((category) => {
             const field = fields[category.position];

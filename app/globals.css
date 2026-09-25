@@ -1161,6 +1161,33 @@ body {
   min-height: 2.875rem;
 }
 
+.tutti-countdown {
+  position: sticky;
+  top: var(--space-2);
+  z-index: 2;
+  display: grid;
+  gap: var(--space-1);
+  width: min(100%, 40rem);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-soft);
+}
+
+.tutti-countdown p {
+  margin: 0;
+}
+
+.tutti-countdown [role="timer"] {
+  color: var(--primary);
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(1.5rem, 7vw, 2.25rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
 .tutti-answer-entry {
   display: grid;
   width: min(100%, 40rem);

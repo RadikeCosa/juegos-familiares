@@ -12,6 +12,7 @@ import {
   type TuttiFruttiRoomSetupClient
 } from "../../../../lib/supabase/tutti-frutti-room-setup";
 import {
+  callTuttiFrutti,
   getTuttiFruttiGameState,
   startTuttiFruttiSession,
   submitTuttiFruttiLetterSkipVote,
@@ -62,14 +63,22 @@ export function TuttiFruttiLobbyContent(options: {
   starting: boolean;
   voting: boolean;
   skipSeconds: number;
+  countdownSeconds?: number;
+  callReady?: boolean;
+  calling?: boolean;
+  unconfirmedAnswers?: boolean;
   game: TuttiFruttiStartedGame | null;
   gameError: string | null;
   actionError: string | null;
   onStart: () => void;
   onSkipVote: (candidateId: string) => void;
+  onCall?: () => void;
+  onAnswerSaveState?: (ready: boolean, unconfirmed: boolean) => void;
   onExit: (asHost: boolean) => void;
 }) {
-  const { lobby, connected, connection, busy, starting, voting, skipSeconds, game, gameError, actionError, onStart, onSkipVote, onExit } = options;
+  const { lobby, connected, connection, busy, starting, voting, skipSeconds, countdownSeconds = 45,
+    callReady = false, calling = false, unconfirmedAnswers = false, game, gameError, actionError,
+    onStart, onSkipVote, onCall = () => {}, onAnswerSaveState = () => {}, onExit } = options;
   const isHost = lobby.participants.some((participant) => participant.isSelf && participant.isHost);
   const selfPlayerId = lobby.participants.find((participant) => participant.isSelf)?.playerId;
   const enoughPlayers = lobby.participants.length >= 2;
@@ -141,9 +150,16 @@ export function TuttiFruttiLobbyContent(options: {
                     <p>Esta letra se necesita para completar las rondas restantes y no se puede saltar.</p>
                   )}
                 </section>
-              ) : game.round.phase === "PLAYING" ? (
+              ) : ["PLAYING", "FINAL_COUNTDOWN", "REVIEWING"].includes(game.round.phase) ? (
                 <>
-                  <p role="status">Letra confirmada. La ronda está lista.</p>
+                  {game.round.phase === "PLAYING" ? (
+                    <p role="status">Letra confirmada. Completá y guardá todas las categorías para llamar Tutti Frutti.</p>
+                  ) : game.round.phase === "FINAL_COUNTDOWN" ? (
+                    <div className="tutti-countdown" role="status">
+                      <p>{game.participants.find((participant) => participant.playerId === game.round.calledByPlayerId)?.nickname ?? "Un participante"} llamó Tutti Frutti.</p>
+                      <p role="timer">{countdownSeconds > 0 ? `${countdownSeconds} segundos restantes` : "Cerrando respuestas…"}</p>
+                    </div>
+                  ) : <p role="status">Respuestas bloqueadas. Esperando la revisión.</p>}
                   {lobby.room.id && selfPlayerId ? (
                     <TuttiFruttiAnswerEntry
                       roomId={lobby.room.id}
@@ -152,7 +168,18 @@ export function TuttiFruttiLobbyContent(options: {
                       roundNumber={game.round.number}
                       categories={game.categories}
                       connection={connection}
+                      editable={game.round.phase === "PLAYING" || game.round.phase === "FINAL_COUNTDOWN" && countdownSeconds > 0}
+                      onSaveState={onAnswerSaveState}
                     />
+                  ) : null}
+                  {game.round.phase === "PLAYING" ? (
+                    <button className="impostor-action impostor-action--primary" type="button"
+                      disabled={!callReady || calling || connection !== "online"} onClick={onCall}>
+                      {calling ? "Iniciando cuenta…" : "Tutti Frutti"}
+                    </button>
+                  ) : null}
+                  {game.round.phase === "REVIEWING" && unconfirmedAnswers ? (
+                    <p role="alert">Alguna edición no alcanzó a guardarse antes del cierre.</p>
                   ) : null}
                 </>
               ) : null}
@@ -182,15 +209,24 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const [starting, setStarting] = useState(false);
   const [votingCandidateId, setVotingCandidateId] = useState<string | null>(null);
   const [skipSeconds, setSkipSeconds] = useState(5);
+  const [countdownSeconds, setCountdownSeconds] = useState(45);
+  const [callReady, setCallReady] = useState(false);
+  const [unconfirmedAnswers, setUnconfirmedAnswers] = useState(false);
+  const [calling, setCalling] = useState(false);
   const [busy, setBusy] = useState(false);
   const [connection, setConnection] = useState<"online" | "offline" | "reconnecting">("online");
   const [setupState, setSetupState] = useState<SetupState | null>(null);
   const actionInFlight = useRef(false);
   const skipVoteInFlight = useRef(false);
+  const callInFlight = useRef(false);
   const requestSequence = useRef(0);
   const setupRequestSequence = useRef(0);
   const gameRequestSequence = useRef(0);
   const serverOffsetMs = useRef(0);
+  const onAnswerSaveState = useCallback((ready: boolean, unconfirmed: boolean) => {
+    setCallReady(ready);
+    setUnconfirmedAnswers(unconfirmed);
+  }, []);
   const roomPresenceRef = useRef<RoomPresenceSubscription | null>(null);
   const normalizedCode = normalizeRoomJoinCode(code);
 
@@ -239,18 +275,18 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
   const refreshGame = useCallback(async (roomId: string) => {
     const request = ++gameRequestSequence.current;
     try {
+      const requestedAt = Date.now();
       const snapshot = await getTuttiFruttiGameState(
         createBrowserSupabaseClient() as unknown as TuttiFruttiGameClient,
         roomId
       );
       if (request === gameRequestSequence.current) {
-        serverOffsetMs.current = Date.parse(snapshot.serverNow) - Date.now();
+        serverOffsetMs.current = Date.parse(snapshot.serverNow) - (requestedAt + Date.now()) / 2;
         setGame(snapshot);
         setGameError(null);
       }
     } catch (error) {
       if (request === gameRequestSequence.current) {
-        setGame(null);
         setGameError(error instanceof Error ? error.message : "No pudimos recuperar la partida.");
       }
     }
@@ -340,6 +376,29 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
     const interval = window.setInterval(updateAndRefresh, 1_000);
     return () => window.clearInterval(interval);
   }, [roomId, pendingCandidateId, pendingDeadline, connection, refreshGame]);
+
+  const gamePhase = game?.round.phase;
+  const countdownDeadline = game?.round.countdownEndsAt;
+  useEffect(() => {
+    if (!roomId || connection !== "online"
+      || (gamePhase !== "PLAYING" && gamePhase !== "FINAL_COUNTDOWN")) return;
+    let ticks = 0;
+    let pollInFlight = false;
+    const update = () => {
+      if (countdownDeadline) {
+        setCountdownSeconds(Math.max(0, Math.ceil((Date.parse(countdownDeadline)
+          - (Date.now() + serverOffsetMs.current)) / 1000)));
+      }
+      ticks += 1;
+      if ((gamePhase === "FINAL_COUNTDOWN" || ticks % 2 === 0) && !pollInFlight) {
+        pollInFlight = true;
+        void refreshGame(roomId).finally(() => { pollInFlight = false; });
+      }
+    };
+    update();
+    const interval = window.setInterval(update, 1_000);
+    return () => window.clearInterval(interval);
+  }, [roomId, gamePhase, countdownDeadline, connection, refreshGame]);
 
   useEffect(() => {
     if (!roomId || !selfPlayerId) return;
@@ -431,6 +490,29 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
     }
   }
 
+  async function callRound() {
+    const activeRoomId = lobby?.room.id;
+    if (!activeRoomId || !callReady || callInFlight.current || connection !== "online") return;
+    callInFlight.current = true;
+    setCalling(true);
+    setActionError(null);
+    try {
+      const requestedAt = Date.now();
+      const snapshot = await callTuttiFrutti(
+        createBrowserSupabaseClient() as unknown as TuttiFruttiGameClient, activeRoomId
+      );
+      gameRequestSequence.current += 1;
+      serverOffsetMs.current = Date.parse(snapshot.serverNow) - (requestedAt + Date.now()) / 2;
+      setGame(snapshot);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "No pudimos iniciar la cuenta.");
+      await refreshGame(activeRoomId);
+    } finally {
+      callInFlight.current = false;
+      setCalling(false);
+    }
+  }
+
   async function joinDirectCode() {
     if (actionInFlight.current) return;
     actionInFlight.current = true;
@@ -519,11 +601,17 @@ export function TuttiFruttiRoomEntry({ code }: { code: string }) {
         starting={starting}
         voting={votingCandidateId !== null}
         skipSeconds={skipSeconds}
+        countdownSeconds={countdownSeconds}
+        callReady={callReady}
+        calling={calling}
+        unconfirmedAnswers={unconfirmedAnswers}
         game={game}
         gameError={gameError}
         actionError={actionError}
         onStart={() => { void startGame(); }}
         onSkipVote={(candidateId) => { void voteToSkip(candidateId); }}
+        onCall={() => { void callRound(); }}
+        onAnswerSaveState={onAnswerSaveState}
         onExit={(asHost) => { void exitRoom(asHost); }}
       />
       {setupForRoom?.status === "loading" ? <p aria-live="polite">Recuperando configuración…</p> : null}

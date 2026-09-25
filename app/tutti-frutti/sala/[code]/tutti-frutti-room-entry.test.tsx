@@ -17,12 +17,14 @@ function render(
   current: ActiveRoomLobby,
   connected: Set<string>,
   connection: "online" | "offline" | "reconnecting" = "online",
-  game: TuttiFruttiStartedGame | null = null
+  game: TuttiFruttiStartedGame | null = null,
+  overrides: Partial<Parameters<typeof TuttiFruttiLobbyContent>[0]> = {}
 ) {
   return renderToStaticMarkup(createElement(TuttiFruttiLobbyContent, {
     lobby: current, connected, connection, busy: false, starting: false,
     voting: false, skipSeconds: 5, game,
-    gameError: null, actionError: null, onStart: vi.fn(), onSkipVote: vi.fn(), onExit: vi.fn()
+    gameError: null, actionError: null, onStart: vi.fn(), onSkipVote: vi.fn(), onExit: vi.fn(),
+    ...overrides
   }));
 }
 
@@ -79,7 +81,7 @@ describe("Tutti Frutti lobby", () => {
         { playerId: "member", nickname: "Beto" }
       ],
       round: {
-        number: 1, phase: "LETTER_PENDING", letter: "M",
+        number: 1, phase: "LETTER_PENDING", letter: "M", countdownEndsAt: null, calledByPlayerId: null, lockedAt: null,
         letterDecision: {
           candidateId: "candidate-1", deadlineAt: "2026-09-24T20:00:05.000Z",
           votes: 0, votesRequired: 2, hasVoted: false, canSkip: true
@@ -110,7 +112,7 @@ describe("Tutti Frutti lobby", () => {
         { playerId: "member", nickname: "Beto" }
       ],
       round: {
-        number: 1, phase: "LETTER_PENDING", letter: "M",
+        number: 1, phase: "LETTER_PENDING", letter: "M", countdownEndsAt: null, calledByPlayerId: null, lockedAt: null,
         letterDecision: {
           candidateId: "candidate-1", deadlineAt: "2026-09-24T20:00:05.000Z",
           votes: 0, votesRequired: 2, hasVoted: false, canSkip: false
@@ -133,11 +135,46 @@ describe("Tutti Frutti lobby", () => {
       startedByPlayerId: "host", roundCount: 5,
       categories: [{ position: 1, kind: "preset", key: "name", label: "Nombre" }],
       participants: [{ playerId: "host", nickname: "Ana" }],
-      round: { number: 1, phase: "PLAYING", letter: "M", letterDecision: null }
+      round: { number: 1, phase: "PLAYING", letter: "M", countdownEndsAt: null, calledByPlayerId: null, lockedAt: null, letterDecision: null }
     };
     const markup = render(playingLobby, new Set(), "online", game);
-    expect(markup).toContain("Letra confirmada. La ronda está lista.");
+    expect(markup).toContain("Letra confirmada. Completá y guardá todas las categorías para llamar Tutti Frutti.");
     expect(markup).not.toContain("Votar para saltarla");
+    expect(markup).toContain("Tutti Frutti</button>");
+  });
+
+  it("shows the first caller and shared countdown without exposing other answers", () => {
+    const playingLobby = { ...lobby, room: { ...lobby.room, status: "playing" as const } };
+    const game: TuttiFruttiStartedGame = {
+      roomId: "room-1", roomStatus: "playing", sessionId: "session-1",
+      serverNow: "2026-09-25T12:00:00.000Z", startedByPlayerId: "host", roundCount: 5,
+      categories: [{ position: 1, kind: "preset", key: "name", label: "Nombre" }],
+      participants: [{ playerId: "host", nickname: "Ana" }, { playerId: "member", nickname: "Beto" }],
+      round: { number: 1, phase: "FINAL_COUNTDOWN", letter: "M",
+        countdownEndsAt: "2026-09-25T12:00:45.000Z", calledByPlayerId: "member",
+        lockedAt: null, letterDecision: null }
+    };
+    const markup = render(playingLobby, new Set(), "online", game, { countdownSeconds: 37 });
+    expect(markup).toContain("Beto llamó Tutti Frutti.");
+    expect(markup).toContain("37 segundos restantes");
+    expect(markup).not.toContain("Tutti Frutti</button>");
+  });
+
+  it("shows a waiting state and warns about unconfirmed edits after lock", () => {
+    const playingLobby = { ...lobby, room: { ...lobby.room, status: "playing" as const } };
+    const game: TuttiFruttiStartedGame = {
+      roomId: "room-1", roomStatus: "playing", sessionId: "session-1",
+      serverNow: "2026-09-25T12:00:46.000Z", startedByPlayerId: "host", roundCount: 5,
+      categories: [{ position: 1, kind: "preset", key: "name", label: "Nombre" }],
+      participants: [{ playerId: "host", nickname: "Ana" }],
+      round: { number: 1, phase: "REVIEWING", letter: "M",
+        countdownEndsAt: "2026-09-25T12:00:45.000Z", calledByPlayerId: "host",
+        lockedAt: "2026-09-25T12:00:45.100Z", letterDecision: null }
+    };
+    const markup = render(playingLobby, new Set(), "online", game, { unconfirmedAnswers: true });
+    expect(markup).toContain("Respuestas bloqueadas. Esperando la revisión.");
+    expect(markup).toContain("Alguna edición no alcanzó a guardarse");
+    expect(markup).not.toContain("Tutti Frutti</button>");
   });
 
   it("keeps a submitted vote fixed and disables the action for that candidate", () => {
@@ -151,7 +188,7 @@ describe("Tutti Frutti lobby", () => {
       categories: [{ position: 1, kind: "preset", key: "name", label: "Nombre" }],
       participants: [{ playerId: "host", nickname: "Ana" }],
       round: {
-        number: 1, phase: "LETTER_PENDING", letter: "M",
+        number: 1, phase: "LETTER_PENDING", letter: "M", countdownEndsAt: null, calledByPlayerId: null, lockedAt: null,
         letterDecision: {
           candidateId: "candidate-1", deadlineAt: "2026-09-24T20:00:05.000Z",
           votes: 1, votesRequired: 2, hasVoted: true, canSkip: true

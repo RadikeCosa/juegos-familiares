@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  callTuttiFrutti,
   getTuttiFruttiGameState,
   startTuttiFruttiSession,
   submitTuttiFruttiLetterSkipVote,
@@ -20,6 +21,7 @@ const game: TuttiFruttiStartedGame = {
   participants: [{ playerId: "host", nickname: "Ana" }],
   round: {
     number: 1, phase: "LETTER_PENDING", letter: "M",
+    countdownEndsAt: null, calledByPlayerId: null, lockedAt: null,
     letterDecision: {
       candidateId: "candidate-1", deadlineAt: "2026-09-24T20:00:05.000Z",
       votes: 0, votesRequired: 2, hasVoted: false, canSkip: true
@@ -28,6 +30,16 @@ const game: TuttiFruttiStartedGame = {
 };
 
 describe("Tutti Frutti game RPC adapter", () => {
+  it("sends only the room intent when calling and reads the server deadline", async () => {
+    const countdown = { ...game, round: { ...game.round, phase: "FINAL_COUNTDOWN",
+      countdownEndsAt: "2026-09-25T12:00:45.000Z", calledByPlayerId: "host", letterDecision: null } };
+    const rpc = vi.fn().mockResolvedValue({ data: countdown, error: null });
+    const client = { rpc } as unknown as TuttiFruttiGameClient;
+    await expect(callTuttiFrutti(client, "room-1")).resolves.toMatchObject({
+      round: { phase: "FINAL_COUNTDOWN", calledByPlayerId: "host" }
+    });
+    expect(rpc).toHaveBeenCalledWith("call_tutti_frutti", { target_room_id: "room-1" });
+  });
   it("starts through the dedicated RPC and returns the server snapshot", async () => {
     const rpc = vi.fn().mockResolvedValue({ data: game, error: null });
     const client = { rpc } as unknown as TuttiFruttiGameClient;
@@ -55,7 +67,7 @@ describe("Tutti Frutti game RPC adapter", () => {
   it("accepts the round-playing state returned by lazy deadline resolution", async () => {
     const accepted = {
       ...game,
-      round: { number: 1, phase: "PLAYING" as const, letter: "M", letterDecision: null }
+      round: { number: 1, phase: "PLAYING" as const, letter: "M", countdownEndsAt: null, calledByPlayerId: null, lockedAt: null, letterDecision: null }
     };
     const client = { rpc: vi.fn().mockResolvedValue({ data: accepted, error: null }) } as unknown as TuttiFruttiGameClient;
     await expect(getTuttiFruttiGameState(client, "room-1")).resolves.toEqual(accepted);
