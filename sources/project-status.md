@@ -280,6 +280,27 @@ de completar el smoke de tres jugadores, Impostor visual, conectividad real y
 service worker. Todo lo verificado corresponde a entorno local; no se
 consultaron ni modificaron servicios remotos y la baseline productiva no cambió.
 
+### Despliegue de Tutti Frutti — 2026-09-26
+
+El usuario informó que Tutti Frutti fue desplegado hoy. El dato se registra
+como confirmación del usuario; no se consultó Vercel durante esta actualización.
+No se dispone aquí del entorno exacto del despliegue ni del SHA del build, por
+lo que no se atribuye el despliegue a un commit concreto ni se actualiza la
+baseline de producción de Impostor (`main@7431605`).
+
+La rama `codex/release-tutti-frutti` contiene los incrementos 0–17 integrados
+en el `main` local, junto con los ajustes de release del 26/09: durante
+`lobby` y `playing` Tutti Frutti mantiene heartbeat y evaluación autoritativa
+de liveness/sucesión de host; Presence se usa para indicadores de conexión. La
+PWA mantiene la actualización bajo acción explícita del usuario y aplaza la
+recarga hasta salir de una ruta crítica de partida. Estos cambios corresponden
+al código versionado de la rama; la asociación con el build desplegado queda
+pendiente de confirmar con su SHA/detalle de deployment.
+
+El despliegue informado no confirma por sí solo las validaciones operativas
+pendientes: smoke de tres jugadores hasta cierre, smoke visual de Impostor,
+pérdida real de red y activación del service worker.
+
 En la revisión del smoke se observó que el bloque de sala competía con la grilla
 de la ronda. Se compactó durante la sesión activa: código, conexión del cliente
 y total del roster permanecen visibles; el roster con Presence individual se

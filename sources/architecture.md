@@ -156,8 +156,11 @@ simular continuidad ni reproducir autoridad.
 
 La capacidad PWA pertenece a Juegos Familiares. La implementación actual
 incluye manifest instalable, registro de service worker en producción y un
-mecanismo explícito de actualización que evita recargar durante una ruta
-crítica de partida.
+mecanismo explícito de actualización. Las actualizaciones no se aplican por
+recarga automática: el usuario las solicita. Si el worker pasa a controlar la
+página durante una ruta crítica de partida, la recarga se difiere hasta que la
+navegación llegue a una ruta segura. En rutas no críticas, el cambio de
+controller puede recargar la página para cargar la versión nueva.
 
 El service worker aplica caché `cache-first` sólo a recursos estáticos seguros
 del mismo origen. No cachea llamadas Supabase, RPCs ni estado de gameplay.
