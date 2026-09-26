@@ -245,6 +245,51 @@ se abrió una segunda sesión aislada, pero no se pudo establecer la identidad y
 el flujo compartido desde esa sesión. No se reinició ni limpió la DB local, no
 se aplicaron migrations remotas ni cambió la baseline productiva.
 
+El Incremento 17 se auditó en la rama local `codex/tutti-frutti-increment-17`.
+Pasaron los validadores de Tutti Frutti 7–16, el ciclo multironda de Impostor
+12.5 y las validaciones de sucesión 5.3 y 6.3 en Supabase local; la suite de
+aplicación pasó con 802 tests y también pasaron lint y build con Webpack. Se
+añadió `validate-tutti-frutti-17.mjs` para comprobar sucesión real de host en
+countdown y revisión, retorno del host anterior y ausencia de sucesor sin
+alterar el estado de la partida. Ese validador pasó antes del reinicio del
+entorno.
+
+El smoke móvil de dos jugadores recorrió tres rondas, reload durante candidata
+y después de avanzar ronda, revisión, puntuación, resultado final y retorno al
+lobby; los dos clientes recuperaron el resultado compartido. En una revancha
+con tres jugadores, todos reconstruyeron el roster y el estado tras reload, y
+el tercer jugador recuperó sus respuestas después de que el host llamara
+Tutti. El smoke de tres jugadores no llegó a resultado/cierre y no se completó
+un ciclo manual de navegador de Impostor. La auditoría de Impostor se apoya en
+sus validadores locales, no en una nueva sesión visual.
+
+`npm run test:db` no pudo completar la suite desde cero porque su primera
+validación exige una base sin Groups y la instancia local ya contenía 227. No
+se reinició ni limpió esa base para preservar sus datos; los validadores
+focalizados anteriores pasaron. Tras reiniciar el entorno, volver a ejecutar
+el validador nuevo quedó impedido por falta de acceso al socket Docker, por lo
+que la ejecución satisfactoria registrada es la previa al reinicio. La
+revisión móvil observó las rutas principales a 390 px sin desborde horizontal,
+manifest con `display: standalone` y una ruta de resultado inválida que mostró
+su estado de recuperación sin datos privados. No se confirmó desde navegador
+la activación del service worker ni se probó pérdida real de conectividad.
+
+No se encontró una falla reproducible que justificara cambiar comportamiento
+de producto o esquema. Los límites anteriores quedan como evidencia pendiente
+de completar el smoke de tres jugadores, Impostor visual, conectividad real y
+service worker. Todo lo verificado corresponde a entorno local; no se
+consultaron ni modificaron servicios remotos y la baseline productiva no cambió.
+
+En la revisión del smoke se observó que el bloque de sala competía con la grilla
+de la ronda. Se compactó durante la sesión activa: código, conexión del cliente
+y total del roster permanecen visibles; el roster con Presence individual se
+pliega en un `<details>` nativo, inicialmente cerrado. La elección se conserva
+al cambiar de fase; lobby y resultado final no cambian. La suite completa pasó
+con 803 tests y pasaron lint y build. La ruta de una partida real quedó en
+«Comprobando sala…» durante el intento de revisión a 390 × 844, por lo que la
+última modificación todavía no tiene confirmación visual en navegador. El
+smoke mobile previo corresponde al render anterior a este ajuste.
+
 Only observations confirmed against the current product should become active
 improvement work. Historical UX findings are evidence to revalidate, not an
 automatic backlog. No additional detailed post-beta UX/UI backlog is established

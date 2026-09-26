@@ -39,6 +39,7 @@ describe("Tutti Frutti lobby", () => {
     expect(markup).toContain("desconectado");
     expect(markup).toContain("Cerrar sala");
     expect(markup).toContain("Iniciar partida");
+    expect(markup).not.toContain('class="tutti-room-summary"');
   });
 
   it("lets a member leave and keeps actions unavailable while offline", () => {
@@ -119,6 +120,12 @@ describe("Tutti Frutti lobby", () => {
       }
     };
     const markup = render(playingLobby, new Set(), "online", game);
+    expect(markup).toContain('<details class="tutti-room-summary">');
+    expect(markup).not.toMatch(/<details[^>]*\bopen(?:="")?[^>]*>/);
+    expect(markup).toContain("Sala · Código TUTT1234");
+    expect(markup).toContain("Conectado");
+    expect(markup).toContain("2 participantes");
+    expect(markup).toContain("Participantes");
     expect(markup).toContain("Partida iniciada");
     expect(markup).toContain("Letra M");
     expect(markup).toContain("Categorías: Nombre");
@@ -126,6 +133,26 @@ describe("Tutti Frutti lobby", () => {
     expect(markup).toContain("Votar para saltarla");
     expect(markup).toContain("La letra se acepta en 5 segundos");
     expect(markup).not.toContain("Iniciar partida");
+  });
+
+  it("summarizes this client's connection separately from participant Presence", () => {
+    const playingLobby: ActiveRoomLobby = {
+      ...lobby,
+      room: { ...lobby.room, status: "playing" }
+    };
+
+    for (const [connection, expected] of [
+      ["online", "Conectado"],
+      ["reconnecting", "Reconectando…"],
+      ["offline", "Sin conexión"]
+    ] as const) {
+      const markup = render(playingLobby, new Set(["host"]), connection);
+      expect(markup).toContain(expected);
+      expect(markup).toContain("2 participantes");
+      expect(markup).toContain("Ana");
+      expect(markup).toContain("Beto");
+      expect(markup).toContain("desconectado");
+    }
   });
 
   it("shows the reserve rule and disables skipping when letters are needed for later rounds", () => {

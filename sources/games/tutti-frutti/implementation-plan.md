@@ -742,6 +742,43 @@ para preservarlos. El Cron fue comprobado localmente, no en un destino real.
 - **Depends on:** 2 y 7–16; cada corte previo ya debe tener recovery básica.
 - **Does not depend on:** features diferidas ni deploy a producción.
 
+#### Resultado de la auditoría local
+
+El corte quedó implementado en `codex/tutti-frutti-increment-17` sin cambio de
+esquema ni de reglas. El validador añadido
+`supabase/tests/validate-tutti-frutti-17.mjs` ejercita sucesión de host durante
+countdown y revisión, retorno del host anterior y ausencia de sucesor; pasó
+contra Supabase local antes del reinicio del entorno. También pasaron los
+validadores Tutti Frutti 7–16, Impostor 12.5 y sucesión 5.3/6.3. La suite DB
+completa quedó bloqueada por su precondición de base vacía: la instancia local
+contenía 227 Groups. No se reinició ni limpió.
+
+El smoke mobile de dos jugadores recorrió las tres rondas, recuperación tras
+reload, puntuación, resultado y retorno al lobby. Para una revancha de tres
+jugadores se verificaron el roster y la recuperación de respuestas tras reload
+y durante countdown; no se completó su resultado y cierre. Impostor tuvo
+validación DB completa del ciclo multironda, pero no smoke manual de navegador.
+La revisión a 390 px no observó desborde horizontal; se confirmó el manifest
+standalone y recuperación segura de una URL de resultado inválida. No se
+verificaron pérdida real de red ni activación de service worker. Tras el
+reinicio no fue posible repetir el nuevo validador porque faltó acceso al
+socket Docker. El registro de evidencia y límites restantes está en
+`sources/project-status.md`.
+
+La auditoría no halló defectos reproducibles que justificaran cambios de
+producto, permisos o esquema. Se cierra el corte con esos límites de validación
+documentados; no equivale a afirmar que los escenarios manuales pendientes se
+hayan ejecutado ni que producción haya sido auditada.
+
+Durante el smoke se observó que la información de sala quitaba protagonismo a
+la grilla. La UI ahora la resume con código, conexión del cliente y total del
+roster, y deja el roster/Presence individual en un `<details>` cerrado por
+defecto que conserva su apertura entre fases. No cambia el lobby ni el
+resultado final. Pasan las 15 pruebas focalizadas de la vista, la suite completa
+de 803 tests, lint y build; la última modificación queda pendiente de revisión
+visual con una sesión activa porque el navegador local permaneció en
+«Comprobando sala…».
+
 ## Checkpoints de validación
 
 | Punto | Evidencia mínima antes de avanzar |
@@ -807,7 +844,7 @@ respuestas privadas antes de review ni votos/secretos fuera de su lectura
 autorizada. La recuperación se verifica al introducir cada fase y se vuelve
 a recorrer en 17.
 
-## Tutti Frutti MVP complete
+## Tutti Frutti MVP — criterio de cierre
 
 Un jugador elige Tutti Frutti, crea o entra a una Room, reconoce host y
 miembros, configura categorías/rondas y comienza con al menos dos jugadores.
@@ -817,7 +854,8 @@ bloquea una vez. Tras el lock, el roster revisa, impugna y decide con reglas
 de 3+ y 2 jugadores; el sistema aplica 10/5/0 de forma idempotente, avanza
 rondas y muestra un resultado final inmutable. La Room vuelve a lobby sin
 perder miembros/slot; una revancha crea otra sesión. Refresh, desconexión,
-foreground y eventos perdidos reconstruyen estado autorizado. RLS, grants,
-RPCs, privacidad, carreras y smoke mobile están verificados en DB local y
-navegadores aislados; la regresión completa de Impostor es PASS. Ninguna
+foreground y eventos perdidos deben reconstruir estado autorizado. RLS, grants,
+RPCs, privacidad, carreras y smoke mobile requieren verificación en DB local y
+clientes aislados; la evidencia reunida y los escenarios manuales pendientes
+del Incremento 17 se registran en `sources/project-status.md`. Ninguna
 operación de producción queda implícita en esta definición.

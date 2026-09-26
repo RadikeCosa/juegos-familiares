@@ -129,27 +129,59 @@ export function TuttiFruttiLobbyContent(options: {
   const isHost = lobby.participants.some((participant) => participant.isSelf && participant.isHost);
   const selfPlayerId = lobby.participants.find((participant) => participant.isSelf)?.playerId;
   const enoughPlayers = lobby.participants.length >= 2;
+  const isPlaying = lobby.room.status === "playing";
+  const connectionLabel = connection === "offline"
+    ? "Sin conexión"
+    : connection === "reconnecting" ? "Reconectando…" : "Conectado";
+  const participantList = (
+    <ul className="impostor-group-members">
+      {lobby.participants.map((participant) => (
+        <li key={participant.playerId}>
+          <span>{participant.nickname}</span>
+          <span className="impostor-room-badges">
+            {participant.isSelf ? <strong>Vos</strong> : null}
+            {participant.isHost ? <strong>Host</strong> : null}
+            <span className={connected.has(participant.playerId) ? "impostor-presence impostor-presence--connected" : "impostor-presence impostor-presence--disconnected"}>
+              {connected.has(participant.playerId) ? "conectado" : "desconectado"}
+            </span>
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
   return (
-    <section className="impostor-platform-context" aria-labelledby="tutti-room-title">
-      <p className="impostor-kicker">Sala de Tutti Frutti</p>
-      <h1 id="tutti-room-title">Código {lobby.room.code}</h1>
-      <p>Compartí el código con personas de tu grupo.</p>
-      <p aria-live="polite">{connection === "offline" ? "Sin conexión. La sala se actualizará al volver." : connection === "reconnecting" ? "Actualizando sala..." : "Sala sincronizada"}</p>
-      <h2>Participantes</h2>
-      <ul className="impostor-group-members">
-        {lobby.participants.map((participant) => (
-          <li key={participant.playerId}>
-            <span>{participant.nickname}</span>
-            <span className="impostor-room-badges">
-              {participant.isSelf ? <strong>Vos</strong> : null}
-              {participant.isHost ? <strong>Host</strong> : null}
-              <span className={connected.has(participant.playerId) ? "impostor-presence impostor-presence--connected" : "impostor-presence impostor-presence--disconnected"}>
-                {connected.has(participant.playerId) ? "conectado" : "desconectado"}
+    <section className={`impostor-platform-context${isPlaying ? " tutti-room-context--playing" : ""}`} aria-labelledby="tutti-room-title">
+      {isPlaying ? (
+        <details className="tutti-room-summary">
+          <summary>
+            <span className="tutti-room-summary__content">
+              <span id="tutti-room-title" className="tutti-room-summary__title" role="heading" aria-level={1}>
+                Sala · Código {lobby.room.code}
+              </span>
+              <span className={`tutti-room-summary__connection tutti-room-summary__connection--${connection}`} aria-live="polite">
+                {connectionLabel}
+              </span>
+              <span className="tutti-room-summary__count">
+                {lobby.participants.length} {lobby.participants.length === 1 ? "participante" : "participantes"}
               </span>
             </span>
-          </li>
-        ))}
-      </ul>
+          </summary>
+          <div className="tutti-room-summary__details">
+            <p>{connection === "offline" ? "La sala se actualizará al volver la conexión." : "Compartí el código con personas de tu grupo."}</p>
+            <h2>Participantes</h2>
+            {participantList}
+          </div>
+        </details>
+      ) : (
+        <>
+          <p className="impostor-kicker">Sala de Tutti Frutti</p>
+          <h1 id="tutti-room-title">Código {lobby.room.code}</h1>
+          <p>Compartí el código con personas de tu grupo.</p>
+          <p aria-live="polite">{connection === "offline" ? "Sin conexión. La sala se actualizará al volver." : connection === "reconnecting" ? "Actualizando sala..." : "Sala sincronizada"}</p>
+          <h2>Participantes</h2>
+          {participantList}
+        </>
+      )}
       {lobby.room.status === "lobby" ? (
         <>
           {postgameLoading ? (
