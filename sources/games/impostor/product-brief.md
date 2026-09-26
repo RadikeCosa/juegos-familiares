@@ -55,7 +55,9 @@ Para jugar otra tanda se crea una Room nueva; una Room terminada no se reutiliza
 - contexto de Group persistente y acceso por invitación;
 - banco de palabras con validación, deduplicación y privacidad;
 - Room temporal con host, código compartible y lobby multi-dispositivo;
-- Presence visual, liveness persistida y sucesión de host en lobby;
+- Presence visual, liveness persistida y sucesión de host en `lobby` y,
+  según el código versionado, en `playing`; el deploy de este último caso
+  aún no fue verificado (ver `sources/project-status.md`);
 - roster congelado al comenzar la tanda;
 - selección autoritativa y balanceada de palabra, impostor y primer jugador;
 - revelación privada y sincronización de todas las fases de juego;

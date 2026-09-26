@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const STATIC_CACHE_NAME = `juegos-familia-static-${CACHE_VERSION}`;
 
 const CACHEABLE_PATH_PREFIXES = ["/_next/static/", "/icons/"];
@@ -86,7 +86,8 @@ self.addEventListener("activate", (event) => {
             )
             .map((cacheName) => caches.delete(cacheName)),
         ),
-      ),
+      )
+      .then(() => self.clients.claim()),
   );
 });
 

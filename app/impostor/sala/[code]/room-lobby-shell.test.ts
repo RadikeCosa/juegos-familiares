@@ -1043,7 +1043,7 @@ describe("renderRoomLobbyContent", () => {
         );
 
         expect(markup).toContain("Primero necesitás unirte a un grupo");
-        expect(markup).toContain("/impostor");
+        expect(markup).toContain('href="/"');
         expect(markup).not.toContain("Continuar para unirme");
     });
 
@@ -2475,10 +2475,10 @@ describe("renderRoomLobbyContent", () => {
         expect(markup).toContain("3 puntos");
         expect(markup).toContain("2 rondas jugadas");
         expect(markup).toContain(
-            "La tanda terminó. Desde tu grupo podés crear otra sala."
+            "La tanda terminó. Volvé a Impostor para crear otra sala."
         );
-        expect(markup).toContain("Volver al grupo");
-        expect(markup).toContain("href=\"/impostor/grupo\"");
+        expect(markup).toContain("Volver a Impostor");
+        expect(markup).toContain("href=\"/impostor\"");
         expect(markup).not.toMatch(/Nueva ronda|Terminar tanda|voto|Casa|Mesa|impostor_guess|roundsSummary/i);
     });
 
@@ -2541,7 +2541,7 @@ describe("renderRoomLobbyContent", () => {
 
         expect(source).toContain("activeLobby.room.code !== roomCode");
         expect(source).toContain("router.replace(");
-        expect(source).toContain("encodeURIComponent(activeLobby.room.code)");
+        expect(source).toContain("roomPath(activeLobby.room.gameType, activeLobby.room.code)");
     });
 
     it("keeps the Realtime subscription stable across lobby refetches for the same Room", () => {
@@ -2566,8 +2566,8 @@ describe("renderRoomLobbyContent", () => {
             "utf8"
         );
 
-        expect(source).toContain("absentDestination: \"group\"");
-        expect(source).toContain("router.replace(\"/impostor/grupo\")");
+        expect(source).toContain("absentDestination: \"entry\"");
+        expect(source).toContain("router.replace(\"/impostor\")");
     });
 
     it("starts liveness heartbeat only when the active Room and current participant are known", () => {

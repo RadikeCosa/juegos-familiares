@@ -16,30 +16,39 @@ describe("service worker registration contract", () => {
     expect(registrationSource).toContain('navigator.serviceWorker.register("/sw.js", { scope: "/" })');
   });
 
-  it("does not implement custom install prompts, background sync or automatic reloads", () => {
+  it("does not implement custom install prompts or background sync", () => {
     expect(registrationSource).not.toContain("beforeinstallprompt");
     expect(registrationSource).not.toContain("sync");
-    expect(registrationSource).not.toContain("controllerchange");
     expect(registrationSource).not.toContain("clients.claim");
   });
 
   it("shows update UX without offering reload inside an active room route", () => {
     expect(registrationSource).toContain('pathname.startsWith("/impostor/sala/")');
+    expect(registrationSource).toContain('pathname.startsWith("/tutti-frutti/sala/")');
+    expect(registrationSource).toContain('import { usePathname } from "next/navigation"');
     expect(registrationSource).toContain("Salí de la sala o terminá la tanda antes de actualizar.");
     expect(registrationSource).toContain("Actualizá cuando no estés jugando una tanda.");
   });
 
-  it("applies updates only through an explicit user action", () => {
+  it("asks the waiting worker to activate only through an explicit user action", () => {
     const applyUpdateStart = registrationSource.indexOf("function applyUpdate()");
     const applyUpdateSource = registrationSource.slice(applyUpdateStart);
 
-    expect(applyUpdateSource).toContain("updateState.isCriticalRoute");
+    expect(applyUpdateSource).toContain("isCriticalGameplayPath(window.location.pathname)");
     expect(applyUpdateSource).toContain("postMessage({");
     expect(applyUpdateSource).toContain("JUEGOS_FAMILIA_APPLY_UPDATE");
-    expect(applyUpdateSource).toContain("window.location.reload()");
-    expect(registrationSource.indexOf("window.location.reload()")).toBeGreaterThan(
-      applyUpdateStart,
-    );
+    expect(registrationSource).toContain('addEventListener("controllerchange", reloadWhenControlled)');
+    expect(registrationSource).toContain("removeEventListener(\"controllerchange\", reloadWhenControlled)");
+    expect(registrationSource).toContain("reloadAfterSafeRouteRef.current = true");
+    expect(registrationSource).toContain("!reloadAfterSafeRouteRef.current || isCriticalGameplayPath(pathname)");
+    expect(registrationSource).not.toContain("isCriticalRoute");
+  });
+
+  it("versions the static cache so installed clients fetch this release's assets", () => {
+    const workerSource = readFileSync(join(process.cwd(), "public/sw.js"), "utf8");
+
+    expect(workerSource).toContain('const CACHE_VERSION = "v2"');
+    expect(workerSource).toContain("self.clients.claim()");
   });
 
   it("keeps the manual update action at a comfortable touch target", () => {

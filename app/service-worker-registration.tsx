@@ -1,19 +1,24 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type PwaUpdateState = {
-  isCriticalRoute: boolean;
   registration: globalThis.ServiceWorkerRegistration;
 };
 
 function isCriticalGameplayPath(pathname: string) {
-  return pathname.startsWith("/impostor/sala/");
+  return (
+    pathname.startsWith("/impostor/sala/") ||
+    pathname.startsWith("/tutti-frutti/sala/")
+  );
 }
 
 function usePwaUpdateNotice() {
   const [updateState, setUpdateState] = useState<PwaUpdateState | null>(null);
   const isApplyingUpdateRef = useRef(false);
+  const reloadAfterSafeRouteRef = useRef(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") {
@@ -25,10 +30,7 @@ function usePwaUpdateNotice() {
     }
 
     function markUpdateAvailable(registration: globalThis.ServiceWorkerRegistration) {
-      setUpdateState({
-        isCriticalRoute: isCriticalGameplayPath(window.location.pathname),
-        registration,
-      });
+      setUpdateState({ registration });
     }
 
     void navigator.serviceWorker.register("/sw.js", { scope: "/" }).then((registration) => {
@@ -53,29 +55,72 @@ function usePwaUpdateNotice() {
     });
   }, []);
 
+  useEffect(() => {
+    if (!updateState || !("serviceWorker" in navigator)) {
+      return;
+    }
+
+    function reloadWhenControlled() {
+      if (isCriticalGameplayPath(window.location.pathname)) {
+        reloadAfterSafeRouteRef.current = true;
+        return;
+      }
+
+      window.location.reload();
+    }
+
+    navigator.serviceWorker.addEventListener("controllerchange", reloadWhenControlled);
+    return () => {
+      navigator.serviceWorker.removeEventListener("controllerchange", reloadWhenControlled);
+    };
+  }, [updateState]);
+
+  useEffect(() => {
+    if (!reloadAfterSafeRouteRef.current || isCriticalGameplayPath(pathname)) {
+      return;
+    }
+
+    reloadAfterSafeRouteRef.current = false;
+    window.location.reload();
+  }, [pathname]);
+
   function applyUpdate() {
-    if (!updateState || updateState.isCriticalRoute || isApplyingUpdateRef.current) {
+    if (
+      !updateState ||
+      isCriticalGameplayPath(window.location.pathname) ||
+      isApplyingUpdateRef.current
+    ) {
       return;
     }
 
     isApplyingUpdateRef.current = true;
-    updateState.registration.waiting?.postMessage({
-      type: "JUEGOS_FAMILIA_APPLY_UPDATE",
-    });
-    window.location.reload();
+    const waitingWorker = updateState.registration.waiting;
+
+    if (!waitingWorker) {
+      if (isCriticalGameplayPath(window.location.pathname)) {
+        reloadAfterSafeRouteRef.current = true;
+        isApplyingUpdateRef.current = false;
+        return;
+      }
+
+      window.location.reload();
+      return;
+    }
+
+    waitingWorker.postMessage({ type: "JUEGOS_FAMILIA_APPLY_UPDATE" });
   }
 
-  return { applyUpdate, updateState };
+  return { applyUpdate, updateState, pathname };
 }
 
 export function ServiceWorkerRegistration() {
-  const { applyUpdate, updateState } = usePwaUpdateNotice();
+  const { applyUpdate, updateState, pathname } = usePwaUpdateNotice();
 
   if (!updateState) {
     return null;
   }
 
-  if (updateState.isCriticalRoute) {
+  if (isCriticalGameplayPath(pathname)) {
     return (
       <div className="pwa-update-notice" role="status" aria-live="polite">
         <strong>Nueva versión disponible</strong>

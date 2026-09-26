@@ -27,13 +27,16 @@ describe("static-safe service worker contract", () => {
     expect(serviceWorker).not.toMatch(/api-cache|NetworkFirst|StaleWhileRevalidate/);
   });
 
-  it("does not use aggressive update lifecycle features", () => {
+  it("waits for user approval before activating and then takes control", () => {
     expect(serviceWorker).not.toContain("install',");
-    expect(serviceWorker).not.toContain("clients.claim");
     expect(serviceWorker).not.toContain("location.reload");
     expect(serviceWorker).toContain("JUEGOS_FAMILIA_APPLY_UPDATE");
     expect(serviceWorker.indexOf("self.skipWaiting()")).toBeGreaterThan(
       serviceWorker.indexOf('event.data?.type === "JUEGOS_FAMILIA_APPLY_UPDATE"'),
+    );
+    expect(serviceWorker).toContain("self.clients.claim()");
+    expect(serviceWorker.indexOf("self.clients.claim()")).toBeGreaterThan(
+      serviceWorker.indexOf('self.addEventListener("activate"'),
     );
   });
 

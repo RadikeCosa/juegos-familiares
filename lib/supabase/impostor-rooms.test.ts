@@ -51,6 +51,11 @@ const singleParticipantRow = {
     participant_joined_at: "2026-08-19T12:00:00.000Z"
 };
 
+const activeRoomParticipantRow = {
+    ...singleParticipantRow,
+    room_game_type: "impostor"
+};
+
 const startSessionRow = {
     started: true,
     already_started: false,
@@ -330,6 +335,14 @@ const submitImpostorGuessRow = {
 };
 
 describe("createRoom", () => {
+    it("sends an explicit Tutti Frutti game intent and reports an active other-game conflict", async () => {
+        const supabase = { rpc: vi.fn(async () => ({ data: [singleParticipantRow], error: null })) };
+        await createRoom(supabase, "tutti_frutti");
+        expect(supabase.rpc).toHaveBeenCalledWith("create_room", { requested_game_type: "tutti_frutti" });
+
+        const conflictClient = { rpc: vi.fn(async () => ({ data: null, error: { code: "P0029" } })) };
+        await expect(createRoom(conflictClient, "tutti_frutti")).rejects.toThrow("Ya tenés una sala activa de otro juego.");
+    });
     it("calls the authoritative RPC without ownership arguments", async () => {
         const supabase = {
             rpc: vi.fn(async (_fn: string) => {
@@ -559,6 +572,16 @@ describe("one-shot room intents", () => {
 });
 
 describe("joinRoomByCode", () => {
+    it("sends the expected Tutti Frutti game and reports a same-group code for another game", async () => {
+        const supabase = { rpc: vi.fn(async () => ({ data: [singleParticipantRow], error: null })) };
+        await joinRoomByCode(supabase, " ab7kq2m4 ", "tutti_frutti");
+        expect(supabase.rpc).toHaveBeenCalledWith("join_room_by_code", {
+            room_code: "AB7KQ2M4", expected_game_type: "tutti_frutti"
+        });
+
+        const wrongGameClient = { rpc: vi.fn(async () => ({ data: null, error: { code: "P0030" } })) };
+        await expect(joinRoomByCode(wrongGameClient, "AB7KQ2M4", "tutti_frutti")).rejects.toThrow("Ese código pertenece a otro juego.");
+    });
     it("sends only the normalized room_code as product input", async () => {
         const supabase = {
             rpc: vi.fn(async (
@@ -664,13 +687,47 @@ describe("joinRoomByCode", () => {
 });
 
 describe("getMyActiveRoom", () => {
+    it("rejects an explicit null game identity", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...activeRoomParticipantRow, room_game_type: null }],
+                error: null
+            }))
+        };
+
+        await expect(getMyActiveRoom(supabase)).rejects.toThrow(
+            "No pudimos confirmar tu sala activa."
+        );
+    });
+
+    it("rejects a missing or unsupported game identity", async () => {
+        for (const row of [singleParticipantRow, { ...activeRoomParticipantRow, room_game_type: "other" }]) {
+            const supabase = { rpc: vi.fn(async () => ({ data: [row], error: null })) };
+            await expect(getMyActiveRoom(supabase)).rejects.toThrow(
+                "No pudimos confirmar tu sala activa."
+            );
+        }
+    });
+
+    it("accepts a Tutti Frutti identity without exposing gameplay", async () => {
+        const supabase = {
+            rpc: vi.fn(async () => ({
+                data: [{ ...activeRoomParticipantRow, room_game_type: "tutti_frutti" }],
+                error: null
+            }))
+        };
+        const lobby = await getMyActiveRoom(supabase);
+        expect(lobby?.room.gameType).toBe("tutti_frutti");
+        expect(Object.keys(lobby ?? {})).toEqual(["room", "participants"]);
+    });
+
     it("calls the authoritative RPC without room, player or group arguments", async () => {
         const supabase = {
             rpc: vi.fn(async (_fn: string) => {
                 void _fn;
 
                 return {
-                    data: [singleParticipantRow],
+                    data: [activeRoomParticipantRow],
                     error: null
                 };
             })
@@ -680,7 +737,8 @@ describe("getMyActiveRoom", () => {
             room: {
                 id: "11111111-1111-4111-8111-111111111111",
                 code: "AB7KQ2M4",
-                status: "lobby"
+                status: "lobby",
+                gameType: "impostor"
             },
             participants: [{ playerId: "player-1", nickname: "Ramiro", isHost: true, isSelf: true, joinedAt: "2026-08-19T12:00:00.000Z" }]
         });
@@ -703,7 +761,7 @@ describe("getMyActiveRoom", () => {
     it("does not expose internal identifiers in the returned lobby", async () => {
         const supabase = {
             rpc: vi.fn(async () => ({
-                data: [singleParticipantRow],
+                data: [activeRoomParticipantRow],
                 error: null
             }))
         };
@@ -748,7 +806,7 @@ describe("getMyActiveRoom", () => {
 
     it("rejects lobby rows without participant_is_self", async () => {
         const { participant_is_self: _participantIsSelf, ...rowWithoutSelf } =
-            singleParticipantRow;
+            activeRoomParticipantRow;
         void _participantIsSelf;
         const supabase = {
             rpc: vi.fn(async () => ({
@@ -765,7 +823,7 @@ describe("getMyActiveRoom", () => {
     it("rejects lobby rows with null participant_is_self", async () => {
         const supabase = {
             rpc: vi.fn(async () => ({
-                data: [{ ...singleParticipantRow, participant_is_self: null }],
+                data: [{ ...activeRoomParticipantRow, participant_is_self: null }],
                 error: null
             }))
         };
@@ -778,7 +836,7 @@ describe("getMyActiveRoom", () => {
     it("rejects a lobby with no self participant", async () => {
         const supabase = {
             rpc: vi.fn(async () => ({
-                data: [{ ...singleParticipantRow, participant_is_self: false }],
+                data: [{ ...activeRoomParticipantRow, participant_is_self: false }],
                 error: null
             }))
         };
@@ -792,9 +850,9 @@ describe("getMyActiveRoom", () => {
         const supabase = {
             rpc: vi.fn(async () => ({
                 data: [
-                    singleParticipantRow,
+                    activeRoomParticipantRow,
                     {
-                        ...singleParticipantRow,
+                        ...activeRoomParticipantRow,
                         participant_player_id: "player-2",
                         participant_nickname: "Pedro",
                         participant_is_host: false
@@ -886,6 +944,33 @@ function createDeferred<T>() {
 }
 
 describe("subscribeToRoomChanges", () => {
+    it("uses a separate invalidation channel for a Tutti Frutti Room", () => {
+    const channel = { on: vi.fn(() => channel), subscribe: vi.fn(() => channel) };
+    const supabase = { channel: vi.fn(() => channel), removeChannel: vi.fn(async () => "ok") };
+    subscribeToRoomChanges(supabase, "11111111-1111-4111-8111-111111111111", vi.fn(), "tutti_frutti");
+    expect(supabase.channel).toHaveBeenCalledWith("tutti-frutti-room:11111111-1111-4111-8111-111111111111");
+    expect(channel.on).toHaveBeenCalledWith(
+        "postgres_changes",
+        {
+            event: "INSERT",
+            schema: "public",
+            table: "tutti_frutti_room_setup",
+            filter: "room_id=eq.11111111-1111-4111-8111-111111111111"
+        },
+        expect.any(Function)
+    );
+    expect(channel.on).toHaveBeenCalledWith(
+        "postgres_changes",
+        {
+            event: "UPDATE",
+            schema: "public",
+            table: "tutti_frutti_room_setup",
+            filter: "room_id=eq.11111111-1111-4111-8111-111111111111"
+        },
+        expect.any(Function)
+    );
+  });
+
     it("subscribes only to the current Room membership inserts/deletes and Room updates", () => {
         const callbacks: Array<(payload: unknown) => void> = [];
         const channel = {
@@ -3196,6 +3281,24 @@ describe("getConnectedRoomParticipantIds", () => {
 });
 
 describe("subscribeToRoomPresence", () => {
+    it("uses a separate private Presence topic for Tutti Frutti", async () => {
+        const channel = {
+            on: vi.fn(() => channel), presenceState: vi.fn(() => ({})),
+            subscribe: vi.fn(() => channel), track: vi.fn(async () => "ok"),
+            untrack: vi.fn(async () => "ok")
+        };
+        const supabase = { channel: vi.fn(() => channel), removeChannel: vi.fn(async () => "ok") };
+        const subscription = subscribeToRoomPresence(supabase, {
+            roomId: "11111111-1111-4111-8111-111111111111", currentPlayerId: "player-1",
+            gameType: "tutti_frutti", onSync: vi.fn()
+        });
+        expect(supabase.channel).toHaveBeenCalledWith(
+            "tutti-frutti-room-presence:11111111-1111-4111-8111-111111111111",
+            expect.objectContaining({ config: expect.objectContaining({ private: true }) })
+        );
+        await subscription.unsubscribe();
+    });
+
     it("uses a private Presence channel scoped by roomId and tracks only the current player id", async () => {
         const callbacks: Array<() => void> = [];
         const channel = {

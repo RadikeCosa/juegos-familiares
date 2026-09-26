@@ -14,10 +14,10 @@ Impostor es actualmente la única utilidad jugable implementada dentro de
 Juegos Familiares. Mantiene su propio dominio de producto, reglas, estado y
 operación.
 
-La portada `/` ofrece la entrada común a la aplicación y a Impostor. Cuando
-existe una identidad reconocida, también expresa de forma secundaria el
-contexto persistente del jugador y su grupo. La portada no crea identidad,
-jugador ni grupo sólo por renderizarse y no fuerza onboarding.
+La portada `/` es la entrada común a la aplicación y el espacio de gestión del
+grupo: allí se crean o aceptan invitaciones, se consulta el contexto y se ven
+los integrantes. La portada no crea identidad, jugador ni grupo sólo por
+renderizarse; el onboarding comienza tras una acción explícita.
 
 ## Capacidades compartidas actuales
 
@@ -28,7 +28,7 @@ la implementación actual:
 - `Player`;
 - `Group` y pertenencia del `Player` a un grupo;
 - contexto de jugador y grupo reconstruido desde estado remoto autorizado;
-- navegación común y la superficie de grupo `/grupo`;
+- navegación común y gestión de grupo en la portada `/`;
 - shell de aplicación mobile-first y capacidades PWA.
 
 Estas capacidades no forman todavía un sistema genérico de perfiles ni un
@@ -36,9 +36,12 @@ motor para múltiples productos.
 
 ## Grupo
 
-`/grupo` es la superficie canónica de plataforma para consultar el grupo
+La portada `/` es la superficie canónica de plataforma para consultar el grupo
 reconocido, sus integrantes y, para su administrador, la invitación activa.
-No es una sala ni contiene estado de una partida.
+`/grupo` se conserva como ruta de compatibilidad y redirige a `/`. Las
+invitaciones compartidas abren `/grupo/invitacion/[code]`, donde ocurre la
+incorporación al grupo dentro de la superficie de plataforma. El grupo no es
+una sala ni contiene estado de una partida.
 
 La creación de grupos está restringida al administrador de plataforma. El
 administrador que crea un grupo queda como administrador inicial de ese

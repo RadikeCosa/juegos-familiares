@@ -13,8 +13,11 @@ React y TypeScript. Usa Supabase Auth para identidad autenticada, Postgres para
 estado persistente, Row Level Security para limitar lecturas y escrituras, y
 RPCs de Postgres para operaciones autoritativas.
 
-Supabase Realtime y Presence se usan donde Impostor necesita notificación,
-invalidación o disponibilidad efímera. La aplicación también dispone de
+Supabase Realtime y Presence se usan para invalidación y disponibilidad
+efímera donde el flujo lo requiere. Impostor mantiene su coordinación propia;
+Tutti Frutti usa Presence en el lobby y una señal RLS-filtrada para invalidar
+las respuestas del mismo participante. Esa señal no contiene texto ni
+reemplaza una lectura autorizada por RPC. La aplicación también dispone de
 manifest, service worker y shell PWA compartidos.
 
 ```text
@@ -34,22 +37,36 @@ Estado autoritativo
 - `AuthIdentity`;
 - `Player`;
 - `Group` y el contexto de pertenencia;
-- navegación compartida y `/grupo`;
+- `Room` y `RoomParticipant` para identidad de juego, Group, host,
+  membership y lifecycle compartidos;
+- navegación compartida y gestión de Group en `/`;
 - shell mobile-first y capacidades PWA;
 - adaptadores comunes de acceso a Supabase cuando corresponde.
 
 ### Impostor
 
-- `Room` y `RoomParticipant`;
 - `GameSession` y `SessionPlayer`;
 - rondas, roles, palabras y asignaciones privadas;
 - votos, resultados, puntuación e historial del juego;
-- host, liveness, reconexión y transiciones de gameplay;
+- coordinación actual de liveness y reconexión y transiciones de gameplay;
 - uso de Realtime y Presence para su experiencia sincronizada.
 
-Un concepto específico de Impostor no se promueve a plataforma sólo porque su
-implementación pueda reutilizar infraestructura común. No existe actualmente
-un motor genérico de juegos, salas, rondas, puntajes ni Realtime.
+Cada Room persiste un `game_type` inmutable (`impostor` o `tutti_frutti`). Las
+Rooms históricas se identifican como Impostor y la creación sin
+argumentos continúa creando Impostor. Las RPCs con intención de juego validan
+create/join, rechazan una Room activa de otro juego y mantienen opaco el código
+de otro Group. `get_my_active_room()` devuelve el tipo junto con la coordinación
+autorizada; la navegación recupera la ruta del juego. Tutti Frutti tiene
+entrada, lobby, configuración por Room, inicio de sesión, votación de letra,
+respuestas privadas, countdown autoritativo y lectura compartida de revisión
+sólo después del bloqueo. Su tópico Presence de lobby está autorizado por
+membresía; una señal RLS-filtrada
+invalida sólo las respuestas propias.
+`player_active_room_slots` sigue imponiendo una sola Room activa
+por Player en toda la plataforma.
+
+El gameplay permanece en cada juego. No existe un motor genérico de juegos,
+rondas, puntajes ni Realtime.
 
 ## Identidad y autorización
 
@@ -95,13 +112,14 @@ participantes.
 
 ## Superficie de grupo
 
-`/grupo` es la superficie canónica de plataforma. Reconstruye el contexto
-`AuthIdentity → Player → Group`, lista integrantes mediante lectura protegida y
-muestra la invitación activa únicamente al administrador del grupo.
-
-La pertenencia actual se representa mediante la relación de `Player` con un
-`Group`; no existe una abstracción separada de membership. La superficie no es
-una `Room` ni contiene estado de gameplay.
+La portada `/` es la superficie canónica de plataforma para el contexto
+`AuthIdentity → Player → Group`, el listado protegido de integrantes y la
+invitación activa visible únicamente para el administrador. `/grupo` redirige
+a la portada por compatibilidad; `/grupo/invitacion/[code]` resuelve la
+incorporación a un grupo. La pertenencia actual se representa mediante la
+relación de `Player` con un `Group`; no existe una abstracción separada de
+membership. La gestión de Group no es una `Room` ni contiene estado de
+gameplay.
 
 ## Persistencia y operaciones
 

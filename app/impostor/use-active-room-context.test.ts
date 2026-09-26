@@ -4,7 +4,7 @@ import {
   type ActiveRoomContextState,
 } from "./use-active-room-context";
 import type { PlatformBootstrapState } from "../../lib/supabase/platform-bootstrap";
-import type { RoomLobby } from "../../lib/supabase/impostor-rooms";
+import type { ActiveRoomLobby } from "../../lib/supabase/impostor-rooms";
 
 function createRecognizedState(
   playerId = "player-1",
@@ -27,12 +27,13 @@ function createRecognizedState(
   };
 }
 
-function createLobby(code = "AB7KQ2M4"): RoomLobby {
+function createLobby(code = "AB7KQ2M4"): ActiveRoomLobby {
   return {
     room: {
       id: "room-1",
       code,
       status: "lobby",
+      gameType: "impostor",
     },
     participants: [],
   };
@@ -81,7 +82,7 @@ describe("createActiveRoomContextController", () => {
   });
 
   it("emits loading before checking an active Room", () => {
-    const pending = createDeferred<RoomLobby | null>();
+    const pending = createDeferred<ActiveRoomLobby | null>();
     const states: ActiveRoomContextState[] = [];
     const controller = createActiveRoomContextController({
       loadActiveRoom: vi.fn(() => pending.promise),
@@ -120,7 +121,7 @@ describe("createActiveRoomContextController", () => {
       { status: "loading" },
       {
         status: "success",
-        room: { id: "room-1", code: "PLAY1234", status: "lobby" },
+        room: { id: "room-1", code: "PLAY1234", status: "lobby", gameType: "impostor" },
       },
     ]);
   });
@@ -149,7 +150,7 @@ describe("createActiveRoomContextController", () => {
   it("retries with the current recognized platform context", async () => {
     const states: ActiveRoomContextState[] = [];
     const loadActiveRoom = vi
-      .fn<() => Promise<RoomLobby | null>>()
+      .fn<() => Promise<ActiveRoomLobby | null>>()
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(createLobby("RETRY123"));
     const controller = createActiveRoomContextController({
@@ -169,17 +170,17 @@ describe("createActiveRoomContextController", () => {
       { status: "loading" },
       {
         status: "success",
-        room: { id: "room-1", code: "RETRY123", status: "lobby" },
+        room: { id: "room-1", code: "RETRY123", status: "lobby", gameType: "impostor" },
       },
     ]);
   });
 
   it("discards late responses after the recognized player or group changes", async () => {
-    const first = createDeferred<RoomLobby | null>();
-    const second = createDeferred<RoomLobby | null>();
+    const first = createDeferred<ActiveRoomLobby | null>();
+    const second = createDeferred<ActiveRoomLobby | null>();
     const states: ActiveRoomContextState[] = [];
     const loadActiveRoom = vi
-      .fn<() => Promise<RoomLobby | null>>()
+      .fn<() => Promise<ActiveRoomLobby | null>>()
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise);
     const controller = createActiveRoomContextController({
@@ -200,13 +201,13 @@ describe("createActiveRoomContextController", () => {
       { status: "loading" },
       {
         status: "success",
-        room: { id: "room-1", code: "FRESH123", status: "lobby" },
+        room: { id: "room-1", code: "FRESH123", status: "lobby", gameType: "impostor" },
       },
     ]);
   });
 
   it("discards late responses after dispose", async () => {
-    const pending = createDeferred<RoomLobby | null>();
+    const pending = createDeferred<ActiveRoomLobby | null>();
     const states: ActiveRoomContextState[] = [];
     const controller = createActiveRoomContextController({
       loadActiveRoom: vi.fn(() => pending.promise),

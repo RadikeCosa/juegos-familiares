@@ -1,0 +1,861 @@
+# Tutti Frutti — plan de implementación incremental
+
+## Objetivo y estado de este plan
+
+Introducir Tutti Frutti como segundo juego jugable de Juegos Familiares, desde
+selección de juego hasta revancha en la misma Room, con estado autoritativo,
+recuperación y privacidad por actor, sin alterar las reglas ni el cierre actual
+de Impostor. Este documento organiza los cortes y registra su progreso; los
+cortes futuros no describen funcionalidades ya implementadas ni autorizan por
+sí mismos migrations remotas, deploys o cambios de producto.
+
+**Estado de los Incrementos 0–4:** integrados en el `main` local. Incluyen el
+tipo de juego y el ruteo, el lobby Tutti Frutti, la identidad/roster neutral y
+el espejo transaccional de las sesiones Impostor. Las validaciones y smokes de
+cada corte se registraron al implementarlos. No se aplicaron migrations
+remotas.
+
+**Estado del Incremento 5:** integrado en el `main` local. La compatibilidad
+legacy mantiene el espejo neutral y la sucesión durante `playing` usa el
+roster neutral, liveness autoritativa y selección determinista. Sus validadores
+locales pasan. La definición desplegada de la RPC sigue sin verificarse; esta
+brecha no se presenta como comportamiento confirmado en producción.
+
+**Estado del Incremento 6:** integrado en el `main` local. La Room Tutti
+Frutti tiene un borrador JSONB atómico, lectura de defaults sin fila
+persistida, guardado host-only y sólo en lobby, validación en DB y lectura
+compartida por Realtime. El usuario confirmó el smoke manual completo con dos
+identidades. No se aplicó la migration remotamente.
+
+El cambio de plataforma que lleva la gestión de grupos a la portada también
+está integrado en el `main` local; la baseline de producción descrita en
+`sources/project-status.md` permanece sin cambios.
+
+Las decisiones de producto vigentes están en `product-decisions.md`; fases en
+`game-state-model.md`; límites en `room-session-boundary.md`; requisitos en
+`technical-requirements.md`; `physical-data-model.md` distingue esquema local
+implementado de propuestas futuras. Las migrations son el contrato SQL local;
+no se validaron contra datos remotos. Cada corte debe distinguir esas
+categorías antes de fijar una migration. La baseline productiva registrada en
+`sources/project-status.md` es
+Impostor en `main@7431605`; el estado de una DB remota no se inspeccionó para
+este plan. La política de sucesión en `playing` está **CONFIRMED** en
+`product-decisions.md`; la RPC Impostor versionada la implementa con
+`session_players`, pero su despliegue no fue verificado.
+
+## Baseline técnica comprobada en el repositorio
+
+- `rooms` conserva Group, host, miembros, `lobby | playing | closed` y
+  `game_type` inmutable.
+  `player_active_room_slots` impone una Room activa por Player en
+  toda la plataforma; `lobby` y `playing` son activos. Al volver de `playing`
+  a `lobby`, el slot debe permanecer.
+- Las firmas antiguas `create_room()` y `join_room_by_code(text)` permanecen
+  exclusivas de Impostor. Las nuevas firmas reciben intención de juego y
+  verifican tipo, Group, lobby y slot global; `get_my_active_room()` devuelve
+  el tipo y las rutas actuales recuperan el juego correspondiente. Tutti
+  Frutti tiene lobby, presencia, configuración compartida, sesión, respuestas,
+  bloqueo, revisión, desafíos, puntuación y avance hasta el Incremento 14.
+- `game_sessions` tiene `unique(room_id)` y fases de Impostor;
+  `session_players` incluye datos propios de ese juego. `start_session()` crea
+  roster, estado y primera ronda de Impostor; `end_session()` termina la
+  sesión y cierra la Room. Esas tablas y RPCs siguen siendo de Impostor.
+- Presence usa tópicos separados `impostor-room-presence:` y
+  `tutti-frutti-room-presence:`, autorizados por juego y membresía, y liveness
+  persistida en `room_participants.last_seen_at`. La UI relee estado autorizado al cargar,
+  volver al foreground, recuperar red y recibir cambios; Realtime invalida,
+  no autoriza. El RPC de sucesión tiene rama `playing` ligada al roster de
+  `session_players`; esto es evidencia de código versionado, no de despliegue.
+- Las migrations y validadores cercanos incluyen `create_rooms.test.ts`,
+  `room_lifecycle_playing_6_2.test.ts`, `start_session_6_3.test.ts`,
+  `supabase/tests/validate-4-1.mjs`, `validate-4-3.mjs`, `validate-5-2.mjs`,
+  `validate-6-3.mjs`, `validate-12-5.mjs` y los tests de entrada, Room y
+  recuperación en `app/impostor/` y `lib/supabase/impostor-rooms.test.ts`.
+
+## Principios, corte y método
+
+Room coordina juego inmutable, Group, host, membership, lifecycle y
+conectividad. Cada juego posee fases, secretos, respuestas, votos y puntajes.
+Presence no es participación: el roster se congela al iniciar cada sesión y
+no cambia por desconexión. Una sesión terminada jamás se reutiliza. Tutti
+Frutti termina su sesión y devuelve la Room a `lobby` en una operación;
+Impostor conserva cierre de Room. No crear `GenericGame`, `GameEngine` ni
+modelos de gameplay comunes. El servidor deriva actor de `auth.uid()`, aplica
+RLS/grants/RPCs y comprueba Group, Room, tipo de juego, roster, ownership,
+fase y host. El cliente envía intenciones y reconstruye lecturas autorizadas.
+
+Cada incremento se implementará en una rama corta, con test focalizado y
+validación proporcional en Supabase **local controlado**. Antes de su cierre:
+auditoría del cambio, smoke indicado, documentación contractual que haya
+cambiado y regresión de Impostor en todo corte compartido. Después podrán
+seguir commit, push, PR y merge sólo con autorizaciones aplicables y revisión;
+este plan no ejecuta esos pasos. No reescribir migrations históricas. Ningún
+corte agrega persistencia legible/escribible por clientes antes de diseñar y
+probar su RLS, grants, RPCs y privacidad. Los nombres SQL propuestos se
+revalidan contra las migrations y datos del destino antes de ejecutarse.
+
+## Mapa de dependencias
+
+```text
+0 tipo/descubrimiento → 1 create/join/rutas → 2 lobby
+                    └→ 3 identidad/backfill → 4 espejo Impostor → 5 sucesión
+2 → 6 configuración ────────────────────────────────┐
+4, 5, 6 → 7 inicio/candidata → 8 skip → 9 respuestas
+9 → 10 countdown/lock → 11 review → 12 desafíos → 13 score
+13 → 14 siguiente ronda → 15 final/retorno → 16 revancha
+2, 7–16 → 17 recuperación y cierre MVP
+```
+
+Los Incrementos 0–15 están integrados en el `main` local antes de este corte;
+sus migrations y validadores se ejecutaron sólo en Supabase local. La política
+de sucesión en `playing` está implementada en el
+código del 5, pero falta verificar la definición desplegada antes de atribuirla
+a producción. El pool de letras del 7 quedó definido como `A B C D E F G H I
+J L M N O P R S T U V`. El Incremento 9 depende del 8; el 17 completa la
+verificación de recuperación construida desde cada corte.
+
+## Incrementos
+
+### 0. Identidad de juego y descubrimiento de Room
+
+- **Goal:** una Room existente o nueva expresa inequívocamente su juego en
+  lecturas autorizadas, sin abrir todavía creación Tutti Frutti.
+- **Scope:** preflight sobre datos locales representativos y, antes de una
+  migration de destino, conteos/invariantes del destino confirmado; agregar
+  `rooms.game_type` restringido, backfill explícito de Rooms Impostor y
+  `get_my_active_room()` con tipo. Mantener temporalmente el create sin
+  argumentos y su compatibilidad; no convertir una Room ya creada.
+- **Explicitly out of scope:** rutas Tutti, nuevas sesiones y cambio de
+  `start_session()`/`end_session()`.
+- **Likely files / areas:** nueva migration y test, validadores DB de Rooms,
+  `lib/supabase/impostor-rooms.ts`, hook de Room activa.
+- **Database impact:** columna, CHECK/no-null y backfill seguros; verificar
+  grants de la lectura y compatibilidad de la firma/resultado RPC. Ninguna
+  migration histórica se edita.
+- **Application impact:** interpretar el tipo en el read model sin afectar
+  navegación Impostor actual.
+- **Security requirements:** tipo asignado por servidor; cliente no puede
+  cambiarlo; descubrimiento sólo de la Room autorizada.
+- **Concurrency / idempotency:** migration repetible en entorno controlado;
+  create concurrente conserva un solo slot global y no cambia tipo.
+- **Automated verification:** migration sobre Rooms abiertas/cerradas y
+  sesiones Impostor existentes; CHECK rechaza valores ajenos; test de lectura
+  y suite cercana de create/active room; **Impostor regression = PASS**.
+- **Manual smoke:** crear/entrar a Impostor, refrescar, iniciar, reconectar y
+  terminar; discovery sigue enviando a Impostor.
+- **Documentation update:** arquitectura de plataforma y contrato de Room
+  sólo cuando el cambio esté aplicado, con baseline/validación en status.
+- **Exit criteria:** toda Room local tiene tipo inmutable y lecturas correctas;
+  Impostor completa el smoke sin cambio de conducta.
+- **Depends on:** contratos actuales y preflight de datos.
+- **Does not depend on:** esquema de sesión común ni UI Tutti.
+
+### 1. Create, join y ruteo conscientes del juego
+
+- **Goal:** elegir juego antes de crear/entrar y recuperar la ruta correcta;
+  todavía no hay partida Tutti.
+- **Scope:** intención validada de juego en create/join, compatibilidad de
+  llamadas Impostor existentes, conflicto explícito si el Player ya ocupa
+  Room activa del otro juego; Game → create/join → ruta del juego.
+- **Explicitly out of scope:** lobby Tutti completo, configuración, gameplay.
+- **Likely files / areas:** migration RPC nueva, adaptadores Supabase,
+  `app/page`, entrada `app/impostor/` y ruta Tutti mínima.
+- **Database impact:** guards de tipo/Group/código/slot en create/join; RLS y
+  grants existentes no se amplían sin pruebas; nueva firma si corresponde.
+- **Application impact:** ruteo desde selección y active-room recovery por
+  tipo, incluido código directo y conflicto visible.
+- **Security requirements:** código de otro Group indistinguible de uno
+  inexistente; no join cruzado por ruta manipulada ni segundo slot global.
+- **Concurrency / idempotency:** create/join simultáneos entre juegos no
+  producen dos Rooms; retry mismo juego converge, otro juego da conflicto.
+- **Automated verification:** DB cross-group/cross-game, lobby-only join,
+  carreras de slot; tests de ruteo/entrada y **Impostor regression = PASS**.
+- **Manual smoke:** dos dispositivos crean Impostor/Tutti por separado,
+  prueban código correcto/equivocado y refresh de Room activa; completar
+  smoke Impostor de 0.
+- **Documentation update:** flujo de entrada y contrato de Room si cambian.
+- **Exit criteria:** ninguna ruta ni RPC confunde los tipos; Impostor sigue
+  pudiendo crear, entrar y terminar como antes.
+- **Depends on:** 0.
+- **Does not depend on:** identidad compartida de sesión.
+
+### 2. Lobby Tutti Frutti
+
+- **Goal:** dos jugadores pueden compartir una Room Tutti y recuperar su
+  coordinación, sin iniciar sesión.
+- **Scope:** miembros, host, Presence/liveness, leave/close, carga directa,
+  refetch en reconexión; tópico propio o adaptación autorizada del actual.
+- **Explicitly out of scope:** configuración y sucesión en `playing`.
+- **Likely files / areas:** `app/tutti-frutti/`, adaptador Tutti acotado,
+  rutas/lecturas Room y tests; RPC de coordinación sólo si guard lo exige.
+- **Database impact:** reutilizar `rooms`, `room_participants` y slots; si se
+  toca Presence/RPC, preservar RLS y membership del tópico.
+- **Application impact:** lobby mobile-first, host/participantes y recovery
+  desde estado remoto; Presence sólo indicador visual.
+- **Security requirements:** sólo miembros autorizados ven lobby/tópico;
+  no heredar secretos ni payloads de Impostor.
+- **Concurrency / idempotency:** leave/close repetidos y sucesión de lobby
+  simultánea conservan un host válido o cierre consistente.
+- **Automated verification:** acceso de outsider, close/leave, slot liberado
+  sólo al cierre/salida permitida, navegación y reconexión; **Impostor
+  regression = PASS** por tocar coordinación compartida.
+- **Manual smoke:** crear, unir, ver host, desconectar/reconectar, salir y
+  cerrar en dos identidades aisladas.
+- **Documentation update:** flujo y requisitos de lobby según implementación.
+- **Exit criteria:** lobby Tutti estable y Room activa se recupera por tipo.
+- **Depends on:** 1.
+- **Does not depend on:** identidad de sesión, categorías o juego iniciado.
+
+### 3. Identidad mínima de sesión y backfill
+
+- **Goal:** representar una sesión activa/histórica por Room y un roster
+  neutral, sin modificar aún gameplay Impostor.
+- **Scope:** validar alternativa recomendada A frente a datos reales;
+  introducir `room_sessions` y `room_session_participants`, mapear sesiones
+  Impostor históricas usando el mismo ID, verificar cardinalidad y tiempos.
+- **Explicitly out of scope:** convertir fases, roles, votos o puntajes de
+  Impostor; crear sesión Tutti; activar constraints que rompan un escritor
+  todavía no adaptado.
+- **Likely files / areas:** migration nueva, tests de contenido y DB,
+  consultas de preflight/backfill; sin reemplazo de `game_sessions`.
+- **Database impact:** FKs de Room/Group/tipo, unicidad de sesión no
+  finalizada y roster; introducir restricciones de forma compatible,
+  endurecerlas sólo después del corte 4 y validación de consistencia.
+- **Application impact:** ninguno visible; la lectura de Impostor continúa
+  en sus tablas existentes.
+- **Security requirements:** nuevas tablas sin grants de cliente amplios,
+  RLS desde su creación; roster histórico no expuesto a otro Group.
+- **Concurrency / idempotency:** backfill estable por ID, sin duplicados;
+  verificar escritura concurrente con Impostor durante rollout y plan de
+  despliegue que evite sesiones huérfanas.
+- **Automated verification:** fixture con sesiones abiertas/cerradas y datos
+  inconsistentes; prueba de backfill, unicidad y accesos; **Impostor
+  regression = PASS**.
+- **Manual smoke:** Impostor abierto y terminado sigue legible; preflight y
+  conteos coinciden antes/después en DB local controlada.
+- **Documentation update:** modelo físico y status reflejan la decisión A
+  sólo tras validarla; documentar desviaciones si el preflight la invalida.
+- **Exit criteria:** mapeo uno a uno sin pérdida; las constraints compatibles
+  y la ausencia de acceso no autorizado están demostradas.
+- **Depends on:** 0 y preflight del destino concreto.
+- **Does not depend on:** lobby Tutti (2), configuración ni gameplay.
+
+### 4. Espejo transaccional de inicio/fin Impostor
+
+- **Goal:** los nuevos starts/ends de Impostor mantienen el registro mínimo
+  compartido sin cambiar la experiencia del juego.
+- **Scope:** adaptar `start_session()` y `end_session()` para crear/finalizar
+  `room_sessions` y roster junto con sus tablas actuales; endurecer los
+  invariantes activos cuando todas las rutas de escritura estén cubiertas.
+- **Explicitly out of scope:** reescribir `game_sessions`, nueva máquina de
+  estados Impostor o cambiar `end_session()` a retorno lobby.
+- **Likely files / areas:** migrations nuevas para RPCs, tests
+  `start_session_6_3`/`end_session` y validadores 6.x/12.x.
+- **Database impact:** mismo ID recomendado, FK/consistencia Room-Group-tipo,
+  una sesión no terminada por Room; sin añadir gameplay a tabla común.
+- **Application impact:** contrato de lectura Impostor idéntico.
+- **Security requirements:** host y roster derivados del estado remoto;
+  secretos y votos permanecen en tablas Impostor con sus permisos.
+- **Concurrency / idempotency:** start concurrente produce un solo par de
+  registros; end repetido finaliza ambos una vez y cierra Room en la misma
+  transacción.
+- **Automated verification:** DB start/finish/error rollback, igualdad de
+  IDs/rosters, sin sesión huérfana y **Impostor regression = PASS** con suite
+  de juego y privacidad.
+- **Manual smoke:** Impostor completo de tres jugadores: iniciar, avanzar,
+  reconectar, puntuar, finalizar; Room cerrada y slot liberado.
+- **Documentation update:** contratos de arquitectura/estado sólo para el
+  ownership compartido comprobado, nunca reglas Impostor.
+- **Exit criteria:** ningún camino Impostor deja Room y sesión común
+  divergentes; juego y cierre siguen iguales.
+- **Depends on:** 3.
+- **Does not depend on:** lobby/configuración Tutti.
+
+### 5. Sucesión del host con roster neutral
+
+- **Goal:** la sucesión en `playing` elige sólo miembros de la sesión activa
+  sin depender de `session_players`.
+- **Scope:** verificar la definición desplegada del RPC en el destino
+  confirmado; adaptar el guard de sucesión al roster común, manteniendo lobby
+  y la política CONFIRMED de `playing`; probar que sólo cambia host, nunca
+  estado jugable.
+- **Explicitly out of scope:** abandono definitivo, expulsión o cambio de
+  roster por ausencia.
+- **Likely files / areas:** migration RPC de sucesión, validador 5.x,
+  `sources/project-status.md` para registrar la evidencia del deploy.
+- **Database impact:** locks y elegibilidad por Room/member/roster; RLS y
+  grants de RPC no se ensanchan.
+- **Application impact:** refetch de host en Impostor y, luego, Tutti.
+- **Security requirements:** no sucesor outsider, otro juego o no roster;
+  Presence/`last_seen_at` sólo prueban liveness, no participación.
+- **Concurrency / idempotency:** dos llamadas concurrentes eligen un único
+  host según orden determinista y no reinician la sesión.
+- **Automated verification:** host stale en lobby/playing, no-roster,
+  outsider y carrera; **Impostor regression = PASS**.
+- **Manual smoke:** host desaparece en lobby y durante Impostor; sucesor
+  continúa; tras 7 repetir en Tutti.
+- **Documentation update:** registrar el comportamiento desplegado sólo tras
+  verificarlo; actualizar requisitos si la implementación difiere.
+- **Exit criteria:** elegibilidad común probada, deploy verificado para el
+  destino declarado e Impostor intacto.
+- **Depends on:** 4 y verificación técnica del deploy/destino; la decisión de
+  producto ya está confirmada.
+- **Does not depend on:** configuración Tutti (6).
+
+### 6. Configuración de lobby Tutti
+
+**Estado:** implementado y fusionado en el `main` local. El usuario confirmó
+el smoke manual de dos identidades; no hay migration remota aplicada.
+
+- **Goal:** host guarda un borrador válido de rondas y categorías que todos
+  pueden reconocer antes de iniciar.
+- **Scope:** preset/custom, orden, cantidad de rondas, validación autoritativa
+  y UI; el snapshot se hará en 7.
+- **Explicitly out of scope:** sorteo, respuestas, preselección de revancha.
+- **Likely files / areas:** `tutti_frutti_room_setup` o alternativa validada,
+  RPC/lectura y UI de lobby, tests.
+- **Database impact:** una configuración por Room, sólo editable en lobby;
+  constraints de límites y nombres conforme decisión de producto.
+- **Application impact:** formulario mobile-first con lectura recuperable.
+- **Security requirements:** escritura host-only, lectura a miembros Tutti;
+  otro juego, Group o Room no accede.
+- **Concurrency / idempotency:** ediciones concurrentes con versión/guard;
+  inicio posterior congela una versión completa, no mezcla campos.
+- **Automated verification:** catálogo/límites/duplicados, host/no host,
+  cross-room y reintento de guardado.
+- **Manual smoke:** host edita, invitado ve cambios, refresh conserva draft;
+  invitado no puede editar.
+- **Documentation update:** catálogo, límites y UX realmente elegidos en
+  producto/flujo; propuesta física si varía.
+- **Exit criteria:** draft válido y estable; decisiones de catálogo/límites
+  cerradas antes de la migration.
+- **Depends on:** 2 y decisiones de categorías/rondas.
+- **Does not depend on:** 3–5; puede avanzarse mientras se validan.
+
+### 7. Inicio Tutti y primera letra candidata
+
+**Estado:** implementado e integrado en `main` local. Migration y pruebas DB
+ejecutadas contra Supabase local; sin aplicación remota ni smoke visual manual
+en dos navegadores.
+
+- **Goal:** host inicia una sesión con mínimo dos jugadores y primera letra
+  preparada, sin saltar ni responder aún.
+- **Scope:** freeze transaccional de roster/configuración/pool, nueva sesión
+  específica, primera ronda/candidata, `lobby → playing`; loader autorizado
+  reconstruye fase y letra.
+- **Explicitly out of scope:** voto de skip, entrada de respuestas y cierre.
+- **Likely files / areas:** `tutti_frutti_sessions`, categorías, rondas y
+  candidatas; RPC start, loader y UI de espera.
+- **Database impact:** FK a sesión común, snapshot inmutable, restricciones
+  de ronda/candidata y pool; migración local validada.
+- **Application impact:** host start, otros reciben fase por refetch, ruta
+  directa restaura sesión.
+- **Security requirements:** host-only, tipo Tutti, roster Room vigente;
+  configuración/pool no controlados por IDs del cliente.
+- **Concurrency / idempotency:** lock Room; una sola sesión y candidata. Un
+  retry en `playing` devuelve lo existente sólo al participante congelado
+  registrado como iniciador; no vuelve a congelar el roster ni sortea otra
+  letra.
+- **Automated verification:** mínimo 2, 1 jugador rechazado, tipo/host/Group,
+  start doble, rollback y snapshot; Impostor regression = PASS por lifecycle.
+- **Manual smoke:** dos jugadores inician, ven misma candidata y recargan;
+  host sucesor del 5 conserva partida.
+- **Documentation update:** flujo/estado físico si el inicio concreto difiere.
+- **Exit criteria:** una Room playing tiene una sesión Tutti no finalizada,
+  roster y snapshot inmutables.
+- **Depends on:** 4, 5 y 6. Pool confirmado: `A B C D E F G H I J L M N O
+  P R S T U V` (sin K, Ñ, Q, W, X, Y, Z).
+- **Does not depend on:** desafíos, puntuación o revancha.
+
+### 8. Ventana y voto para saltar letra
+
+**Estado:** implementado e integrado en `main` local; validado en Supabase
+local. No aplicado remotamente.
+
+- **Goal:** jugadores saltan una candidata por mayoría antes de comenzar la
+  ronda; si no se alcanza, la misma candidata queda aceptada.
+- **Scope:** ventana de 5 segundos; umbral floor(roster/2)+1, con roster
+  congelado aunque haya desconexiones; votos anónimos e inmutables; siguiente
+  candidata sin incrementar ronda. Bloquear skips que dejen menos letras no
+  usadas que rondas restantes.
+- **Explicitly out of scope:** respuestas y scoring.
+- **Likely files / areas:** votos/candidatas, RPC de voto/avance, loader/UI.
+- **Database impact:** deadline por candidata y voto único por
+  candidata/jugador; RLS cerrado; resolución perezosa por lectura autorizada
+  de estado vencido.
+- **Application impact:** UI mobile-first con tally agregado y cuenta regresiva
+  aproximada desde el deadline del servidor; polling RPC de 1 s sólo mientras
+  la candidata espera.
+- **Security requirements:** voto sólo del roster Tutti; no votar candidato
+  vencido ni elegir letra propia desde cliente.
+- **Concurrency / idempotency:** mayoría y timeout simultáneos resuelven una
+  sola vez; skip repetido nunca reutiliza letra jugada/saltada.
+- **Automated verification:** umbrales 2/3/4, empate 2/4, voto concurrente,
+  desconexión sin cambiar el denominador, voto duplicado/antiguo, reserva para
+  rondas restantes, privacidad del tally y lectura perezosa tras vencimiento.
+- **Manual smoke:** pendiente; con dos identidades, votar hasta saltar, dejar
+  vencer sin mayoría, y actualizar o reabrir para recuperar el estado.
+- **Documentation update:** duración final elegida y política de elegibles.
+- **Exit criteria:** la candidata queda aceptada y la ronda pasa a `PLAYING`,
+  o una mayoría crea una nueva candidata para la misma ronda.
+- **Depends on:** 7. La duración, elegibilidad, visibilidad y regla de
+  preservación de rondas ya están decididas.
+- **Does not depend on:** respuestas, countdown o review.
+
+### 9. Respuestas privadas y persistentes
+
+**Estado:** implementado e integrado en `main` local. La migration y el
+validador de DB pasaron en Supabase local; las migrations remotas no se
+aplicaron.
+
+- **Goal:** cada integrante del roster edita sus respuestas por categoría y
+  las recupera antes del lock.
+- **Scope implementado:** texto original, normalización v1 versionada por
+  sesión, upsert por ronda/Player/posición de categoría, lectura sólo propia,
+  fase editable `PLAYING`, y retención del historial por ronda.
+- **Explicitly out of scope:** ver respuestas ajenas, lock y puntaje.
+- **Likely files / areas:** `tutti_frutti_answers`, RPCs/lecturas privadas,
+  formulario y tests de privacidad.
+- **Database impact:** unicidad de clave, FK cruzadas de sesión/ronda/
+  categoría/roster, RLS/grants deny-by-default.
+- **Application impact:** autoguardado tras 500 ms, estados accesibles y
+  reintento usando el borrador actual; refresh/reconexión recupera el último
+  valor aceptado por servidor. Invalidaciones Realtime no transportan respuestas.
+- **Security requirements:** autor único; ni select directo, RPC amplia ni
+  Realtime filtran respuestas ajenas durante PLAYING.
+- **Concurrency / idempotency:** clave única por ronda/participante/categoría;
+  último guardado confirmado gana y la RPC devuelve el valor/timestamp
+  canónicos de su transacción. Guardados por campo se serializan por pestaña.
+- **Automated verification:** validador local cubre actor propio/ajeno,
+  cross-room/game, códigos SQLSTATE, límites/normalización, acceso directo,
+  payload de invalidación, historial por ronda, carreras concurrentes y RPC
+  canónica. Suite de tests del proyecto y regresión focalizada de Impostor
+  pasaron.
+- **Manual smoke:** no se completó el smoke visual de dos navegadores. El
+  validador local de DB ejercitó dos identidades, privacidad y Realtime.
+- **Documentation update:** completada en las fuentes activas de Tutti
+  Frutti, arquitectura y estado del proyecto.
+- **Exit criteria:** aislamiento y comportamiento de DB comprobados; el build
+  compiló, pero Next falló interpretando `tsc --showConfig`. El chequeo de
+  tipos directo pasó. No se limpiaron los fixtures escritos por el validador.
+- **Depends on:** 8 y la decisión de normalización registrada en la sección
+  46 de `product-decisions.md`.
+- **Does not depend on:** votación de desafíos ni scoring.
+
+### 10. Llamada, countdown y lock
+
+**Estado local:** integrado a `main`. La primera
+llamada exige todas las respuestas persistidas y no vacías y fija 45 segundos.
+El cierre temprano queda fuera. Un job SQL de un segundo bloquea al vencer,
+con lectura autoritativa, guard de escrituras tardías y espera de review.
+La verificación local de DB cubrió llamadas simultáneas, privacidad, guardado
+en vuelo y lock sin cliente. Quedan el smoke visual de dos navegadores, la
+comprobación operacional de Cron en un destino real y la revisión de su cola
+antes de habilitarlo allí. No hay migration remota aplicada.
+
+- **Goal:** la primera llamada válida fija un deadline irreversible; al
+  vencer, todas las respuestas quedan bloqueadas una sola vez.
+- **Scope:** elegibilidad de llamada, deadline servidor, edición hasta lock,
+  proceso de vencimiento que progresa aun sin cliente conectado, lectura de
+  tiempo restante y transición a review.
+- **Explicitly out of scope:** cierre temprano por completitud/presencia si
+  su política sigue abierta; desafíos y score.
+- **Likely files / areas:** columnas de ronda, RPC call/lock, scheduler o
+  avance autoritativo seguro, UI countdown, tests de carreras.
+- **Database impact:** un deadline/trigger por ronda; guard de fase y locks
+  de fila compartidos con writes; no confiar en temporizador del navegador.
+- **Application impact:** contador calculado desde deadline remoto; refresh
+  y foreground reconstruyen, incluido timeout ocurrido offline.
+- **Security requirements:** caller del roster; nadie propone deadline o
+  lock arbitrario; respuestas no se revelan hasta fase de review.
+- **Concurrency / idempotency:** dos callers preservan primer deadline;
+  edición vs lock se serializa; lock retry no cambia respuestas.
+- **Automated verification:** doble llamada, caller incompleto según regla
+  aprobada, deadline fijo, edición antes/después, vencimiento sin clientes,
+  rollback y privacidad.
+- **Manual smoke:** ambos editan durante countdown, recargan y observan
+  mismo fin; write tardío rechazado.
+- **Documentation update:** elegibilidad validada (todos los campos es aún
+  hipótesis preferida), duración final y mecanismo de avance.
+- **Exit criteria:** deadline y lock son únicos; progreso no depende de
+  Presence ni de que el host mantenga abierta la página.
+- **Depends on:** 9 y decisión sobre elegibilidad/duración de llamada.
+- **Does not depend on:** política de cierre temprano; puede quedar fuera
+  del primer MVP si se acuerda explícitamente ese alcance.
+
+### 11. Lectura de review y duplicados provisionales
+
+**Estado local:** integrado en `main`. La RPC
+exige `REVIEWING` y bloqueo confirmado, autoriza sólo al roster congelado y
+devuelve originales, vacíos y grupos provisionales sin valores normalizados.
+La UI muestra una categoría por vez en orden configurado, con recuperación
+tras reconexión y reintento, e identifica a los participantes coincidentes.
+La validación de DB local incluye lectura durante
+una transición SQL sin commit. No se aplicó migration remota; desafíos y
+puntaje siguen pendientes. La UI se revisó visualmente a 390 px con una
+identidad; queda pendiente el smoke visual de dos sesiones aisladas.
+
+- **Goal:** tras lock, el roster ve respuestas de la ronda y posibles
+  duplicados normalizados sin juicio semántico automático.
+- **Scope:** lectura autorizada de respuestas ajenas sólo en REVIEWING,
+  vacías/no vacías y grupos de coincidencia provisionales; UX de excepciones.
+- **Explicitly out of scope:** invalidar respuestas, otorgar puntos.
+- **Likely files / areas:** RPC/read model review, UI y tests de fase.
+- **Database impact:** ninguna tabla de scores; lectura protegida por roster,
+  fase y Room/tipo; evitar broad SELECT.
+- **Application impact:** vista mobile de revisión y recarga idempotente.
+- **Security requirements:** antes de review el mismo endpoint no revela
+  datos; nuevo miembro de Room no hereda acceso a roster histórico.
+- **Concurrency / idempotency:** lock y apertura de lectura tienen un orden
+  único; lecturas repetidas no mutan estado.
+- **Automated verification:** matriz de actores/fases, normalización básica y
+  duplicados por categoría/ronda; cero fuga previa.
+- **Manual smoke:** dos jugadores dejan un duplicado y un vacío; sólo tras
+  lock ambos ven lo necesario para revisar.
+- **Documentation update:** elección de presentación de review y regla de
+  comparación aplicada.
+- **Exit criteria:** excepción visible sin filtrar datos en fase anterior.
+- **Depends on:** 10 y decisión de UX de review.
+- **Does not depend on:** challenges ni score definitivo.
+
+### 12. Desafíos y decisión social
+
+**Estado de implementación:** integrado en `main` local; pendiente de smoke
+visual de dos sesiones. La migration se aplicó a Supabase local sin resetear la
+base existente; los validadores DB locales de los incrementos 11 y 12 pasan,
+al igual que los 766 tests de aplicación y el build. El lint termina con un
+warning previo en `validate-6-2.mjs`. La UI de dos navegadores aún no se
+verificó. El diseño fija una disputa a la vez por ronda y una por respuesta, 30
+segundos de plazo y roster congelado al iniciar la sesión. El
+impugnador registra automáticamente `INVALID`. Con 3+ jugadores el autor no
+vota y se requiere más de la mitad de elegibles; empate significa válida. Con
+dos jugadores, sólo el autor puede aceptar (`INVALID`) o rechazar (`VALID`).
+La falta de respuesta deja válida la respuesta. La DB extiende el Cron
+existente con un lock advisory y lotes acotados; no agrega otro job. El estado
+de la disputa sólo expone al roster el objetivo, plazo, voto propio y
+resultado, nunca votos ajenos ni conteos. Aún no se aplicó la migration
+remotamente. La suite DB global no se ejecutó completa: su precondición exige
+una DB sin Groups y la DB local preexistente contiene fixtures; no se reinició
+para preservarlos. El Cron fue comprobado localmente, no en un destino real.
+
+- **Goal:** una respuesta no vacía puede impugnarse y resolverse con la
+  regla de 3+ o acuerdo mutuo de 2, sin bloquear indefinidamente la ronda.
+- **Scope:** una impugnación abierta por ronda, un intento por respuesta,
+  creación, voto/acuerdo, quórum, desempate válido, plazo y resolución.
+- **Explicitly out of scope:** diccionarios, IA y árbitro host.
+- **Likely files / areas:** `tutti_frutti_challenges`, votos, RPCs, UI y
+  tests de concurrencia.
+- **Database impact:** claves únicas por desafío/votante, FK a answer y
+  roster, estado final inmutable, señal Realtime sin contenido de votos,
+  RLS/grants privados.
+- **Application impact:** sólo actores elegibles votan; UI reconstruye
+  estado y resultado autorizado.
+- **Security requirements:** derivar identidad y elegibilidad desde `auth.uid()`
+  y roster congelado; autor excluido con 3+; sólo autor resuelve con 2;
+  outsider/no-roster no impugna ni vota; votos y conteos ajenos permanecen
+  privados.
+- **Concurrency / idempotency:** orden Room → sesión → sesión Tutti → ronda →
+  impugnación → voto; retries iguales no duplican ni cambian decisiones;
+  Cron y RPC serializan por locks comunes y el job usa lock advisory para
+  evitar trabajo duplicado.
+- **Automated verification:** mayoría, empate, ambos cierres anticipados, dos
+  jugadores, silencio/plazo, voto fuera de plazo, acceso por actor, privacidad,
+  retries y carrera con Cron.
+- **Manual smoke:** dos sesiones aisladas en móvil, revisión compartida del 11,
+  apertura/voto con 2 y 3+ jugadores, refresh, reconexión y vuelta a foreground.
+- **Documentation update:** elegibles, timeout/abstención, mecanismo de
+  acuerdo de dos y secuencia UX elegidos.
+- **Exit criteria:** resolución determinista autoritativa, sin voto posterior
+  al plazo; estado y UI reconstruibles desde servidor. Validar Cron en un
+  destino real antes de cualquier aplicación remota.
+- **Depends on:** 11 y reglas confirmadas en `product-decisions.md`.
+- **Does not depend on:** score o ronda siguiente.
+
+### 13. Puntuación inmutable de ronda
+
+**Estado de implementación:** integrado en el `main` local; ver
+`sources/project-status.md` para las validaciones y límites de entorno.
+
+- **Goal:** calcular 10/5/0 después de resolver desafíos y ofrecer totales
+  reproducibles sin doble adjudicación.
+- **Scope:** cierre manual de revisión por el host actual, duplicados entre
+  respuestas finalmente válidas, puntos por respuesta, marcador de ronda
+  puntuada; totales/ranking derivados.
+- **Explicitly out of scope:** tabla adicional de round scores, estadísticas
+  históricas globales o siguiente ronda.
+- **Likely files / areas:** RPC score, puntos en answers/ronda, read model
+  result, tests de reglas.
+- **Database impact:** puntos por respuesta y `scored_at` atómicos; CHECK de
+  0/5/10 e inmutabilidad tras puntuar. Las respuestas ausentes se muestran
+  como cero usando el roster y categorías congelados.
+- **Application impact:** el host cierra `REVIEWING`; todo el roster ve el
+  resultado por respuesta, total de ronda, acumulado y ranking.
+- **Security requirements:** cliente no envía puntos/validez/duplicados;
+  sólo roster autorizado ve resultados.
+- **Concurrency / idempotency:** locks Room → sesión compartida → sesión Tutti
+  → ronda; repetir el mismo round ID devuelve el resultado guardado; desafíos
+  abiertos impiden puntuar.
+- **Automated verification:** único 10, duplicado 5, inválido/vacío 0;
+  invalidar un duplicado vuelve único al restante; doble score sin suma.
+- **Manual smoke:** revisar, resolver y ver resultado idéntico en dos
+  dispositivos tras refresh.
+- **Documentation update:** persistencia final de puntos si difiere del
+  modelo propuesto.
+- **Exit criteria:** historial de una ronda puntuada permanece estable.
+- **Depends on:** 12.
+- **Does not depend on:** segunda ronda ni final de sesión.
+
+### 14. Siguiente ronda y agotamiento de letras
+
+- **Goal:** continuar con el mismo snapshot de categorías y roster, y una
+  letra distinta de las jugadas o saltadas.
+- **Scope:** el host actual avanza desde `RESULT`; la RPC bloquea Room → sesión
+  compartida → sesión Tutti Frutti → ronda y crea ronda/candidata atómicamente.
+  La vigente es la de mayor número. Un reintento con la última ronda puntuada
+  devuelve su sucesora única sin puntuar; bases anteriores se rechazan.
+- **Explicitly out of scope:** resultado final, retorno al lobby e historial
+  navegable.
+- **Database impact:** se reemplazan lecturas y voto de letra que apuntaban a
+  ronda 1; la lectura expone el ID de ronda, limita acumulados históricos a la
+  ronda consultada y usa la señal existente para invalidar. Se valida máximo,
+  agotamiento y unicidad del número y la letra.
+- **Application impact:** el host ve «Siguiente ronda» sólo antes de la final.
+  Falta de letras deja `RESULT` y muestra un error; el refresco periódico cubre
+  señales Realtime perdidas.
+- **Security requirements:** actor desde `auth.uid()`, host actual y roster
+  verificados; grants cerrados y cliente sin escritura directa.
+- **Concurrency / idempotency:** locks preceden lectura e insert; la sucesora
+  inmediata no puntuada define el reintento. Constraints únicas protegen
+  número y letra.
+- **Automated verification:** carrera/reintento, base antigua, fase/rol/roster,
+  agotamiento sin fila parcial, número consecutivo, letra única, recuperación y
+  voto en ronda 2, acumulado histórico y última ronda.
+- **Manual smoke:** dos sesiones aisladas, avance y señal; repetir con canal
+  interrumpido y recuperar por refresh/reconexión.
+- **Exit criteria:** siguiente ronda jugable; ronda anterior y su acumulado
+  permanecen inmutables.
+- **Depends on:** 13.
+- **Does not depend on:** resultado final ni revancha.
+
+### 15. Resultado final y retorno a lobby
+
+**Estado de implementación:** integrado en el `main` local; ver
+`sources/project-status.md` para las validaciones y límites de entorno.
+
+- **Goal:** después de la última ronda puntuada, la sesión queda FINISHED
+  y la misma Room vuelve a `lobby` de forma indivisible.
+- **Scope:** la puntuación final cierra sesión y devuelve la Room al lobby;
+  resultado estable para el roster congelado, lobby postpartida y close
+  separado.
+- **Explicitly out of scope:** iniciar otra sesión y rediseñar cierre Impostor.
+- **Database impact:** locks Room → sesión compartida → sesión Tutti → ronda,
+  `UPDATE ... RETURNING` guardados y un timestamp para ronda/sesión. El
+  resultado se agrupa sin tabla de totales. `P0055` bloqueó revancha hasta 16.
+- **Application impact:** URL estable de resultado, ganador o empate y lobby
+  postpartida sin inicio ni edición de configuración.
+- **Security requirements:** `room_session_participants` autoriza historia;
+  membresía actual sólo permite volver a la Room. Nuevos miembros no reciben
+  el ID ni el resultado anterior.
+- **Concurrency / idempotency:** Room serializa cierres; un retry valida el
+  estado guardado antes de devolverlo. Una inconsistencia falla sin reparación.
+- **Automated verification:** ronda intermedia, hueco sin puntuar, carrera,
+  retry tras lobby/close, empate múltiple, privacidad, slots y guard de revancha.
+- **Manual smoke:** última ronda → resultado → lobby; dos clientes recargan,
+  host cierra Room aparte; completar también smoke fin Impostor.
+- **Documentation update:** contrato de lifecycle y flujo de resultado
+  implementado.
+- **Exit criteria:** ninguna combinación `finished+playing` ni
+  `unfinished+lobby`; Room conserva identidad y miembros.
+- **Depends on:** 14.
+- **Does not depend on:** política de revancha.
+
+### 16. Revancha como sesión nueva
+
+**Estado de implementación:** integrado en esta rama; ver
+`sources/project-status.md` para las validaciones y límites de entorno.
+
+- **Goal:** desde la misma Room en lobby comenzar otra partida Tutti sin
+  reusar estado, puntos o roster anterior.
+- **Scope:** sólo el host actual inicia; el setup persistido queda editable en
+  lobby y se congela al inicio; el roster se toma de RoomParticipants actuales
+  registrados, independientemente de Presence; historial anterior.
+- **Explicitly out of scope:** cambiar juego de la Room, reabrir Room cerrada
+  o migrar Impostor a varias partidas por Room.
+- **Likely files / areas:** UI postgame/lobby, RPC start Tutti, draft,
+  loaders de sesión reciente y tests.
+- **Database impact:** múltiples sesiones finalizadas por Room y máximo una
+  activa; una Room en lobby con sesión sin `finished_at` falla `P0056`; la
+  configuración inválida conserva `P0038`. No se reescanea el historial
+  finalizado porque el cierre 15 garantiza rondas puntuadas atómicamente.
+- **Application impact:** host edita setup y ve «Nueva partida»; roster previo
+  que continúa en el resultado sigue la Room a `playing` tras una lectura
+  autorizada, con refresh/reconnect como recuperación.
+- **Security requirements:** actor/host actual y roster de sesión verificados;
+  miembro nuevo puede jugar pero no lee resultados anteriores.
+- **Concurrency / idempotency:** Room lock serializa; starter original o host
+  actual, si pertenecen al roster activo, recuperan el mismo estado. No se
+  crea una segunda sesión ni se reinicia la anterior.
+- **Automated verification:** config distinta, marcador nuevo en cero, roster
+  cambiado, error `P0056` vs `P0038`, carrera/retry tras sucesión, rollback,
+  historial y permisos.
+- **Manual smoke:** terminar partida, cambiar setup y roster, iniciar otra;
+  verificar resultado previo y navegación automática de dos sesiones.
+- **Documentation update:** política de revancha, config editable, roster,
+  retry y navegación implementados.
+- **Exit criteria:** nueva sesión jugable en la misma Room; sesiones y
+  resultados previos siguen inmutables y scoped a su roster.
+- **Depends on:** 15 y decisiones postgame indicadas abajo.
+- **Does not depend on:** cambios al lifecycle Impostor.
+
+### 17. Recovery, seguridad y cierre MVP
+
+- **Goal:** demostrar el ciclo entero bajo fallos de red, concurrencia y
+  permisos reales, sin introducir nuevas reglas.
+- **Scope:** matriz de refresh, foreground, carga directa, pérdida de red y
+  evento Realtime perdido en lobby, candidata, respuesta, countdown, review,
+  desafío, score, resultado y revancha; sucesión de host en ambos juegos,
+  incluido cambio durante countdown/review, retorno del host anterior y
+  ausencia de sucesor; revisión mobile/PWA progresiva.
+- **Explicitly out of scope:** offline completo para partidas sincronizadas,
+  nuevas abstracciones generales y backlog UX no observado.
+- **Likely files / areas:** tests focalizados faltantes, smokes DB/browser,
+  adaptadores y UI sólo donde fallen los escenarios.
+- **Database impact:** validar RLS/grants/RPCs y consistencia local completa;
+  cambiar esquema sólo ante defecto concreto en su propio corte.
+- **Application impact:** todos los loaders reconstruyen desde servidor;
+  caché/Realtime son pistas, no estado autoritativo.
+- **Security requirements:** matriz actor × juego × Group × Room × roster ×
+  fase, especialmente respuesta ajena antes de review, votos y secretos
+  Impostor; verificar payloads y acceso directo.
+- **Concurrency / idempotency:** repetir create/start/skip/call/lock/vote/
+  score/finish/rematch en clientes aislados y verificar unicidad e invariantes.
+- **Automated verification:** tests DB de migrations y permisos, `npm test`,
+  lint/build según cierre, validadores locales relevantes y regresión plena
+  Impostor; reportar los no ejecutados.
+- **Manual smoke:** ciclo completo Tutti de dos y de tres jugadores,
+  interrupciones en fases críticas, sucesión, final/rematch; ciclo completo
+  Impostor sin regresión; revisar tamaño mobile, lifecycle PWA y red.
+- **Documentation update:** status, contratos específicos y limitaciones
+  observadas; no convertir hipótesis no validadas en decisiones.
+- **Exit criteria:** definición MVP siguiente satisfecha con evidencia;
+  riesgos residuales documentados y auditoría cerrada.
+- **Depends on:** 2 y 7–16; cada corte previo ya debe tener recovery básica.
+- **Does not depend on:** features diferidas ni deploy a producción.
+
+#### Resultado de la auditoría local
+
+El corte quedó implementado en `codex/tutti-frutti-increment-17` sin cambio de
+esquema ni de reglas. El validador añadido
+`supabase/tests/validate-tutti-frutti-17.mjs` ejercita sucesión de host durante
+countdown y revisión, retorno del host anterior y ausencia de sucesor; pasó
+contra Supabase local antes del reinicio del entorno. También pasaron los
+validadores Tutti Frutti 7–16, Impostor 12.5 y sucesión 5.3/6.3. La suite DB
+completa quedó bloqueada por su precondición de base vacía: la instancia local
+contenía 227 Groups. No se reinició ni limpió.
+
+El smoke mobile de dos jugadores recorrió las tres rondas, recuperación tras
+reload, puntuación, resultado y retorno al lobby. Para una revancha de tres
+jugadores se verificaron el roster y la recuperación de respuestas tras reload
+y durante countdown; no se completó su resultado y cierre. Impostor tuvo
+validación DB completa del ciclo multironda, pero no smoke manual de navegador.
+La revisión a 390 px no observó desborde horizontal; se confirmó el manifest
+standalone y recuperación segura de una URL de resultado inválida. No se
+verificaron pérdida real de red ni activación de service worker. Tras el
+reinicio no fue posible repetir el nuevo validador porque faltó acceso al
+socket Docker. El registro de evidencia y límites restantes está en
+`sources/project-status.md`.
+
+La auditoría no halló defectos reproducibles que justificaran cambios de
+producto, permisos o esquema. Se cierra el corte con esos límites de validación
+documentados; no equivale a afirmar que los escenarios manuales pendientes se
+hayan ejecutado ni que producción haya sido auditada.
+
+Durante el smoke se observó que la información de sala quitaba protagonismo a
+la grilla. La UI ahora la resume con código, conexión del cliente y total del
+roster, y deja el roster/Presence individual en un `<details>` cerrado por
+defecto que conserva su apertura entre fases. No cambia el lobby ni el
+resultado final. Pasan las 15 pruebas focalizadas de la vista, la suite completa
+de 803 tests, lint y build; la última modificación queda pendiente de revisión
+visual con una sesión activa porque el navegador local permaneció en
+«Comprobando sala…».
+
+## Checkpoints de validación
+
+| Punto | Evidencia mínima antes de avanzar |
+| --- | --- |
+| 0–1, superficie compartida | DB local: backfill/tipo, Group/slot, create/join concurrente; tests de rutas y smoke Impostor create→join→start→reconnect→finish. **Impostor regression = PASS**. |
+| 2, lobby | Dos identidades: create/join, host/Presence, leave/close, refresh; outsider rechazado. **Impostor regression = PASS**. |
+| 3–5, sesiones/host | Preflight del destino, backfill, espejo start/end y rollback; host stale en lobby/playing, no-roster y carrera. **Impostor regression = PASS** antes de 7. |
+| 7–10, entrada | DB: roster/snapshot, letras/votos, escritura propia y privacidad, deadline/lock concurrentes. Browser: dos clientes, refresh y pérdida de red en cada fase. |
+| 11–13, juicio | Lectura sólo tras lock; 2 y 3+ jugadores, desafío/voto concurrente, empate/acuerdo y score idempotente. |
+| 14–16, ciclo | Rondas sin letra repetida, finish/lobby atómico con slot retenido, rematch nuevo e historial aislado; smoke Impostor end/close. |
+| 17, cierre | Suite DB y app pertinente, auditoría de matriz de actores, smokes completos mobile/PWA y reporte de límites reales. |
+
+Las pruebas DB deben ejecutarse contra Supabase local inequívocamente
+identificado, incluyendo intentos no autorizados, constraints, RPC guards,
+reintentos y carreras, no sólo el caso feliz. Antes de cualquier aplicación
+remota, identificar destino, contrastar datos reales con preflight y obtener
+autorización explícita separada. Cada incremento con cambios textuales cierra
+con `git diff --check`.
+
+## Decisiones abiertas, punto exacto de bloqueo
+
+Para el Incremento 10 ya se confirmó la llamada con todas las categorías
+persistidas y no vacías, la duración inicial de 45 segundos y la exclusión
+del cierre temprano. La operación del job en un destino real sigue siendo una
+validación previa a cualquier aplicación remota, no una decisión de producto.
+
+| Decisión pendiente | Bloquea | No bloquea |
+| --- | --- | --- |
+| Datos reales del destino, estrategia de backfill y alternativa A de sesión mínima | 3/4 y constraints estrictas | 0–2 con migración local segura; el remoto requiere preflight antes de aplicar |
+| Normalización más allá de trim/case | 9/11/13 sólo si se pretende incluirla; si no, declarar versión mínima trim/case en 9 | 0–8 |
+| Cierre temprano al completar todos: elegibilidad con Presence cambiante y reversión de completion | Sólo implementación de ese guard; no se añade silenciosamente al 10 | Flujo con deadline como garantía de progreso |
+| Reglas de desafío social | Confirmadas e implementadas en 12 | 0–11 |
+| Autoridad de avance a ronda siguiente | 14 si requiere acción de usuario | 0–13 |
+| Acceso a resultado final tras salir y presentación mínima postgame | 15 en el read model/UX respectivo | 0–14 |
+| Quién inicia revancha, borrador editable, roster entre partidas y lobby postgame | Resuelto en 16 | 0–15 |
+
+La política de sucesión en `playing` está **CONFIRMED** y ya no bloquea 5 ni
+el guard requerido por 7. Persisten las dependencias técnicas: 5 necesita 4,
+roster común y verificación del deploy/destino; el código de 7 está en su rama
+y se validó localmente. El 17 debe comprobar recovery y smoke de esa política
+en ambos juegos. La comprobación del deploy es evidencia operativa, no una
+nueva decisión de producto.
+
+Una pregunta abierta bloquea **su guard o UX concretos**, no todos los
+incrementos anteriores. Si el producto decide que el cierre temprano es
+imprescindible para el MVP, definir su política antes de cerrar 10; de otro
+modo documentar expresamente su exclusión del primer corte y verificar que el
+deadline siempre progresa. No asumir que un desconectado deja de integrar el
+roster ni que su ausencia concede un voto automático.
+
+## Riesgos y auditoría prioritaria
+
+Los cortes **0–1** son de alto riesgo por backfill de tipo, firmas de
+create/join/discovery y slot único global. Los **3–5** son de alto riesgo por
+mapeo histórico, doble escritura transaccional de Impostor y sucesión con
+deploy no verificado; requieren auditoría de SQL, datos reales y regresión
+Impostor antes de proseguir. Los **9–10** requieren auditoría de privacidad y
+carreras entre escritura y bloqueo; 12–13, de elegibilidad concurrente y score
+duplicado; **15–16**,
+de finish/lobby atómico, slots e historia. En todos los casos comprobar
+cross-group, cross-room, cross-game y no-roster. Realtime no transporta
+respuestas privadas antes de review ni votos/secretos fuera de su lectura
+autorizada. La recuperación se verifica al introducir cada fase y se vuelve
+a recorrer en 17.
+
+## Tutti Frutti MVP — criterio de cierre
+
+Un jugador elige Tutti Frutti, crea o entra a una Room, reconoce host y
+miembros, configura categorías/rondas y comienza con al menos dos jugadores.
+Cada sesión congela roster/configuración, prepara letras sin repetir, admite
+skip según mayoría, persiste respuestas privadas, fija un solo countdown y
+bloquea una vez. Tras el lock, el roster revisa, impugna y decide con reglas
+de 3+ y 2 jugadores; el sistema aplica 10/5/0 de forma idempotente, avanza
+rondas y muestra un resultado final inmutable. La Room vuelve a lobby sin
+perder miembros/slot; una revancha crea otra sesión. Refresh, desconexión,
+foreground y eventos perdidos deben reconstruir estado autorizado. RLS, grants,
+RPCs, privacidad, carreras y smoke mobile requieren verificación en DB local y
+clientes aislados; la evidencia reunida y los escenarios manuales pendientes
+del Incremento 17 se registran en `sources/project-status.md`. Ninguna
+operación de producción queda implícita en esta definición.

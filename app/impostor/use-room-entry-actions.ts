@@ -43,9 +43,7 @@ export type RoomEntryActionsController = {
   joinRoomByCode: (rawCode: string) => void;
 };
 
-// Shared entry point for the "create or join a Room" intent, reused by both
-// /impostor (direct entry) and /impostor/grupo (secondary surface), so the
-// two never diverge on single-flight, intent recording, or error handling.
+// Shared entry point for creating or joining an Impostor Room.
 export function createRoomEntryActionsController({
   createClient,
   navigate,

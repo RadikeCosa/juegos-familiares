@@ -237,5 +237,12 @@ ocultamiento visual como sustituto de esta separación.
 - Una palabra normalizada no se repite en la misma GameSession.
 - Scoring, creación de ronda y cierre de tanda son transaccionales e idempotentes
   frente a reintentos previstos.
-- La sucesión automática de host usa liveness autoritativa y está acotada al
-  lobby; Presence por sí sola nunca cambia `rooms.host_player_id`.
+- La política **CONFIRMED** permite sucesión en `playing` cuando el host queda
+  stale según liveness autoritativa. El sucesor debe ser un RoomParticipant
+  vigente, pertenecer al roster congelado de la tanda y tener liveness activa;
+  se elige determinísticamente. La RPC versionada usa `session_players` para
+  ese guard. Presence sólo puede motivar una evaluación; no transfiere
+  autoridad. La sucesión cambia únicamente `rooms.host_player_id`: no altera
+  roles, ronda, votos, puntajes ni participación. Si el host anterior vuelve,
+  no recupera el rol automáticamente; sin sucesor elegible no hay cambio.
+  Consultar `sources/project-status.md`: el deploy no fue verificado.
