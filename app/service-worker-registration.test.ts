@@ -16,7 +16,7 @@ describe("service worker registration contract", () => {
     expect(registrationSource).toContain('navigator.serviceWorker.register("/sw.js", { scope: "/" })');
   });
 
-  it("does not implement custom install prompts, background sync or automatic update reloads", () => {
+  it("does not implement custom install prompts or background sync", () => {
     expect(registrationSource).not.toContain("beforeinstallprompt");
     expect(registrationSource).not.toContain("sync");
     expect(registrationSource).not.toContain("clients.claim");
@@ -30,18 +30,17 @@ describe("service worker registration contract", () => {
     expect(registrationSource).toContain("Actualizá cuando no estés jugando una tanda.");
   });
 
-  it("applies updates only through an explicit user action", () => {
+  it("asks the waiting worker to activate only through an explicit user action", () => {
     const applyUpdateStart = registrationSource.indexOf("function applyUpdate()");
     const applyUpdateSource = registrationSource.slice(applyUpdateStart);
 
     expect(applyUpdateSource).toContain("isCriticalGameplayPath(window.location.pathname)");
     expect(applyUpdateSource).toContain("postMessage({");
     expect(applyUpdateSource).toContain("JUEGOS_FAMILIA_APPLY_UPDATE");
-    expect(applyUpdateSource).toContain('"controllerchange"');
-    expect(applyUpdateSource).toContain("window.location.reload()");
-    expect(applyUpdateSource.indexOf('"controllerchange"')).toBeLessThan(
-      applyUpdateSource.indexOf("postMessage({"),
-    );
+    expect(registrationSource).toContain('addEventListener("controllerchange", reloadWhenControlled)');
+    expect(registrationSource).toContain("removeEventListener(\"controllerchange\", reloadWhenControlled)");
+    expect(registrationSource).toContain("reloadAfterSafeRouteRef.current = true");
+    expect(registrationSource).toContain("!reloadAfterSafeRouteRef.current || isCriticalGameplayPath(pathname)");
     expect(registrationSource).not.toContain("isCriticalRoute");
   });
 

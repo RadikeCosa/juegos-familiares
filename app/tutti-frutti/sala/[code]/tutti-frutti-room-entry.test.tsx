@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -12,6 +14,10 @@ const lobby: ActiveRoomLobby = {
     { playerId: "member", nickname: "Beto", isHost: false, isSelf: false, joinedAt: "2026-09-21T00:01:00Z" }
   ]
 };
+const roomEntrySource = readFileSync(
+  join(process.cwd(), "app/tutti-frutti/sala/[code]/tutti-frutti-room-entry.tsx"),
+  "utf8",
+);
 
 function render(
   current: ActiveRoomLobby,
@@ -29,6 +35,18 @@ function render(
 }
 
 describe("Tutti Frutti lobby", () => {
+  it("keeps authoritative liveness and host succession active while playing", () => {
+    const effectStart = roomEntrySource.indexOf("if (!roomId || !selfPlayerId) return;");
+    const effectEnd = roomEntrySource.indexOf("async function startGame()", effectStart);
+    const roomLifecycleEffect = roomEntrySource.slice(effectStart, effectEnd);
+
+    expect(roomLifecycleEffect).toContain('lobby?.room.status !== "lobby" && lobby?.room.status !== "playing"');
+    expect(roomLifecycleEffect).toContain("startRoomLivenessHeartbeat({");
+    expect(roomLifecycleEffect).toContain("refreshMyRoomLiveness(");
+    expect(roomLifecycleEffect).toContain("reassignRoomHostIfStale(");
+    expect(roomLifecycleEffect).toContain("subscribeToRoomPresence(");
+  });
+
   it("shows the authoritative roster, host, and visual Presence separately", () => {
     const markup = render(lobby, new Set(["host"]));
     expect(markup).toContain("Código TUTT1234");

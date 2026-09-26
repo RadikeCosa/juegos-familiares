@@ -806,13 +806,14 @@ export function TuttiFruttiRoomEntry({ code, postgameSessionId = null }: {
     if (!roomId || !selfPlayerId) return;
     const client = createBrowserSupabaseClient();
     const changes = subscribeToRoomChanges(client as unknown as ImpostorRoomChangesClient, roomId, () => { void refresh(); }, "tutti_frutti");
-    if (lobby?.room.status !== "lobby") {
+    if (lobby?.room.status !== "lobby" && lobby?.room.status !== "playing") {
       return () => { void changes.unsubscribe(); };
     }
     const heartbeat = startRoomLivenessHeartbeat({
       refresh: () => refreshMyRoomLiveness(client as unknown as ImpostorRoomsClient),
       onError: () => setConnection("reconnecting")
     });
+    // Presence only drives the participant connection indicators; liveness and host succession come from RPCs below.
     const roomPresence = subscribeToRoomPresence(client as unknown as ImpostorRoomPresenceClient, {
       roomId, currentPlayerId: selfPlayerId, gameType: "tutti_frutti",
       onSync: setPresence,

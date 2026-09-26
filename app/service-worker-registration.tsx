@@ -17,6 +17,8 @@ function isCriticalGameplayPath(pathname: string) {
 function usePwaUpdateNotice() {
   const [updateState, setUpdateState] = useState<PwaUpdateState | null>(null);
   const isApplyingUpdateRef = useRef(false);
+  const reloadAfterSafeRouteRef = useRef(false);
+  const pathname = usePathname();
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "production") {
@@ -53,6 +55,35 @@ function usePwaUpdateNotice() {
     });
   }, []);
 
+  useEffect(() => {
+    if (!updateState || !("serviceWorker" in navigator)) {
+      return;
+    }
+
+    function reloadWhenControlled() {
+      if (isCriticalGameplayPath(window.location.pathname)) {
+        reloadAfterSafeRouteRef.current = true;
+        return;
+      }
+
+      window.location.reload();
+    }
+
+    navigator.serviceWorker.addEventListener("controllerchange", reloadWhenControlled);
+    return () => {
+      navigator.serviceWorker.removeEventListener("controllerchange", reloadWhenControlled);
+    };
+  }, [updateState]);
+
+  useEffect(() => {
+    if (!reloadAfterSafeRouteRef.current || isCriticalGameplayPath(pathname)) {
+      return;
+    }
+
+    reloadAfterSafeRouteRef.current = false;
+    window.location.reload();
+  }, [pathname]);
+
   function applyUpdate() {
     if (
       !updateState ||
@@ -66,24 +97,24 @@ function usePwaUpdateNotice() {
     const waitingWorker = updateState.registration.waiting;
 
     if (!waitingWorker) {
-      isApplyingUpdateRef.current = false;
+      if (isCriticalGameplayPath(window.location.pathname)) {
+        reloadAfterSafeRouteRef.current = true;
+        isApplyingUpdateRef.current = false;
+        return;
+      }
+
+      window.location.reload();
       return;
     }
 
-    navigator.serviceWorker.addEventListener(
-      "controllerchange",
-      () => window.location.reload(),
-      { once: true },
-    );
     waitingWorker.postMessage({ type: "JUEGOS_FAMILIA_APPLY_UPDATE" });
   }
 
-  return { applyUpdate, updateState };
+  return { applyUpdate, updateState, pathname };
 }
 
 export function ServiceWorkerRegistration() {
-  const { applyUpdate, updateState } = usePwaUpdateNotice();
-  const pathname = usePathname();
+  const { applyUpdate, updateState, pathname } = usePwaUpdateNotice();
 
   if (!updateState) {
     return null;
