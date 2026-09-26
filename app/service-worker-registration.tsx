@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type PwaUpdateState = {
-  isCriticalRoute: boolean;
   registration: globalThis.ServiceWorkerRegistration;
 };
 
 function isCriticalGameplayPath(pathname: string) {
-  return pathname.startsWith("/impostor/sala/");
+  return (
+    pathname.startsWith("/impostor/sala/") ||
+    pathname.startsWith("/tutti-frutti/sala/")
+  );
 }
 
 function usePwaUpdateNotice() {
@@ -25,10 +28,7 @@ function usePwaUpdateNotice() {
     }
 
     function markUpdateAvailable(registration: globalThis.ServiceWorkerRegistration) {
-      setUpdateState({
-        isCriticalRoute: isCriticalGameplayPath(window.location.pathname),
-        registration,
-      });
+      setUpdateState({ registration });
     }
 
     void navigator.serviceWorker.register("/sw.js", { scope: "/" }).then((registration) => {
@@ -54,15 +54,28 @@ function usePwaUpdateNotice() {
   }, []);
 
   function applyUpdate() {
-    if (!updateState || updateState.isCriticalRoute || isApplyingUpdateRef.current) {
+    if (
+      !updateState ||
+      isCriticalGameplayPath(window.location.pathname) ||
+      isApplyingUpdateRef.current
+    ) {
       return;
     }
 
     isApplyingUpdateRef.current = true;
-    updateState.registration.waiting?.postMessage({
-      type: "JUEGOS_FAMILIA_APPLY_UPDATE",
-    });
-    window.location.reload();
+    const waitingWorker = updateState.registration.waiting;
+
+    if (!waitingWorker) {
+      isApplyingUpdateRef.current = false;
+      return;
+    }
+
+    navigator.serviceWorker.addEventListener(
+      "controllerchange",
+      () => window.location.reload(),
+      { once: true },
+    );
+    waitingWorker.postMessage({ type: "JUEGOS_FAMILIA_APPLY_UPDATE" });
   }
 
   return { applyUpdate, updateState };
@@ -70,12 +83,13 @@ function usePwaUpdateNotice() {
 
 export function ServiceWorkerRegistration() {
   const { applyUpdate, updateState } = usePwaUpdateNotice();
+  const pathname = usePathname();
 
   if (!updateState) {
     return null;
   }
 
-  if (updateState.isCriticalRoute) {
+  if (isCriticalGameplayPath(pathname)) {
     return (
       <div className="pwa-update-notice" role="status" aria-live="polite">
         <strong>Nueva versión disponible</strong>
