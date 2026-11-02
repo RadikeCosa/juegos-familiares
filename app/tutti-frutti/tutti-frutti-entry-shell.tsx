@@ -108,7 +108,7 @@ export function TuttiFruttiEntryShell() {
       <form className="impostor-create-group impostor-room-join-step" onSubmit={onJoin}>
         <label className="impostor-field">
           <span>Código de sala</span>
-          <input name="roomCode" type="text" autoCapitalize="characters" autoCorrect="off" spellCheck={false} maxLength={8} required disabled={busy} />
+          <input name="roomCode" type="text" autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={64} placeholder="mate-luna" required disabled={busy} />
         </label>
         <button className="impostor-action" type="submit" disabled={busy}>Unirme a una sala</button>
       </form>

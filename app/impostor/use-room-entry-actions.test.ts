@@ -107,7 +107,7 @@ describe("createRoomEntryActionsController", () => {
 
   it("reveals the join form on request and normalizes the submitted code", async () => {
     const rpc = vi.fn(async (_fn: string, params?: { room_code: string }) => ({
-      data: [createRoomLobbyRow({ code: params?.room_code ?? "" })],
+      data: [createRoomLobbyRow({ code: params?.room_code?.toUpperCase() ?? "" })],
       error: null,
     }));
     const client = { rpc } as unknown as ImpostorRoomsClient;
@@ -130,7 +130,7 @@ describe("createRoomEntryActionsController", () => {
     await settlePromises();
 
     expect(rpc).toHaveBeenCalledWith("join_room_by_code", {
-      room_code: "AB7KQ2M4",
+      room_code: "ab7kq2m4",
     });
     expect(recordJoinIntent).toHaveBeenCalledWith("AB7KQ2M4");
     expect(navigate).toHaveBeenCalledWith("/impostor/sala/AB7KQ2M4");

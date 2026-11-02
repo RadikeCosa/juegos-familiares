@@ -241,7 +241,7 @@ async function validate() {
   assertEqual(roomRowsA1.length, 1, "Case A should return exactly one participant row.");
   assertEqual(roomRowsA1[0].room_status, "lobby", "Case A room should start in lobby.");
   assertEqual(roomRowsA1[0].participant_is_host, true, "Case A creator should be host.");
-  assert(/^[A-HJ-NP-Z2-9]{8}$/.test(roomRowsA1[0].room_join_code), "Case A join code format mismatch.");
+  assert(/^[A-Z]{3,7}-[A-Z]{3,7}$/.test(roomRowsA1[0].room_join_code), "Case A join code format mismatch.");
 
   const dbRoomA = roomRowForHost(playerA1Id);
   const roomAId = dbRoomA[0];

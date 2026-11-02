@@ -115,3 +115,19 @@ los cambios de Tutti Frutti y las decisiones de archivo documental de esta
 tarea. La implementación vive en un worktree separado. No se realizó commit,
 push, PR, merge, despliegue ni cambio remoto. La documentación de producción
 no se utiliza como evidencia de despliegue de Diccionario.
+
+## Revisión previa a publicación — 2026-11-02
+
+Se integró `origin/main@4e9c339` para conservar los códigos legibles y las fuentes
+locales ya productivas. La revisión encontró una copia anterior de las RPCs de
+entrada dentro de la migration de Diccionario: se reemplazó por la baseline de
+códigos legibles, manteniendo normalización de acentos y separadores y el error
+de agotamiento del generador. La entrada de Diccionario admite códigos largos.
+
+Se añadieron regresiones de creación con códigos legibles y recuperación por
+variantes normalizadas. La disponibilidad del juego es un booleano público,
+sin datos de catálogo, y falla cerrada si falta su fila de configuración.
+La migration tiene límites de espera para no retener locks de producción.
+
+El destino se confirmó contrastando el Supabase vinculado con el origen usado
+por los bundles públicos de `juegos-familiares.vercel.app`.

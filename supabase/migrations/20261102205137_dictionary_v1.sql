@@ -1,4 +1,6 @@
 -- Diccionario v1. Disabled until an authorized migration activates a reviewed catalogue.
+set local lock_timeout = '5s';
+set local statement_timeout = '60s';
 create schema if not exists dictionary_private;
 revoke all on schema dictionary_private from public, anon, authenticated;
 
@@ -107,7 +109,7 @@ begin
  update dictionary_private.settings set enabled=value;
 end $$;
 create function public.get_dictionary_availability() returns boolean language sql stable security definer set search_path='' as $$
- select enabled from dictionary_private.settings where singleton;
+ select coalesce((select enabled from dictionary_private.settings where singleton),false);
 $$;
 
 -- Close only Diccionario state. Caller holds the Room row lock.
@@ -196,7 +198,7 @@ begin
     raise exception 'Juego de sala invalido.' using errcode = 'P0028';
   end if;
 
-  if requested_game_type = 'dictionary' and not public.get_dictionary_availability() then
+  if requested_game_type='dictionary' and not public.get_dictionary_availability() then
     raise exception 'Diccionario todavía no está habilitado.' using errcode='D0002';
   end if;
   current_auth_user_id := auth.uid();
@@ -223,7 +225,6 @@ begin
 
   if requested_game_type='dictionary' and active_room_id is not null
     and dictionary_private.expire(active_room_id) then active_room_id:=null; end if;
-
   if active_room_id is null then
     for attempt in 1..8 loop
       new_join_code := public.generate_room_join_code();
@@ -252,7 +253,8 @@ begin
     end loop;
 
     if active_room_id is null then
-      raise exception 'No se pudo crear la sala. Intenta de nuevo.';
+      raise exception 'No pudimos generar un código disponible. Intentá crear la sala de nuevo'
+        using errcode = 'P0057';
     end if;
   end if;
 
@@ -361,7 +363,7 @@ begin
       using errcode = 'P0002';
   end if;
 
-  normalized_code := upper(btrim(coalesce(room_code, '')));
+  normalized_code := public.normalize_room_join_code(room_code);
 
   select rooms.id, rooms.group_id, rooms.status, rooms.game_type
     into target_room_id, target_room_group_id, target_room_status, target_room_game_type
@@ -378,9 +380,7 @@ begin
     raise exception 'El codigo pertenece a otro juego.' using errcode = 'P0030';
   end if;
 
-  if target_room_game_type='dictionary' and dictionary_private.expire(target_room_id) then
-    return;
-  end if;
+  if target_room_game_type='dictionary' and dictionary_private.expire(target_room_id) then return; end if;
   if target_room_status <> 'lobby' then
     raise exception 'Esta sala ya no esta disponible.'
       using errcode = 'P0011';
@@ -422,8 +422,8 @@ begin
 
     active_room_id := target_room_id;
   end if;
-  if target_room_game_type='dictionary' then perform dictionary_private.touch(target_room_id); end if;
 
+  if target_room_game_type='dictionary' then perform dictionary_private.touch(target_room_id); end if;
   return query
   select
     rooms.id,
@@ -490,7 +490,7 @@ begin
   select rm.id into rid from public.rooms rm join public.room_participants rp on rp.room_id=rm.id
   join public.players p on p.id=rp.player_id and p.group_id=rm.group_id
   where rm.game_type='dictionary' and p.auth_user_id=auth.uid()
-   and ((target_room_id is not null and rm.id=target_room_id) or (target_room_id is null and rm.join_code=upper(btrim(room_code))));
+   and ((target_room_id is not null and rm.id=target_room_id) or (target_room_id is null and rm.join_code=public.normalize_room_join_code(room_code)));
  end if;
  if rid is null then raise exception 'La partida no está disponible para tu cuenta.' using errcode='D0003'; end if;
  select id into pid from public.players where auth_user_id=auth.uid();
@@ -720,8 +720,8 @@ do $$ declare obj record; begin
 end $$;
 revoke all on all functions in schema dictionary_private from public,anon,authenticated;
 grant execute on function dictionary_private.can_read_room(uuid) to authenticated;
-revoke all on function public.get_dictionary_availability() from public,anon;
-grant execute on function public.get_dictionary_availability() to authenticated;
+revoke all on function public.get_dictionary_availability() from public;
+grant execute on function public.get_dictionary_availability() to anon, authenticated;
 revoke all on function public.get_dictionary_state(uuid,uuid,text),public.save_dictionary_configuration(uuid,integer),
  public.start_dictionary_session(uuid,uuid),public.submit_dictionary_definition(uuid,uuid,text),public.submit_dictionary_vote(uuid,uuid,uuid),
  public.advance_dictionary_round(uuid,uuid),public.finish_dictionary_session(uuid,uuid),public.heartbeat_dictionary_room(uuid) from public,anon;

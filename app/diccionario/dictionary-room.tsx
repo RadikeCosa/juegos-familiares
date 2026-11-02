@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createBrowserSupabaseClient } from "../../lib/supabase/browser-client";
 import { leaveDictionaryRoom, dictionaryRpc, normalizeDictionaryDefinition, type DictionaryOperation, type DictionaryState } from "../../lib/supabase/dictionary";
 import styles from "./dictionary.module.css";
+import { formatRoomJoinCode } from "../../lib/supabase/impostor-rooms";
 type PendingAction = {
     operation: DictionaryOperation;
     args: Record<string, unknown>;
@@ -131,7 +132,7 @@ export function DictionaryRoom({ code, sessionId, initialLobby = false }: {
     const preview = normalizeDictionaryDefinition(definition), length = Array.from(preview).length;
     const roster = isLobby ? state.lobbyParticipants : state.participants;
     return <section className={styles.content} aria-labelledby="dictionary-heading">
-    <header className={styles.header}><div><p className="impostor-kicker">Diccionario · Sala {state.code}</p><h1 id="dictionary-heading">{isLobby ? "Listos para inventar" : ended ? "Resultado de la partida" : `Ronda ${round?.number ?? 1} de ${state.roundCount}`}</h1></div></header>
+    <header className={styles.header}><div><p className="impostor-kicker">Diccionario · Sala {formatRoomJoinCode(state.code)}</p><h1 id="dictionary-heading">{isLobby ? "Listos para inventar" : ended ? "Resultado de la partida" : `Ronda ${round?.number ?? 1} de ${state.roundCount}`}</h1></div></header>
     {visibleError && <div role="alert"><p>{visibleError}</p>{pending && <button className="impostor-action" disabled={busy} onClick={() => void act(pending)}>Reintentar la misma acción</button>}</div>}
     {isLobby ? <>
       <p>Se necesitan al menos 3 jugadores. El anfitrión inicia cuando estén todos.</p>

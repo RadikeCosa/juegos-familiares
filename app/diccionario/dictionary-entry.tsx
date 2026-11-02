@@ -63,5 +63,5 @@ export function DictionaryEntry() {
     if (room)
         return <><p>Ya tenés una sala activa.</p><Link className="impostor-action impostor-action--primary" href={roomPath(room.room.gameType, room.room.code)}>Volver a la sala</Link></>;
     return <section className="impostor-platform-context"><p>Hola, {platform.player.nickname}.</p>{enabled ? <button className="impostor-action impostor-action--primary" disabled={busy} onClick={() => void enter("create")}>Crear sala</button> : <p>Estamos preparando el catálogo. Diccionario todavía no está habilitado.</p>}
-    <form onSubmit={join} className="impostor-create-group"><label className="impostor-field">Código de sala<input name="code" required autoCapitalize="characters" maxLength={8} disabled={busy}/></label><button className="impostor-action" disabled={busy}>Unirme a una sala</button></form>{error && <p role="alert">{error}</p>}</section>;
+    <form onSubmit={join} className="impostor-create-group"><label className="impostor-field">Código de sala<input name="code" required autoCapitalize="characters" maxLength={32} disabled={busy}/></label><button className="impostor-action" disabled={busy}>Unirme a una sala</button></form>{error && <p role="alert">{error}</p>}</section>;
 }

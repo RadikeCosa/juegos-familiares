@@ -25,6 +25,10 @@ function rpc(user,fn,args={}){return JSON.parse(sql(command(user,fn,args)));}
 async function concurrent(user,fn,args={}){const {stdout}=await run("psql",[db,"-XqAt","-v","ON_ERROR_STOP=1","-c",command(user,fn,args)]);return JSON.parse(stdout.trim());}
 function rejects(user,fn,args,code){try{rpc(user,fn,args);throw new Error("Unexpected success");}catch(e){assert(e.stderr?.includes(code)||e.stderr?.includes(expectedMessages[code]??code),`${fn} must reject ${code}: ${e.stderr??e.message}`);checks++;}}
 const expectedMessages={D0002:"300 entradas",D0003:"no está disponible",D0004:"Sólo el anfitrión",D0005:"al menos 3",D0006:"No alcanzan",D0007:"ya terminó",D0008:"definición ajena"};
+// The source local DB may predate production's readable room-code migration.
+if(sql("select to_regprocedure('public.normalize_room_join_code(text)') is not null")==="f") {
+ sql("begin;"+readFileSync(new URL("../migrations/20261102195643_readable_room_codes.sql",import.meta.url),"utf8")+";commit;");
+}
 const migration = readdirSync(new URL("../migrations/",import.meta.url)).find(n=>n.endsWith("_dictionary_v1.sql"));
 if(sql("select to_regclass('dictionary_private.cards') is not null")==="f"){
  const ddl=readFileSync(new URL(`../migrations/${migration}`,import.meta.url),"utf8");
@@ -36,6 +40,10 @@ for(const role of ["anon","authenticated"]){for(const table of ["cards","word_us
  let denied=false;try{sql(`set role ${role};select * from dictionary_private.${table};`);}catch{denied=true;}check(denied,`${role} cannot read ${table} directly`);
 }}
 let denied=false;try{sql("set role authenticated;select dictionary_private.set_enabled(true)");}catch{denied=true;}check(denied,"client cannot activate game");
+sql("delete from dictionary_private.settings");
+check(sql("select public.get_dictionary_availability()")==="f","missing flag state fails closed");
+sql("insert into dictionary_private.settings default values");
+equal(sql("set role anon;select public.get_dictionary_availability()"),"f","public availability exposes only the disabled flag");
 // These are synthetic fixtures, not human-reviewed catalogue content. This DB is disposable.
 sql(`insert into dictionary_private.cards(word,sense,definition,difficulty,verification_reference,status,reviewed_by,reviewed_at)
 select 'Fixture '||n,'Synthetic testing sense','Definición de prueba '||n||'.','medium','synthetic:test-only','reviewed','AUTOMATED FIXTURE, NOT HUMAN REVIEW',now() from generate_series(1,299) n on conflict(normalized_word) do nothing`);
@@ -55,17 +63,19 @@ function shared(user,fn,args){return JSON.parse(sql(command(user,fn,args).replac
 function room(){return shared(host.user,"create_room",{requested_game_type:"dictionary"});}
 let rm=room();
 const rid=rm.room_id;
+check(/^[A-Z]{3,7}-[A-Z]{3,7}$/.test(rm.room_join_code),"Dictionary creates readable room codes");
+equal(rpc(host.user,"get_dictionary_state",{room_code:rm.room_join_code.toLowerCase().replace("-"," - - ")}).roomId,rid,"direct Dictionary entry normalizes readable variants");
 equal(sql(`begin;set local role authenticated;set local request.jwt.claim.sub=${q(outsider.user)};select count(*) from public.dictionary_signals where room_id=${q(rid)};commit;`),"0","outsider cannot read signals");
 equal(sql(`begin;set local role authenticated;set local request.jwt.claim.sub=${q(host.user)};select count(*) from public.dictionary_signals where room_id=${q(rid)};commit;`),"1","member can read generic signal");
 rejects(host.user,"start_dictionary_session",{target_room_id:rid,request_id:randomUUID()},"D0005");
-for(const p of [second,third])shared(p.user,"join_room_by_code",{room_code:rm.room_join_code,expected_game_type:"dictionary"});
+for(const p of [second,third])shared(p.user,"join_room_by_code",{room_code:rm.room_join_code.toLowerCase().replace("-"," - - "),expected_game_type:"dictionary"});
 rejects(outsider.user,"get_dictionary_state",{target_room_id:rid},"D0003");
 rejects(second.user,"save_dictionary_configuration",{target_room_id:rid,requested_round_count:3},"D0004");
 rpc(host.user,"save_dictionary_configuration",{target_room_id:rid,requested_round_count:3});
 const key=randomUUID();let state=rpc(host.user,"start_dictionary_session",{target_room_id:rid,request_id:key});
 equal(state.round.phase,"WRITING","starts in writing");
 equal(rpc(host.user,"start_dictionary_session",{target_room_id:rid,request_id:key}).sessionId,state.sessionId,"start retry");
-let joinRejected=false;try{shared(newcomer.user,"join_room_by_code",{room_code:rm.room_join_code,expected_game_type:"dictionary"});}catch{joinRejected=true;}check(joinRejected,"no midgame join");
+let joinRejected=false;try{shared(newcomer.user,"join_room_by_code",{room_code:rm.room_join_code.toLowerCase().replace("-"," - - "),expected_game_type:"dictionary"});}catch{joinRejected=true;}check(joinRejected,"no midgame join");
 const session=state.sessionId,words=[];
 for(let n=1;n<=3;n++){
  const round=state.round;words.push(round.word);
@@ -91,7 +101,7 @@ for(let n=1;n<=3;n++){
 }
 equal(state.endedReason,"completed","final round completes");equal(state.roomStatus,"lobby","returns Room to lobby");
 check(new Set(words).size===3,"no repeat within session");
-shared(newcomer.user,"join_room_by_code",{room_code:rm.room_join_code,expected_game_type:"dictionary"});
+shared(newcomer.user,"join_room_by_code",{room_code:rm.room_join_code.toLowerCase().replace("-"," - - "),expected_game_type:"dictionary"});
 const fresh=rpc(newcomer.user,"get_dictionary_state",{target_room_id:rid});check(fresh.sessionId===null&&fresh.round===null,"new lobby participant cannot read previous session");
 rejects(newcomer.user,"get_dictionary_state",{target_session_id:session},"D0003");
 state=rpc(host.user,"start_dictionary_session",{target_room_id:rid,request_id:randomUUID()});check(!words.includes(state.round.word),"no repeat across games");
@@ -107,7 +117,7 @@ state=rpc(host.user,"heartbeat_dictionary_room",{target_room_id:rid});
 equal(state.closedReason,"inactivity","heartbeat cannot revive expired room");equal(state.roomStatus,"closed","expired room closed");equal(sql(`select count(*) from public.player_active_room_slots where room_id=${q(rid)}`),"0","expiration releases slots");
 equal(sql(`select count(*) from dictionary_private.word_usage where session_id=${q(state.sessionId)}`),"1","abandoned first word stays consumed");
 // Duration limit applies despite fresh activity; sweeps are idempotent.
-rm=room();for(const p of [second,third])shared(p.user,"join_room_by_code",{room_code:rm.room_join_code,expected_game_type:"dictionary"});
+rm=room();for(const p of [second,third])shared(p.user,"join_room_by_code",{room_code:rm.room_join_code.toLowerCase().replace("-"," - - "),expected_game_type:"dictionary"});
 state=rpc(host.user,"start_dictionary_session",{target_room_id:rm.room_id,request_id:randomUUID()});
 sql(`update public.room_sessions set started_at=now()-interval '73 hours' where id=${q(state.sessionId)};select dictionary_private.sweep_expired();select dictionary_private.sweep_expired()`);
 equal(rpc(host.user,"get_dictionary_state",{target_room_id:rm.room_id}).closedReason,"duration","absolute duration enforced");

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+    type ImpostorRoomsClient,
     advanceRoundResultToScoreboard,
     createCreateRoomController,
     createCloseRoomController,
@@ -21,6 +22,9 @@ import {
     joinRoomByCode,
     leaveRoom,
     normalizeRoomJoinCode,
+    formatRoomJoinCode,
+    roomPath,
+    copyRoomJoinCode,
     recordRoomCreationIntent,
     recordRoomJoinIntent,
     reassignRoomHostIfStale,
@@ -538,8 +542,8 @@ describe("room creation intent", () => {
 });
 
 describe("normalizeRoomJoinCode", () => {
-    it("trims whitespace and uppercases the code", () => {
-        expect(normalizeRoomJoinCode("  ab7kq2m4  ")).toBe("AB7KQ2M4");
+    it("only trims whitespace, leaving authoritative normalization to the DB", () => {
+        expect(normalizeRoomJoinCode("  ab7kq2m4  ")).toBe("ab7kq2m4");
     });
 });
 
@@ -576,7 +580,7 @@ describe("joinRoomByCode", () => {
         const supabase = { rpc: vi.fn(async () => ({ data: [singleParticipantRow], error: null })) };
         await joinRoomByCode(supabase, " ab7kq2m4 ", "tutti_frutti");
         expect(supabase.rpc).toHaveBeenCalledWith("join_room_by_code", {
-            room_code: "AB7KQ2M4", expected_game_type: "tutti_frutti"
+            room_code: "ab7kq2m4", expected_game_type: "tutti_frutti"
         });
 
         const wrongGameClient = { rpc: vi.fn(async () => ({ data: null, error: { code: "P0030" } })) };
@@ -608,7 +612,7 @@ describe("joinRoomByCode", () => {
         });
 
         expect(supabase.rpc).toHaveBeenCalledWith("join_room_by_code", {
-            room_code: "AB7KQ2M4"
+            room_code: "ab7kq2m4"
         });
     });
 
@@ -3525,5 +3529,28 @@ describe("subscribeToRoomPresence", () => {
         await subscription.recoverPresence();
 
         expect(channel.track).not.toHaveBeenCalled();
+    });
+});
+
+
+describe("readable Room codes", () => {
+    it("formats issued word codes while preserving legacy codes", () => {
+        expect(formatRoomJoinCode("MATE-LUNA")).toBe("mate-luna");
+        expect(formatRoomJoinCode("AB7KQ2M4")).toBe("AB7KQ2M4");
+        expect(normalizeRoomJoinCode("  Águila - LUNA  ")).toBe("Águila - LUNA");
+        expect(roomPath("tutti_frutti", "MATE-LUNA")).toBe("/tutti-frutti/sala/MATE-LUNA");
+    });
+
+    it("copies lowercase words and preserves legacy code contents", async () => {
+        const writeText = vi.fn(async () => {});
+        await copyRoomJoinCode("MATE-LUNA", { writeText });
+        await copyRoomJoinCode("AB7KQ2M4", { writeText });
+        expect(writeText.mock.calls).toEqual([["mate-luna"], ["AB7KQ2M4"]]);
+        await expect(copyRoomJoinCode("MATE-LUNA", undefined)).rejects.toThrow();
+    });
+
+    it("shows the bounded code-generation error without exposing arbitrary DB errors", async () => {
+        const client = { rpc: vi.fn(async () => ({ data: null, error: { code: "P0057" } })) } as unknown as ImpostorRoomsClient;
+        await expect(createRoom(client)).rejects.toThrow("No pudimos generar un código disponible. Intentá crear la sala de nuevo");
     });
 });
