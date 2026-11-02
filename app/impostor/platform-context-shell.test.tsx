@@ -45,3 +45,13 @@ describe("Impostor room entry", () => {
     expect(markup).not.toContain('href="/impostor/grupo"');
   });
 });
+
+
+it("accepts longer room codes and hints at the word format", () => {
+  const markup = renderToStaticMarkup(renderImpostorPlatformContext(recognized, {
+    roomState: { status: "absent" }, roomJoinState: { status: "form" },
+  }));
+  expect(markup).toContain('maxLength="64"');
+  expect(markup).toContain('placeholder="mate-luna"');
+  expect(markup).toContain('autoCapitalize="none"');
+});

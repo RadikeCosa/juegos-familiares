@@ -14,14 +14,15 @@ deployed to production.
 ```yaml
 product: Impostor
 stage: approved beta
-production: main@7431605
-deployment_status: confirmed in Vercel Production
-observed_status: working correctly based on validation performed so far
+production: main@68a927a97b8b20c2567378ebb01de2bd395371bc
+deployment_status: READY in Vercel Production
+observed_status: deployment source confirmed; runtime and database were not independently verified
 ```
 
-The baseline is supported by a manually confirmed Vercel Production
-deployment, repeated real-world use, positive human evaluation, and the correct
-behavior observed so far.
+The deployment source was checked in Vercel on 2026-11-02. This confirms the
+deployed revision, not runtime behavior or the state of the connected database.
+Repeated real-world use and positive human evaluation remain prior product
+evidence; they do not verify this deployment's current runtime.
 
 In this context, approved beta means that the complete core game loop is
 implemented, deployed to production, used repeatedly in real-world play, and

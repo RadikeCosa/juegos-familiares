@@ -21,6 +21,8 @@ import {
   getMyGameState,
   getMyActiveRoom,
   roomPath,
+  formatRoomJoinCode,
+  copyRoomJoinCode,
   refreshMyRoomLiveness,
   endSession,
   submitImpostorGuess,
@@ -259,7 +261,7 @@ export async function copyRoomCode(
     throw new Error("Clipboard unavailable");
   }
 
-  await shareNavigator.clipboard.writeText(code);
+  await copyRoomJoinCode(code, shareNavigator.clipboard);
 }
 
 function logRoomLivenessError(error: unknown) {
@@ -1240,7 +1242,7 @@ export function renderRoomLobbyContent(
         <h1 id="impostor-room-invite-title">
           Te invitaron a una sala de Impostor.
         </h1>
-        <p>Sala {options.roomCode}.</p>
+        <p>Sala {formatRoomJoinCode(options.roomCode)}.</p>
         <button
           className="impostor-action impostor-action--primary"
           type="button"
@@ -1313,7 +1315,7 @@ export function renderRoomLobbyContent(
     return (
       <section className="impostor-group-card" aria-live="polite">
         <p className="impostor-kicker">Sala</p>
-        <h1>Preparando sala {options.roomCode}...</h1>
+        <h1>Preparando sala {formatRoomJoinCode(options.roomCode)}...</h1>
       </section>
     );
   }
@@ -1325,7 +1327,7 @@ export function renderRoomLobbyContent(
         aria-labelledby="impostor-room-join-title"
       >
         <p className="impostor-kicker">Sala</p>
-        <h1 id="impostor-room-join-title">Sala {options.roomCode}</h1>
+        <h1 id="impostor-room-join-title">Sala {formatRoomJoinCode(options.roomCode)}</h1>
         <p>Te invitaron a esta sala de Impostor.</p>
         <button
           className="impostor-action impostor-action--primary"
@@ -2067,7 +2069,7 @@ export function renderRoomLobbyContent(
       aria-labelledby="impostor-room-title"
     >
       <p className="impostor-kicker">Sala</p>
-      <h1 id="impostor-room-title">Sala {lobby.room.code}</h1>
+      <h1 id="impostor-room-title">Sala {formatRoomJoinCode(lobby.room.code)}</h1>
       {renderRoomConnectionNotice(roomConnectionState, options.onRetryData)}
 
       <div

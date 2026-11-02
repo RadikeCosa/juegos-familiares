@@ -325,3 +325,13 @@ describe("Tutti Frutti lobby", () => {
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Voto registrado<\/button>/);
   });
 });
+
+
+it("shows lowercase word codes and exposes copy feedback in the lobby", () => {
+  const markup = render({ ...lobby, room: { ...lobby.room, code: "TOMILLO-TORTUGA" } }, new Set(), "online", null, {
+    onCopyCode: vi.fn(), copyNotice: "Código copiado.",
+  });
+  expect(markup).toContain("Código tomillo-tortuga");
+  expect(markup).toContain("Copiar código");
+  expect(markup).toContain('role="status"');
+});
