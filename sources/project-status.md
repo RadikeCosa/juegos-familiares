@@ -14,13 +14,15 @@ deployed to production.
 ```yaml
 product: Impostor
 stage: approved beta
-production: main@68a927a97b8b20c2567378ebb01de2bd395371bc
+production: main@5305f7c3c8e1064a4c569bf8e82014f741bf1892
 deployment_status: READY in Vercel Production
-observed_status: deployment source confirmed; runtime and database were not independently verified
+observed_status: deployment source and Supabase migration confirmed; both game routes returned HTTP 200
 ```
 
-The deployment source was checked in Vercel on 2026-11-02. This confirms the
-deployed revision, not runtime behavior or the state of the connected database.
+The deployment source and runtime routes were checked in Vercel on 2026-11-02.
+The connected Supabase production project was also checked: the room-code
+migration was applied, normalization returned the canonical code, and function
+privileges remained restricted to the intended roles.
 Repeated real-world use and positive human evaluation remain prior product
 evidence; they do not verify this deployment's current runtime.
 
