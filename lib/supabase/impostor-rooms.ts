@@ -460,10 +460,10 @@ export type RoomLobby = {
     participants: RoomLobbyParticipant[];
 };
 
-export type RoomGameType = "impostor" | "tutti_frutti";
+export type RoomGameType = "impostor" | "tutti_frutti" | "dictionary";
 
 export function roomPath(gameType: RoomGameType, code: string): string {
-    const prefix = gameType === "impostor" ? "/impostor" : "/tutti-frutti";
+    const prefix = { impostor: "/impostor", tutti_frutti: "/tutti-frutti", dictionary: "/diccionario" }[gameType];
     return `${prefix}/sala/${encodeURIComponent(code)}`;
 }
 
@@ -2453,7 +2453,7 @@ export async function getMyActiveRoom(
     }
 
     if (!rows.every(isRoomLobbyRow) ||
-        !rows.every((row) => row.room_game_type === "impostor" || row.room_game_type === "tutti_frutti") ||
+        !rows.every((row) => row.room_game_type === "impostor" || row.room_game_type === "tutti_frutti" || row.room_game_type === "dictionary") ||
         !rows.every((row) => row.room_game_type === rows[0].room_game_type)) {
         throw new Error("No pudimos confirmar tu sala activa.");
     }

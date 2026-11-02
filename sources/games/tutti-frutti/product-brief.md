@@ -21,7 +21,8 @@ It should reuse platform capabilities only where they are genuinely shared, with
 
 The introduction of a second real game is an opportunity to identify which existing concepts belong to the shared platform and which belong exclusively to Impostor.
 
-Dictionary remains a possible future game but is postponed while Tutti Frutti is prioritized.
+Dictionary was postponed when Tutti Frutti was prioritized. Its product definition
+restarted from scratch on 2026-11-02; see [Dictionary planning](../dictionary/planning.md).
 
 ---
 
@@ -577,7 +578,7 @@ These capabilities may be reconsidered after real gameplay.
 The following decisions are currently considered established:
 
 1. Tutti Frutti becomes the next game prioritized after Impostor.
-2. Dictionary is postponed, not discarded.
+2. Dictionary was postponed, not discarded, at that prioritization checkpoint. Its new definition is tracked separately in [Dictionary planning](../dictionary/planning.md).
 3. Players select Tutti Frutti before creating or joining its room.
 4. A room is conceptually associated with a specific game.
 5. Categories remain constant during a game.

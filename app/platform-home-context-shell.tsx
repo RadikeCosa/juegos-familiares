@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { DictionaryHomeCard } from "./diccionario/dictionary-entry";
 import { useEffect, useState, type ReactNode } from "react";
 import { PlatformGroupOnboardingActions } from "./platform-group-onboarding-actions";
 import { renderPlatformGroupContext } from "./platform-group-section";
@@ -143,6 +144,7 @@ function renderPlatformGameEntries(
   return (
     <>
       {renderImpostorGameEntry(impostorContent)}
+      <DictionaryHomeCard />
       <section className="game-entry" aria-labelledby="tutti-frutti-entry-title">
         <div className="game-entry__art game-entry__art--tutti-frutti" aria-hidden="true">
           <svg viewBox="0 0 96 96" fill="none" focusable="false">

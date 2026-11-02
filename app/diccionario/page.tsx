@@ -1,0 +1,4 @@
+import Link from "next/link";
+import { DictionaryEntry } from "./dictionary-entry";
+export const metadata = { title: "Diccionario | Juegos Familiares", description: "Inventá una definición y encontrá la verdadera." };
+export default function DictionaryPage() { return <main className="impostor"><a className="skip-link" href="#contenido">Saltar al contenido</a><div className="impostor-shell" id="contenido"><nav className="impostor-nav"><Link className="impostor-back" href="/">Juegos Familiares</Link></nav><section className="impostor-hero"><div className="impostor-hero__content"><p className="impostor-kicker">Juego presencial · desde 3 jugadores</p><h1>Diccionario</h1><p className="impostor-lede">Inventá una definición. Encontrá la verdadera.</p><DictionaryEntry /></div></section></div></main>; }
