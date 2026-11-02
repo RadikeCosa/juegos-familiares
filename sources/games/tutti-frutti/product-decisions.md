@@ -21,6 +21,11 @@ When later technical work introduces pressure to change one of these decisions, 
 
 # 2. Game Priority
 
+This section records the prioritization that led to Tutti Frutti. Dictionary
+product definition restarted from scratch on 2026-11-02; its previous design
+is archived. See [Dictionary planning](../dictionary/planning.md) for the new
+exploration. This historical prioritization does not govern that work.
+
 ## Context
 
 Dictionary had previously been considered as the next game after Impostor.

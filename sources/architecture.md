@@ -51,7 +51,7 @@ Estado autoritativo
 - coordinación actual de liveness y reconexión y transiciones de gameplay;
 - uso de Realtime y Presence para su experiencia sincronizada.
 
-Cada Room persiste un `game_type` inmutable (`impostor` o `tutti_frutti`). Las
+Cada Room persiste un `game_type` inmutable (`impostor`, `tutti_frutti` o `dictionary`). Las
 Rooms históricas se identifican como Impostor y la creación sin
 argumentos continúa creando Impostor. Las RPCs con intención de juego validan
 create/join, rechazan una Room activa de otro juego y mantienen opaco el código
@@ -186,3 +186,33 @@ Estas preguntas son exploración, no deuda ni compromiso de implementación:
 - qué forma de recuperación de identidad será apropiada;
 - qué políticas de expiración o limpieza necesita el estado temporal;
 - qué capacidades demostrará como compartidas una próxima utilidad real.
+
+## Diccionario — implementación local deshabilitada
+
+La rama `codex/dictionary-v1` agrega el tipo `dictionary` a las Rooms y sesiones
+neutrales existentes. Las rutas de entrada, sala y resultado pertenecen a
+`/diccionario`. Su gameplay no usa GameSession, Round ni puntajes de Impostor o
+Tutti Frutti.
+
+El esquema `dictionary_private` guarda catálogo, configuración, sesiones,
+rondas, reservas/uso de palabras por Group, definiciones, opciones, votos y
+puntos. Sus tablas tienen RLS y no tienen grants de lectura/escritura cliente.
+Las RPCs públicas derivan actor y Group de Auth y entregan modelos por fase.
+Los únicos datos publicados por Realtime son revisiones opacas en
+`dictionary_signals`, filtradas por membresía. La recuperación también dispone
+de polling en primer plano.
+
+Las transiciones se serializan en Postgres con locks Room → Group cuando se
+modifican reservas → Round. El inicio protege el catálogo contra escrituras
+editoriales concurrentes mientras comprueba elegibilidad y toma snapshots.
+El contenido de las cartas no se distribuye en el cliente.
+
+El vencimiento propio de Diccionario usa actividad autorizada de 24 horas y
+un límite de sesión de 72 horas. Se verifica antes de accesos y mutaciones;
+Cron barre cada 15 minutos. El heartbeat de esta UI se envía sólo en primer
+plano. La sucesión conserva la política compartida y el roster neutral.
+
+La activación está cerrada por un flag persistido y una función administrativa
+interna que exige 300 entradas revisadas con evidencia editorial. No hay UI de
+administración ni bypass público para habilitarlo. La implementación local no
+constituye evidencia de despliegue; ver `sources/games/dictionary/validation.md`.

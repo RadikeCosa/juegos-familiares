@@ -31,7 +31,8 @@
     "test:db:tutti-frutti-14": "node supabase/tests/validate-tutti-frutti-14.mjs",
     "test:db:tutti-frutti-15": "node supabase/tests/validate-tutti-frutti-15.mjs",
     "test:db:tutti-frutti-16": "node supabase/tests/validate-tutti-frutti-16.mjs",
-    "test:db:tutti-frutti-17": "node supabase/tests/validate-tutti-frutti-17.mjs"
+    "test:db:tutti-frutti-17": "node supabase/tests/validate-tutti-frutti-17.mjs",
+    "test:db:dictionary": "node supabase/scripts/dictionary-test-db.mjs validate"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

@@ -90,7 +90,7 @@ export function TuttiFruttiEntryShell() {
     const { room } = entry.activeRoom;
     return (
       <section className="impostor-platform-context">
-        <p>Ya tenés una sala activa{room.gameType === "impostor" ? " de Impostor" : " de Tutti Frutti"}.</p>
+        <p>Ya tenés una sala activa{room.gameType === "impostor" ? " de Impostor" : room.gameType === "dictionary" ? " de Diccionario" : " de Tutti Frutti"}.</p>
         <Link className="impostor-action impostor-action--primary" href={roomPath(room.gameType, room.code)}>
           Volver a la sala
         </Link>

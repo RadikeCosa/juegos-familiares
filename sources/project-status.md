@@ -120,6 +120,20 @@ only in `sources/architecture.md`. Impostor-specific future capabilities remain
 classified in `sources/games/impostor/product-brief.md`. The next utility is
 already owned by the roadmap above.
 
+## Dictionary implementation
+
+Diccionario tiene una primera implementación local en `codex/dictionary-v1`,
+separada de los cambios pendientes de Tutti Frutti. El contrato autosuficiente
+vive en [la planificación](games/dictionary/planning.md); la evidencia y los
+gates pendientes viven en [la validación](games/dictionary/validation.md).
+
+El flag permanece desactivado. Hay 300 candidatas editoriales en borrador,
+pendientes de verificación y revisión humana. Esto no habilita el juego ni
+modifica la baseline productiva. La migration se valida en una base local
+descartable con copia de esquema, sin copiar datos de usuarios ni aplicar
+cambios remotos. La planificación anterior está en
+`sources/archive/dictionary-2026-11-02/` y no gobierna esta versión.
+
 ## Current improvement work
 
 El `main` local integra los Incrementos 0–12 de Tutti Frutti y el traslado de

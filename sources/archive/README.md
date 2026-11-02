@@ -21,3 +21,5 @@ documentation system.
   and follow-up state from the September 2026 exploratory smoke.
 - `narrative-source.md`: compact source material for the future Narrative &
   professional material workstream.
+- `dictionary-2026-11-02/`: the ten previous Dictionary planning documents,
+  preserved at the user's request when product definition restarted from scratch.

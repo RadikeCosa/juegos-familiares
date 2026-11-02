@@ -10,7 +10,8 @@ type PwaUpdateState = {
 function isCriticalGameplayPath(pathname: string) {
   return (
     pathname.startsWith("/impostor/sala/") ||
-    pathname.startsWith("/tutti-frutti/sala/")
+    pathname.startsWith("/tutti-frutti/sala/") ||
+    pathname.startsWith("/diccionario/sala/")
   );
 }
 
