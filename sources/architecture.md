@@ -65,6 +65,15 @@ invalida sólo las respuestas propias.
 `player_active_room_slots` sigue imponiendo una sola Room activa
 por Player en toda la plataforma.
 
+Los códigos de Room nuevos se generan como dos palabras distintas del catálogo
+versionado de la migration, en mayúsculas y separadas por guion. La presentación
+y el portapapeles usan minúsculas; la RPC normaliza la entrada nueva. Los
+códigos alfanuméricos históricos siguen resolviéndose sin cambiar sus registros.
+La unicidad es global y también reserva Rooms cerradas. Los códigos de
+invitación a Group conservan su formato y flujo independientes. La verificación
+de pertenencia, identidad y tipo de juego sigue ocurriendo en las RPCs de
+unión.
+
 El gameplay permanece en cada juego. No existe un motor genérico de juegos,
 rondas, puntajes ni Realtime.
 

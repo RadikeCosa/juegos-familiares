@@ -32,7 +32,7 @@ import { getTuttiFruttiPostgameState, getTuttiFruttiRoundResult, scoreTuttiFrutt
   type TuttiFruttiRoundResult,
   type TuttiFruttiResultClient } from "../../../../lib/supabase/tutti-frutti-result";
 import {
-  closeRoom, getConnectedRoomParticipantIds, getMyActiveRoom, joinRoomByCode,
+  copyRoomJoinCode, formatRoomJoinCode, closeRoom, getConnectedRoomParticipantIds, getMyActiveRoom, joinRoomByCode,
   leaveRoom, normalizeRoomJoinCode, reassignRoomHostIfStale,
   refreshMyRoomLiveness, roomPath, startRoomLivenessHeartbeat,
   subscribeToRoomChanges, subscribeToRoomPresence,
@@ -107,6 +107,8 @@ export function TuttiFruttiLobbyContent(options: {
   game: TuttiFruttiStartedGame | null;
   gameError: string | null;
   actionError: string | null;
+  onCopyCode?: () => void;
+  copyNotice?: string | null;
   onStart: () => void;
   onSkipVote: (candidateId: string) => void;
   onCall?: () => void;
@@ -123,7 +125,7 @@ export function TuttiFruttiLobbyContent(options: {
     challengeSeconds = 0, challengeBusy = false, challengeError = null,
     resultState = null, scoring = false, advancing = false, advanceError = null,
     postgame = false, postgameLoading = false, postgameError = null,
-    game, gameError, actionError, onStart, onSkipVote, onCall = () => {},
+    game, gameError, actionError, onCopyCode, copyNotice, onStart, onSkipVote, onCall = () => {},
     onAnswerSaveState = () => {}, onRetryReview = () => {}, onOpenChallenge = () => {},
     onVoteChallenge = () => {}, onScore = () => {}, onRetryResult = () => {}, onAdvance = () => {}, onExit } = options;
   const isHost = lobby.participants.some((participant) => participant.isSelf && participant.isHost);
@@ -156,7 +158,7 @@ export function TuttiFruttiLobbyContent(options: {
           <summary>
             <span className="tutti-room-summary__content">
               <span id="tutti-room-title" className="tutti-room-summary__title" role="heading" aria-level={1}>
-                Sala · Código {lobby.room.code}
+                Sala · Código {formatRoomJoinCode(lobby.room.code)}
               </span>
               <span className={`tutti-room-summary__connection tutti-room-summary__connection--${connection}`} aria-live="polite">
                 {connectionLabel}
@@ -175,8 +177,10 @@ export function TuttiFruttiLobbyContent(options: {
       ) : (
         <>
           <p className="impostor-kicker">Sala de Tutti Frutti</p>
-          <h1 id="tutti-room-title">Código {lobby.room.code}</h1>
+          <h1 id="tutti-room-title">Código {formatRoomJoinCode(lobby.room.code)}</h1>
           <p>Compartí el código con personas de tu grupo.</p>
+          {onCopyCode ? <button className="impostor-action" type="button" onClick={onCopyCode}>Copiar código</button> : null}
+          {copyNotice ? <p role="status">{copyNotice}</p> : null}
           <p aria-live="polite">{connection === "offline" ? "Sin conexión. La sala se actualizará al volver." : connection === "reconnecting" ? "Actualizando sala..." : "Sala sincronizada"}</p>
           <h2>Participantes</h2>
           {participantList}
@@ -330,6 +334,7 @@ export function TuttiFruttiRoomEntry({ code, postgameSessionId = null }: {
   const router = useRouter();
   const [state, setState] = useState<RoomState>({ status: "loading" });
   const [presence, setPresence] = useState<RoomPresenceState>({});
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [game, setGame] = useState<TuttiFruttiStartedGame | null>(null);
   const [gameError, setGameError] = useState<string | null>(null);
@@ -1033,6 +1038,14 @@ export function TuttiFruttiRoomEntry({ code, postgameSessionId = null }: {
         game={game}
         gameError={gameError}
         actionError={actionError}
+        copyNotice={copyNotice}
+        onCopyCode={() => {
+          setCopyNotice(null);
+          void copyRoomJoinCode(state.lobby.room.code).then(
+            () => setCopyNotice("Código copiado."),
+            () => setCopyNotice("No pudimos copiar el código."),
+          );
+        }}
         onStart={() => { void startGame(); }}
         onSkipVote={(candidateId) => { void voteToSkip(candidateId); }}
         onCall={() => { void callRound(); }}

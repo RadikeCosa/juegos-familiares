@@ -462,6 +462,19 @@ export type RoomLobby = {
 
 export type RoomGameType = "impostor" | "tutti_frutti";
 
+export function formatRoomJoinCode(code: string): string {
+    return /^[A-Z]{3,7}-[A-Z]{3,7}$/i.test(code) ? code.toLowerCase() : code;
+}
+
+export async function copyRoomJoinCode(
+    code: string,
+    clipboard: { writeText: (text: string) => PromiseLike<void> | void } | undefined =
+        typeof navigator === "undefined" ? undefined : navigator.clipboard,
+) {
+    if (!clipboard) throw new Error("No pudimos copiar el código.");
+    await clipboard.writeText(formatRoomJoinCode(code));
+}
+
 export function roomPath(gameType: RoomGameType, code: string): string {
     const prefix = gameType === "impostor" ? "/impostor" : "/tutti-frutti";
     return `${prefix}/sala/${encodeURIComponent(code)}`;
@@ -807,6 +820,10 @@ function getCreateRoomErrorMessage(error: unknown) {
             return MISSING_PLAYER_ROOM_ERROR;
         }
 
+        if (error.code === "P0057") {
+            return "No pudimos generar un código disponible. Intentá crear la sala de nuevo";
+        }
+
         if (error.code === "P0029") {
             return OTHER_GAME_ACTIVE_ROOM_ERROR;
         }
@@ -845,9 +862,9 @@ function getJoinRoomErrorMessage(error: unknown) {
     return GENERIC_JOIN_ROOM_ERROR;
 }
 
-// 8 opaque chars, but forgiving of stray whitespace/case from manual typing.
+// Only trim for UX. The database owns format and case normalization.
 export function normalizeRoomJoinCode(rawCode: string) {
-    return rawCode.trim().toUpperCase();
+    return rawCode.trim();
 }
 
 function getActiveRoomErrorMessage(error: unknown) {

@@ -78,7 +78,7 @@ function ImpostorRoomEntry({
               </div>
               <label className="impostor-field">
                 <span>Código de sala</span>
-                <input ref={joinInputRef} aria-describedby="impostor-join-room-help" aria-invalid={roomJoinState.status === "error"} name="roomCode" type="text" autoCapitalize="characters" autoCorrect="off" spellCheck={false} maxLength={8} required disabled={roomJoinState.status === "joining"} />
+                <input ref={joinInputRef} aria-describedby="impostor-join-room-help" aria-invalid={roomJoinState.status === "error"} name="roomCode" type="text" autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={64} placeholder="mate-luna" required disabled={roomJoinState.status === "joining"} />
               </label>
               {roomJoinState.status === "error" ? <p className="impostor-room-join-step__error" aria-live="polite">{roomJoinState.message}</p> : null}
               <div className="impostor-room-join-step__actions">
