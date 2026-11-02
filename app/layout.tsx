@@ -1,17 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Sora, Source_Sans_3 } from "next/font/google";
+import localFont from "next/font/local";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 import "./globals.css";
 
-const sora = Sora({
-  subsets: ["latin"],
-  weight: ["600"],
+const sora = localFont({
+  src: "./fonts/sora-latin.woff2",
+  weight: "600",
   variable: "--font-display"
 });
 
-const sourceSans = Source_Sans_3({
-  subsets: ["latin"],
-  weight: ["400", "600"],
+const sourceSans = localFont({
+  src: "./fonts/source-sans-3-latin.woff2",
+  weight: "400 600",
   variable: "--font-body"
 });
 
