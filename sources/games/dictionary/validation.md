@@ -1,4 +1,4 @@
-# Diccionario — Implementación local y validación
+# Diccionario — Implementación, despliegue y validación
 
 ## Estado de entrega
 
@@ -99,12 +99,9 @@ Antes de habilitar:
    y referencias efectivamente comprobadas. Seguir [el procedimiento editorial](catalog/README.md).
 2. Comprobar entrega de invalidaciones y resuscripción con Supabase Realtime
    real; el smoke aislado sólo cubrió su fallback de polling.
-3. Observar una ejecución programada de Cron en producción. Su registro y
-   frecuencia se comprobaron; aún no había una ejecución registrada al revisar.
-   El validador local comprueba la política invocando el barrido directamente.
-4. Completar revisión en dispositivo físico/PWA, segundo plano real, pérdida
+3. Completar revisión en dispositivo físico/PWA, segundo plano real, pérdida
    total de red y sucesión visible en navegador. La sucesión se probó en DB.
-5. Cargar el catálogo aprobado y activar mediante migrations administrativas
+4. Cargar el catálogo aprobado y activar mediante migrations administrativas
    separadas, sólo con autorización y destino explícitos. La migration de
    estructura ya está aplicada con el flag apagado.
 
@@ -154,8 +151,10 @@ por los bundles públicos de `juegos-familiares.vercel.app`.
 - RLS habilitada en todas las tablas privadas; clientes sin lectura directa de
   catálogo/opciones, sin ejecución anónima de estado y sin activación del flag.
 - Normalización de códigos legibles conservada y comprobada remotamente.
-- Cron `dictionary-expire-rooms` activo con `*/15 * * * *`; sin ejecución
-  programada observada todavía al consultar `cron.job_run_details`.
+- Cron `dictionary-expire-rooms` activo con `*/15 * * * *`. Primera ejecución
+  programada: `2026-11-02T23:45:00.063129Z` a `23:45:00.121532Z`, estado
+  `succeeded`. No había salas de Diccionario; esto comprueba el runner y la
+  llamada real, no un cierre de partida con participantes en producción.
 
 La API pública devolvió `200 / false` para disponibilidad, `401` al intentar
 leer estado sin sesión y `406` al intentar seleccionar el esquema privado.

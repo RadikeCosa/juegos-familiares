@@ -214,5 +214,6 @@ plano. La sucesión conserva la política compartida y el roster neutral.
 
 La activación está cerrada por un flag persistido y una función administrativa
 interna que exige 300 entradas revisadas con evidencia editorial. No hay UI de
-administración ni bypass público para habilitarlo. El código y la migration se desplegaron con el flag apagado; la evidencia y los
-gates restantes están en `sources/games/dictionary/validation.md`.
+administración ni bypass público para habilitarlo. El código y la migration se
+desplegaron con el flag apagado; la evidencia y los gates restantes están en
+`sources/games/dictionary/validation.md`.

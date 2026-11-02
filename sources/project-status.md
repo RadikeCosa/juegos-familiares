@@ -141,9 +141,10 @@ validación, destino, migration y despliegue vive en
 El flag permanece desactivado. La base remota no tiene cartas cargadas ni salas
 de Diccionario. Hay 300 candidatas editoriales en borrador, pendientes de
 verificación y revisión humana; no satisfacen el gate de habilitación.
-Cron está registrado activo cada 15 minutos; su primera ejecución programada
-no se había observado al cerrar la comprobación. Realtime y la experiencia
-física/PWA requieren completar los gates indicados antes de habilitar.
+Cron está registrado activo cada 15 minutos y su primera ejecución programada
+terminó correctamente el 2026-11-02 a las 23:45 UTC, sin salas de Diccionario.
+Realtime y la experiencia física/PWA requieren completar los gates indicados
+antes de habilitar.
 
 La publicación preserva los códigos legibles y fuentes locales de la baseline
 anterior. Los cambios pendientes de UX de Tutti Frutti en el workspace original
