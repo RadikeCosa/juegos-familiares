@@ -14,17 +14,27 @@ deployed to production.
 ```yaml
 product: Impostor
 stage: approved beta
-production: main@5305f7c3c8e1064a4c569bf8e82014f741bf1892
+production: main@9f0d97cb3bcfdb0570c7e42d81058d50b768fce5
 deployment_status: READY in Vercel Production
-observed_status: deployment source and Supabase migration confirmed; both game routes returned HTTP 200
+observed_status: deployment source and gated Dictionary migration confirmed; existing game routes and Dictionary returned HTTP 200
 ```
 
-The deployment source and runtime routes were checked in Vercel on 2026-11-02.
-The connected Supabase production project was also checked: the room-code
-migration was applied, normalization returned the canonical code, and function
-privileges remained restricted to the intended roles.
+The functional production baseline above was verified in Vercel on 2026-11-02
+as deployment `dpl_Gjbed2HU8NT29wMo4W2gdLMVPJGq`, serving
+`https://juegos-familiares.vercel.app`. It preserves readable room codes and local
+fonts and adds Dictionary code behind a disabled flag. The connected Supabase
+project `auytacgoahmqpgrkcdga` has migration `20261102205137_dictionary_v1`
+applied; Dictionary has zero catalogue entries and zero Rooms and remains
+unavailable for play. Read-only privilege and public API checks passed.
+
+Mobile checks of `/`, `/impostor`, `/tutti-frutti` and `/diccionario` passed
+without page errors, horizontal overflow or identity creation. No runtime error
+records were returned for the new deployment in the checked window. This is
+release evidence, not a new real-world validation of every game loop.
+Documentation-only commits can follow this functional baseline; the verified
+release evidence lives in `sources/games/dictionary/validation.md`.
 Repeated real-world use and positive human evaluation remain prior product
-evidence; they do not verify this deployment's current runtime.
+evidence; they do not verify every path in this deployment.
 
 In this context, approved beta means that the complete core game loop is
 implemented, deployed to production, used repeatedly in real-world play, and
@@ -120,18 +130,25 @@ only in `sources/architecture.md`. Impostor-specific future capabilities remain
 classified in `sources/games/impostor/product-brief.md`. The next utility is
 already owned by the roadmap above.
 
-## Dictionary implementation
+## Dictionary deployment — disabled
 
-Diccionario tiene una primera implementación local en `codex/dictionary-v1`,
-separada de los cambios pendientes de Tutti Frutti. El contrato autosuficiente
-vive en [la planificación](games/dictionary/planning.md); la evidencia y los
-gates pendientes viven en [la validación](games/dictionary/validation.md).
+Diccionario fue integrado a `main` mediante PR #48 y desplegado en Vercel
+Production el 2 de noviembre de 2026. El contrato vive en
+[la planificación](games/dictionary/planning.md); la evidencia de revisión,
+validación, destino, migration y despliegue vive en
+[la validación](games/dictionary/validation.md).
 
-El flag permanece desactivado. Hay 300 candidatas editoriales en borrador,
-pendientes de verificación y revisión humana. Esto no habilita el juego ni
-modifica la baseline productiva. La migration se valida en una base local
-descartable con copia de esquema, sin copiar datos de usuarios ni aplicar
-cambios remotos. La planificación anterior está en
+El flag permanece desactivado. La base remota no tiene cartas cargadas ni salas
+de Diccionario. Hay 300 candidatas editoriales en borrador, pendientes de
+verificación y revisión humana; no satisfacen el gate de habilitación.
+Cron está registrado activo cada 15 minutos y su primera ejecución programada
+terminó correctamente el 2026-11-02 a las 23:45 UTC, sin salas de Diccionario.
+Realtime y la experiencia física/PWA requieren completar los gates indicados
+antes de habilitar.
+
+La publicación preserva los códigos legibles y fuentes locales de la baseline
+anterior. Los cambios pendientes de UX de Tutti Frutti en el workspace original
+no se incorporaron. La planificación anterior de Diccionario está en
 `sources/archive/dictionary-2026-11-02/` y no gobierna esta versión.
 
 ## Current improvement work

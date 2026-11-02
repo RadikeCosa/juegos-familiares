@@ -1,10 +1,12 @@
-# Diccionario — Implementación local y validación
+# Diccionario — Implementación, despliegue y validación
 
 ## Estado de entrega
 
-Primera versión implementada localmente en `codex/dictionary-v1`, el 2 de
-noviembre de 2026. El contrato aprobado está en [planning.md](planning.md).
-El flag queda desactivado; no se desplegó ni se aplicaron migrations remotas.
+Primera versión integrada mediante [PR #48](https://github.com/RadikeCosa/juegos-familiares/pull/48)
+y desplegada en Vercel Production el 2 de noviembre de 2026. El contrato aprobado
+está en [planning.md](planning.md). El flag queda desactivado; la migration
+remota está aplicada sin cargar catálogo. La publicación fue autorizada por el
+usuario después de solicitar revisión del diff y comprobaciones.
 
 Incluye entrada y lobby, configuración, inicio, reservas, escritura, votación,
 resultados, finalización, vencimiento, recuperación y revancha. Se conserva la
@@ -16,7 +18,7 @@ PWA. La señal Realtime contiene sólo una revisión opaca, con RLS por membres�
 
 ## Evidencia automatizada
 
-- Suite de aplicación: 811 tests aprobados.
+- Suite de aplicación sobre la baseline integrada: 819 tests aprobados.
 - TypeScript: aprobado.
 - ESLint: sin errores. La suite de tests conserva un aviso previo de una
   aserción no esperada con `await` en Tutti Frutti.
@@ -97,12 +99,11 @@ Antes de habilitar:
    y referencias efectivamente comprobadas. Seguir [el procedimiento editorial](catalog/README.md).
 2. Comprobar entrega de invalidaciones y resuscripción con Supabase Realtime
    real; el smoke aislado sólo cubrió su fallback de polling.
-3. Verificar la ejecución programada de Cron y la política de vencimiento en
-   el destino autorizado; el validador local invoca el barrido directamente.
-4. Completar revisión en dispositivo físico/PWA, segundo plano real, pérdida
+3. Completar revisión en dispositivo físico/PWA, segundo plano real, pérdida
    total de red y sucesión visible en navegador. La sucesión se probó en DB.
-5. Aplicar migrations y activar mediante una migration administrativa separada,
-   sólo con autorización y destino explícitos.
+4. Cargar el catálogo aprobado y activar mediante migrations administrativas
+   separadas, sólo con autorización y destino explícitos. La migration de
+   estructura ya está aplicada con el flag apagado.
 
 No se ejecutó `npm run test:db` completo: apunta al Supabase habitual y algunas
 pruebas exigen fixtures iniciales. Se usó un entorno descartable para preservar
@@ -112,9 +113,10 @@ los datos locales. Las regresiones de aplicación sí se ejecutaron completas.
 
 Se preservaron los archivos preexistentes del workspace original, incluidos
 los cambios de Tutti Frutti y las decisiones de archivo documental de esta
-tarea. La implementación vive en un worktree separado. No se realizó commit,
-push, PR, merge, despliegue ni cambio remoto. La documentación de producción
-no se utiliza como evidencia de despliegue de Diccionario.
+tarea. La implementación vive en un worktree separado. La publicación posterior fue autorizada por el usuario y se ejecutó mediante
+commit, push, PR #48, merge y despliegue Git de Vercel. Se aplicó exclusivamente
+la migration de Diccionario al destino remoto confirmado. No se incluyeron seeds
+ni se modificaron los datos de grupos o partidas existentes.
 
 ## Revisión previa a publicación — 2026-11-02
 
@@ -131,3 +133,54 @@ La migration tiene límites de espera para no retener locks de producción.
 
 El destino se confirmó contrastando el Supabase vinculado con el origen usado
 por los bundles públicos de `juegos-familiares.vercel.app`.
+
+## Evidencia de publicación
+
+- Fecha: 2026-11-02.
+- Proyecto Vercel: `juegos-familiares`, equipo `radikecosas-projects`.
+- URL pública: https://juegos-familiares.vercel.app
+- Commit funcional: `9f0d97cb3bcfdb0570c7e42d81058d50b768fce5` (`main`, PR #48).
+- Deploy productivo verificado: `dpl_Gjbed2HU8NT29wMo4W2gdLMVPJGq`, `READY`.
+- URL del build: https://juegos-familiares-26znd9mdx-radikecosas-projects.vercel.app
+- Preview validada: `dpl_FPAU4kdNBJWusbcWh1aD1j3f7v8T`, `READY`.
+- Supabase: `auytacgoahmqpgrkcdga`, confirmado contra el origen de los bundles
+  públicos del sitio, no sólo por el vínculo local de la CLI.
+- Migration aplicada: `20261102205137_dictionary_v1`. El dry-run mostró sólo esa
+  migration; la ejecución no incluyó seeds, roles ni cambios de Vault.
+- Estado posterior: flag `false`, cero cartas, cero salas de Diccionario.
+- RLS habilitada en todas las tablas privadas; clientes sin lectura directa de
+  catálogo/opciones, sin ejecución anónima de estado y sin activación del flag.
+- Normalización de códigos legibles conservada y comprobada remotamente.
+- Cron `dictionary-expire-rooms` activo con `*/15 * * * *`. Primera ejecución
+  programada: `2026-11-02T23:45:00.063129Z` a `23:45:00.121532Z`, estado
+  `succeeded`. No había salas de Diccionario; esto comprueba el runner y la
+  llamada real, no un cierre de partida con participantes en producción.
+
+La API pública devolvió `200 / false` para disponibilidad, `401` al intentar
+leer estado sin sesión y `406` al intentar seleccionar el esquema privado.
+La fuente del catálogo no es accesible por URL (`404`). No se crearon usuarios,
+grupos ni partidas de prueba en producción.
+
+La preview protegida se probó con la autenticación existente de Vercel, sin
+retirar su protección. `/`, `/impostor`, `/tutti-frutti` y `/diccionario`
+devolvieron 200. En producción se recorrieron esas rutas con un contexto móvil
+nuevo a 390 × 844: sin errores de página ni desborde horizontal, sin creación
+de identidades y con Diccionario oculto en la portada. El escaneo de errores
+runtime del despliegue en la ventana consultada devolvió cero registros; no
+constituye monitorización continua.
+
+### Avisos de seguridad y límites
+
+Los advisors tenían 109 avisos antes y 122 después. Los 13 nuevos son WARN de
+funciones `SECURITY DEFINER` ejecutables por los roles previstos y de políticas
+compatibles con identidades anónimas autenticadas. La disponibilidad pública
+sólo devuelve el booleano; las acciones sensibles derivan actor y pertenencia y
+las lecturas privadas están protegidas. Las pruebas de grants y RLS pasaron.
+No se detectaron nuevos ERROR. No se modificaron avisos preexistentes fuera de
+alcance, incluida la configuración de contraseñas filtradas.
+
+El despliegue incluye código deshabilitado; no equivale a aprobar el catálogo
+ni a cerrar los gates de habilitación. Un rollback de aplicación puede usar el
+build previo `dpl_5zJPN2JbHnKPTU8jHmXaPRKHBrNa`; la estructura nueva puede quedar
+instalada y el flag apagado. No ejecutar un rollback destructivo de DB como
+parte de una reversión de frontend.
