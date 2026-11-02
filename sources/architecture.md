@@ -187,9 +187,9 @@ Estas preguntas son exploración, no deuda ni compromiso de implementación:
 - qué políticas de expiración o limpieza necesita el estado temporal;
 - qué capacidades demostrará como compartidas una próxima utilidad real.
 
-## Diccionario — implementación local deshabilitada
+## Diccionario — implementación desplegada deshabilitada
 
-La rama `codex/dictionary-v1` agrega el tipo `dictionary` a las Rooms y sesiones
+La implementación integrada a `main` agrega el tipo `dictionary` a las Rooms y sesiones
 neutrales existentes. Las rutas de entrada, sala y resultado pertenecen a
 `/diccionario`. Su gameplay no usa GameSession, Round ni puntajes de Impostor o
 Tutti Frutti.
@@ -214,5 +214,5 @@ plano. La sucesión conserva la política compartida y el roster neutral.
 
 La activación está cerrada por un flag persistido y una función administrativa
 interna que exige 300 entradas revisadas con evidencia editorial. No hay UI de
-administración ni bypass público para habilitarlo. La implementación local no
-constituye evidencia de despliegue; ver `sources/games/dictionary/validation.md`.
+administración ni bypass público para habilitarlo. El código y la migration se desplegaron con el flag apagado; la evidencia y los
+gates restantes están en `sources/games/dictionary/validation.md`.
