@@ -4,9 +4,9 @@
 
 Primera versión integrada mediante [PR #48](https://github.com/RadikeCosa/juegos-familiares/pull/48)
 y desplegada en Vercel Production el 2 de noviembre de 2026. El contrato aprobado
-está en [planning.md](planning.md). El flag queda desactivado; la migration
-remota está aplicada sin cargar catálogo. La publicación fue autorizada por el
-usuario después de solicitar revisión del diff y comprobaciones.
+está en [planning.md](planning.md). La primera publicación dejó el flag apagado.
+La revisión y los gates de activación se describen a continuación; el usuario
+autorizó explícitamente publicación y habilitación productiva.
 
 Incluye entrada y lobby, configuración, inicio, reservas, escritura, votación,
 resultados, finalización, vencimiento, recuperación y revancha. Se conserva la
@@ -86,24 +86,54 @@ runtime Playwright mediante `PLAYWRIGHT_MODULE`, aplicación local en 3107 y una
 API REST de prueba en 55430 apuntando a la base descartable. Sus identidades y
 firma son exclusivamente fixtures; nunca dirigirlo a una instancia real.
 
-## Catálogo y pendientes de habilitación
+## Gates de habilitación — revisión asistida autorizada
 
-Hay [300 candidatas](catalog/candidates.json) en estado `draft`, con definición
-propuesta, dificultad y referencia de consulta pendiente. No se verificaron
-individualmente las referencias ni se realizó revisión humana. Algunas entradas
-pueden necesitar reemplazo editorial. No se cargan automáticamente a la DB.
+El usuario autorizó expresamente sustituir revisión humana por revisión asistida
+con fuentes, y dispositivo físico por navegador móvil emulado. No se presenta
+esta evidencia como revisión humana ni prueba en un teléfono físico.
 
-Antes de habilitar:
+- Catálogo: 300 entradas contrastadas individualmente con DLE/RAE-ASALE;
+  55 cambios, incluidas 20 sustituciones. Definiciones propias, estado `reviewed`,
+  responsable Codex, modalidad asistida, fecha y referencias en cada registro.
+  [Registro editorial](catalog/review.json) y [procedimiento](catalog/README.md).
+- Integridad: prueba de 300 palabras únicas, normalización uniforme, límites,
+  evidencias editoriales y coincidencia exacta entre JSON y migration generada.
+- Aplicación: 821 tests aprobados; lint sin errores y cinco avisos preexistentes;
+  build de producción Webpack y TypeScript aprobados.
+- DB descartable: 50 aserciones y ciclo concurrente completo de tres rondas,
+  incluyendo roles, lecturas directas, privacidad, reintentos, reservas,
+  puntuación única, abandono y gate de 299/300 entradas.
+- Integración local completa: Supabase separado en 55421/55422, con Auth, REST
+  y Realtime reales. Tres identidades anónimas reales, contextos Chromium
+  aislados a 390 × 844, usando el build de producción.
+- Realtime: recepción directa y posterior resuscripción, verificadas sin depender
+  del polling; payload limitado a `room_id` y `revision`. El recorrido también
+  observó 78 eventos reales en las conexiones WebSocket de los navegadores.
+  El observador admite los formatos objeto y array del protocolo.
+- Navegador: tres rondas, orden estable tras recarga, desconexión total de red y
+  recuperación, clasificación, revancha, sucesión visible y regreso del antiguo
+  anfitrión tras finalización anticipada sin rondas resueltas.
+- PWA: service worker de producción controlando la página y caché estática
+  ejercitada, sin REST/RPC ni estado privado en caché. La visibilidad oculta
+  se simuló durante 31 segundos: sin heartbeat; al volver, se recuperó actividad.
+  No equivale a suspensión real de un sistema operativo móvil ni a instalación
+  física de una PWA. Se inspeccionaron capturas y no hubo desborde horizontal
+  ni errores de ejecución de página.
+- Producción antes de activar: destino `auytacgoahmqpgrkcdga`, flag apagado,
+  cero entradas y salas de Diccionario; barrido activo cada 15 minutos.
+  Dry-run: sólo las dos migrations nuevas, sin seeds, roles ni Vault.
 
-1. Verificar y revisar humanamente 300 entradas; registrar responsable, fecha
-   y referencias efectivamente comprobadas. Seguir [el procedimiento editorial](catalog/README.md).
-2. Comprobar entrega de invalidaciones y resuscripción con Supabase Realtime
-   real; el smoke aislado sólo cubrió su fallback de polling.
-3. Completar revisión en dispositivo físico/PWA, segundo plano real, pérdida
-   total de red y sucesión visible en navegador. La sucesión se probó en DB.
-4. Cargar el catálogo aprobado y activar mediante migrations administrativas
-   separadas, sólo con autorización y destino explícitos. La migration de
-   estructura ya está aplicada con el flag apagado.
+El smoke reproducible es `supabase/tests/smoke-dictionary-local-integration.mjs`.
+Exige `DICTIONARY_LOCAL_ENV_FILE` obtenido de `supabase status -o env` en una
+instancia separada, API loopback 55421, DB loopback 55422 y comentario de base
+`dictionary-real-local-validation`. Exige catálogo cargado, flag activo y build
+productivo conectado a esa API, servido en 3107. Usa `PLAYWRIGHT_MODULE` cuando
+Playwright se proporciona desde un runtime externo. Crea exclusivamente fixtures
+locales; nunca dirigirlo al Supabase habitual ni a producción.
+
+La revisión asistida puede contener errores editoriales y conserva cierto sesgo
+hacia objetos tradicionales. La dificultad deberá contrastarse con uso real.
+No se amplió el alcance a los cambios pendientes de Tutti Frutti.
 
 No se ejecutó `npm run test:db` completo: apunta al Supabase habitual y algunas
 pruebas exigen fixtures iniciales. Se usó un entorno descartable para preservar
@@ -179,8 +209,20 @@ las lecturas privadas están protegidas. Las pruebas de grants y RLS pasaron.
 No se detectaron nuevos ERROR. No se modificaron avisos preexistentes fuera de
 alcance, incluida la configuración de contraseñas filtradas.
 
-El despliegue incluye código deshabilitado; no equivale a aprobar el catálogo
-ni a cerrar los gates de habilitación. Un rollback de aplicación puede usar el
+La publicación inicial incluyó código deshabilitado; la evidencia de esa
+publicación no equivalía a aprobar el catálogo ni a cerrar los gates. La nueva
+revisión asistida autorizada y los gates se registran arriba. Un rollback de aplicación puede usar el
 build previo `dpl_5zJPN2JbHnKPTU8jHmXaPRKHBrNa`; la estructura nueva puede quedar
 instalada y el flag apagado. No ejecutar un rollback destructivo de DB como
 parte de una reversión de frontend.
+
+## Activación productiva
+
+Migrations nuevas y separadas:
+
+1. `20261102235851_dictionary_reviewed_catalog`: carga las 300 entradas revisadas.
+2. `20261102235852_dictionary_enable`: invoca la función interna con el gate
+   autoritativo de 300 entradas. No modifica directamente el flag ni sus permisos.
+
+La aplicación de estas migrations al destino autorizado y el estado posterior
+se registrarán después de verificar la ejecución real.

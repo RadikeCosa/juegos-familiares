@@ -1,41 +1,44 @@
-# Catálogo editorial — Borrador
+# Catálogo editorial
 
-`candidates.json` contiene **300 candidatas propuestas con ayuda de IA**, con
-una acepción, definición original propuesta, dificultad orientativa y un enlace
-de consulta pendiente. No se ha verificado que cada enlace resuelva ni que la
-acepción propuesta sea adecuada. Ninguna entrada está revisada por una persona.
+`candidates.json` contiene las **300 entradas revisadas para el lanzamiento**.
+El usuario autorizó expresamente reemplazar el requisito de revisión humana por
+revisión asistida por IA con fuentes. `reviewed` registra esa revisión editorial;
+no significa aprobación humana ni aval de la RAE. El responsable se identifica
+como Codex y `review_kind` como `ai_assisted_authorized`.
 
-Este archivo no se importa desde la aplicación ni se incluye en `public/`.
-No se carga automáticamente como catálogo jugable. El flag permanece apagado.
+Se contrastaron individualmente las acepciones con el Diccionario de la lengua
+española de RAE-ASALE, siguiendo remisiones cuando correspondía. Cada registro
+conserva referencia, fecha y nota editorial. [review.json](review.json) resume
+55 modificaciones, incluidas 20 sustituciones para mejorar fiabilidad, variedad
+y adecuación familiar. Las definiciones son paráfrasis breves para el juego;
+no se redistribuyen artículos ni ejemplos de las fuentes.
 
-## Revisión humana antes de habilitar
+La selección conserva cierto sesgo hacia objetos tradicionales y arquitectura.
+La dificultad es orientativa y puede ajustarse tras observar partidas reales.
+La revisión asistida no elimina la posibilidad de errores editoriales.
 
-Para cada candidata, verificar existencia, acepción y definición con fuentes
-accesibles y sus condiciones; registrar las referencias efectivamente utilizadas.
-Reescribir con palabras propias cuando corresponda. Evaluar pronunciación,
-contexto familiar, dificultad, posibilidad de inventar alternativas plausibles y
-variedad de estilo. Sustituir candidatas demasiado obvias o especializadas.
+## Ampliaciones y correcciones
 
-`verification_status` pasa a `verified` sólo tras esa comprobación; `status`
-pasa a `reviewed` con responsable y fecha únicamente tras aprobación humana.
-El archivo es una propuesta editorial, no evidencia de revisión.
+Contrastar existencia y acepción con fuentes accesibles, revisar las condiciones
+de consulta y redactar con palabras propias. Evaluar el contexto familiar,
+la dificultad y las alternativas inventadas plausibles. Registrar la modalidad
+de revisión, responsable, fecha, referencias y observaciones. No aprobar entradas
+sólo porque el enlace exista o porque una comprobación de formato pase.
+
+`verification_status` pasa a `verified` sólo después del contraste; `status`
+pasa a `reviewed` después de la evaluación editorial. Una ampliación sigue este
+proceso administrativo. No existe aprobación desde un cliente de la aplicación.
 
 ## Carga administrativa
 
 `node supabase/scripts/dictionary-catalog-sql.mjs <archivo.json>` genera SQL para
-revisar e incorporar en una migration nueva. No conecta a bases ni ejecuta SQL.
-Los borradores siguen siendo borradores; el generador rechaza entradas marcadas
-como revisadas sin verificación, responsable o fecha.
+incorporar en una migration nueva. No conecta a bases ni ejecuta SQL. Rechaza
+entradas revisadas sin verificación, responsable o fecha. La fuente editorial
+no se importa desde la aplicación ni se incluye en `public/`.
 
-No se actualizan automáticamente entradas existentes: una corrección editorial
-necesita una migration explícita. Las partidas conservan snapshots; corregir el
-catálogo no cambia una palabra ya seleccionada.
-
-La activación se hace en una migration administrativa separada y autorizada:
-
-```sql
-select dictionary_private.set_enabled(true);
-```
-
-La función verifica 300 entradas `reviewed` válidas antes de habilitar. La primera
-versión no ofrece carga, revisión ni activación desde el cliente.
+Correcciones posteriores requieren migrations nuevas. Las rondas conservan sus
+snapshots: corregir el catálogo no altera palabras ya seleccionadas. La activación
+usa una migration separada que invoca `dictionary_private.set_enabled(true)`;
+el backend exige al menos 300 entradas válidas revisadas. Para revertir la
+habilitación, una migration autorizada puede invocar la misma función con
+`false`, conservando partidas, resultados e historial.

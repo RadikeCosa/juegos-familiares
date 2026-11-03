@@ -10,7 +10,7 @@ const values=rows.map(r=>{
  ||!["draft","reviewed"].includes(r.status)||!["easy","medium","hard"].includes(r.difficulty))throw new Error("Invalid catalogue entry");
  const key=r.word.normalize("NFC").trim().toLocaleLowerCase("es");
  if(seen.has(key))throw new Error(`Duplicate word: ${key}`);seen.add(key);
- if(r.status==="reviewed"&&(r.verification_status!=="verified"||!r.reviewed_by?.trim()||!Number.isFinite(Date.parse(r.reviewed_at))))throw new Error(`Human review evidence missing: ${key}`);
+ if(r.status==="reviewed"&&(r.verification_status!=="verified"||!r.reviewed_by?.trim()||!Number.isFinite(Date.parse(r.reviewed_at))))throw new Error(`Editorial review evidence missing: ${key}`);
  return `(${q(r.word.trim())},${q(r.sense)},dictionary_private.normalize_definition(${q(r.definition)}),${q(r.difficulty)},${q(r.verification_reference)},${q(r.status)},${q(r.reviewed_by)},${q(r.reviewed_at)})`;
 });
 process.stdout.write("-- Generated for review; execute only through an authorized migration.\ninsert into dictionary_private.cards(word,sense,definition,difficulty,verification_reference,status,reviewed_by,reviewed_at) values\n"+values.join(",\n")+";\n");

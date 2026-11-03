@@ -7,9 +7,11 @@ la exploración inicial. Los documentos anteriores se conservan en
 [el archivo histórico](../../archive/dictionary-2026-11-02/README.md) y no
 gobiernan esta versión.
 
-La implementación local se desarrolla en `codex/dictionary-v1`. La habilitación
-requiere validación integral y revisión humana del catálogo. Este documento no
-autoriza commit, push, despliegue ni migrations remotas.
+La habilitación requiere validación integral y revisión del catálogo. Para este
+lanzamiento el usuario autorizó expresamente revisión asistida por IA con fuentes
+y navegador móvil emulado, sustituyendo revisión humana y dispositivo físico.
+También autorizó la publicación y activación en producción. La evidencia y el
+destino confirmado se registran en [validation.md](validation.md).
 
 ## Entrada y configuración
 
@@ -67,8 +69,9 @@ variará estructuras y formalidad para evitar definiciones siempre “de manual�
 
 Se requieren 300 entradas revisadas antes de habilitar. Cada entrada tiene
 palabra, acepción, definición propia breve, dificultad y referencia de
-verificación. La revisión humana y las condiciones de las fuentes deben
-comprobarse. Dificultad variada, evitando palabras demasiado obvias, técnicas o
+verificación. La revisión asistida autorizada debe contrastar las acepciones
+con fuentes y usar redacción propia, respetando las condiciones de consulta.
+Dificultad variada, evitando palabras demasiado obvias, técnicas o
 incómodas para grupos familiares.
 
 Al inicio se reservan palabras para todas las rondas. Se excluyen las ya
