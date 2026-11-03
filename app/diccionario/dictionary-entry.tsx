@@ -12,7 +12,23 @@ export function DictionaryHomeCard() {
         setEnabled(v); }).catch(() => { }); return () => { live = false; }; }, []);
     if (!enabled)
         return null;
-    return <section className="game-entry" aria-labelledby="dictionary-entry-title"><div className="game-entry__content"><p className="game-entry__label">Juegos</p><h2 id="dictionary-entry-title">Diccionario</h2><p>Inventá una definición. Encontrá la verdadera.</p><Link className="game-entry__cta" href="/diccionario">Ir a Diccionario</Link></div></section>;
+    return (
+        <section className="game-entry" aria-labelledby="dictionary-entry-title">
+            <div className="game-entry__art game-entry__art--dictionary" aria-hidden="true">
+                <svg viewBox="0 0 96 96" fill="none" focusable="false">
+                    <path d="M48 24C37 17 23 16 12 20v54c12-4 25-3 36 4 11-7 24-8 36-4V20c-11-4-25-3-36 4Z" fill="currentColor" />
+                    <path d="M48 25v52M23 33c5-1 10 0 15 2M23 44c5-1 10 0 15 2M23 55c5-1 10 0 15 2M59 47c5-2 10-3 15-2M59 58c5-2 10-3 15-2" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" />
+                    <path d="M61 18h12v21l-6-4-6 4V18Z" fill="var(--accent)" />
+                </svg>
+            </div>
+            <div className="game-entry__content">
+                <p className="game-entry__label">Juegos</p>
+                <h2 id="dictionary-entry-title">Diccionario</h2>
+                <p>Inventá una definición. Encontrá la verdadera.</p>
+                <Link className="game-entry__cta" href="/diccionario">Ir a Diccionario</Link>
+            </div>
+        </section>
+    );
 }
 export function DictionaryEntry() {
     const router = useRouter();
