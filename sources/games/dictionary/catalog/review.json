@@ -1,0 +1,344 @@
+{
+  "review_kind": "ai_assisted_authorized",
+  "reviewed_at": "2026-11-02T23:58:38+00:00",
+  "entries": 300,
+  "authorization": "El usuario autorizó expresamente sustituir la revisión humana y el dispositivo físico por revisión asistida con fuentes y navegador móvil emulado.",
+  "method": "Consulta individual de las entradas del DLE; contraste de la acepción con la definición propuesta, paráfrasis propia y evaluación editorial asistida. No es revisión humana ni aprobación de la RAE. No se redistribuyen artículos de las fuentes.",
+  "limitations": [
+    "Persisten sesgos hacia objetos tradicionales y arquitectura.",
+    "La dificultad es una estimación editorial pendiente de uso real.",
+    "La revisión asistida puede contener errores; corregir con migrations nuevas, preservando snapshots."
+  ],
+  "changed_entries": [
+    {
+      "before": "aleación",
+      "after": "aleación",
+      "definition": "Material obtenido al fundir dos o más elementos, de los que al menos uno es un metal.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "alforja",
+      "after": "alforja",
+      "definition": "Bolsa doble que permite repartir una carga a ambos lados.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "aljibe",
+      "after": "aljibe",
+      "definition": "Depósito, generalmente subterráneo, donde se conserva agua.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "almud",
+      "after": "almud",
+      "definition": "Antigua medida de capacidad usada sobre todo para granos.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "alquitrán",
+      "after": "alquitrán",
+      "definition": "Líquido espeso y oscuro obtenido al destilar diversos materiales.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "altillo",
+      "after": "altillo",
+      "definition": "Habitación situada en la parte más alta de una casa.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "argamasa",
+      "after": "argamasa",
+      "definition": "Preparado de cal, arena y agua que se usa para unir materiales de construcción.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "arpillera",
+      "after": "arpillera",
+      "definition": "Tela basta con la que se cubren y protegen objetos.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "artilugio",
+      "after": "artilugio",
+      "definition": "Artefacto cuyo mecanismo resulta algo complicado.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "baquetón",
+      "after": "zaranda",
+      "definition": "Utensilio con una malla que separa lo fino de lo grueso al sacudirlo.",
+      "note": "Sustituye baquetón: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "brocado",
+      "after": "brocado",
+      "definition": "Tela de seda con dibujos tejidos en hilos de oro o plata.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "cabriola",
+      "after": "cabriola",
+      "definition": "Salto de danza en el que se cruzan los pies en el aire.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "cadalso",
+      "after": "tertulia",
+      "definition": "Encuentro habitual de varias personas para conversar.",
+      "note": "Sustituye cadalso: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "cajel",
+      "after": "remanso",
+      "definition": "Tramo de una corriente donde el agua se mueve más despacio.",
+      "note": "Sustituye cajel: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "calandra",
+      "after": "calandra",
+      "definition": "Rejilla situada delante del radiador de un automóvil.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "calicata",
+      "after": "calicata",
+      "definition": "Excavación de exploración para conocer cómo es el subsuelo.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "cartabón",
+      "after": "cartabón",
+      "definition": "Plantilla de dibujo triangular con un ángulo recto y tres lados de distinta longitud.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "cartela",
+      "after": "cartela",
+      "definition": "Pieza a modo de tarjeta sobre la que se escribe una indicación.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "catafalco",
+      "after": "zaguán",
+      "definition": "Espacio cubierto que se encuentra al entrar a una casa desde la calle.",
+      "note": "Sustituye catafalco: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "catalejo",
+      "after": "catalejo",
+      "definition": "Anteojo portátil que se alarga para mirar a distancia.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "cimborrio",
+      "after": "cimborrio",
+      "definition": "Torre que se levanta sobre el cruce de las naves de una iglesia para darle luz.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "cofia",
+      "after": "cofia",
+      "definition": "Red o cubierta ajustada con la que se recoge el cabello.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "coracha",
+      "after": "retahíla",
+      "definition": "Serie larga de cosas que se suceden o se nombran una tras otra.",
+      "note": "Sustituye coracha: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "corbel",
+      "after": "serendipia",
+      "definition": "Descubrimiento afortunado que se hace sin haberlo buscado.",
+      "note": "Sustituye corbel: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "crujía",
+      "after": "crujía",
+      "definition": "Espacio de un edificio comprendido entre dos muros de carga.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "cúspide",
+      "after": "cúspide",
+      "definition": "Remate de algo que termina en punta.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "enarca",
+      "after": "parsimonia",
+      "definition": "Manera de hablar o actuar con mucha calma y lentitud.",
+      "note": "Sustituye enarca: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "enjuta",
+      "after": "algarabía",
+      "definition": "Vocerío de varias personas que hablan al mismo tiempo.",
+      "note": "Sustituye enjuta: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "estacha",
+      "after": "estacha",
+      "definition": "Cabo que une un barco con otro o con un punto fijo para realizar maniobras.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "filigrana",
+      "after": "filigrana",
+      "definition": "Adorno delicado hecho al unir hilos de oro o plata.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "foehn",
+      "after": "solaz",
+      "definition": "Descanso o diversión que alivia las preocupaciones.",
+      "note": "Sustituye foehn: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "forja",
+      "after": "forja",
+      "definition": "Lugar en el que se obtiene metal a partir del mineral de hierro.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "fuste",
+      "after": "vericueto",
+      "definition": "Paso o lugar por el que resulta difícil transitar.",
+      "note": "Sustituye fuste: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "greña",
+      "after": "greña",
+      "definition": "Cabellera revuelta y enredada.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "guarismo",
+      "after": "guarismo",
+      "definition": "Cada cifra arábiga que sirve para escribir una cantidad.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "halógeno",
+      "after": "recelo",
+      "definition": "Desconfianza o sospecha ante alguien o algo.",
+      "note": "Sustituye halógeno: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "infolio",
+      "after": "urdimbre",
+      "definition": "Conjunto de hilos paralelos que se prepara en el telar para formar una tela.",
+      "note": "Sustituye infolio: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "jarcia",
+      "after": "jarcia",
+      "definition": "Conjunto de cuerdas y cables del aparejo de un barco de vela.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "jonrón",
+      "after": "jonrón",
+      "definition": "Batazo que envía la pelota fuera del campo y permite recorrer las bases y anotar.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "lamparón",
+      "after": "lamparón",
+      "definition": "Mancha grande de aceite o grasa en una prenda.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "listel",
+      "after": "vitola",
+      "definition": "Apariencia externa que presenta una persona o una cosa.",
+      "note": "Sustituye listel: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "lucerna",
+      "after": "vespertino",
+      "definition": "Que ocurre o tiene lugar por la tarde.",
+      "note": "Sustituye lucerna: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "lucubración",
+      "after": "lucubración",
+      "definition": "Suposición elaborada sin demasiado fundamento.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "mainel",
+      "after": "tenaz",
+      "definition": "Que se mantiene firme en lo que se propone.",
+      "note": "Sustituye mainel: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "manigueta",
+      "after": "manigueta",
+      "definition": "Parte de una herramienta o utensilio por la que se agarra con la mano.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "mayólica",
+      "after": "zarabanda",
+      "definition": "Danza pausada y solemne de ritmo en tres tiempos.",
+      "note": "Sustituye mayólica: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "mesana",
+      "after": "mesana",
+      "definition": "Mástil más cercano a la popa en un barco de tres palos.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "modillón",
+      "after": "quimera",
+      "definition": "Idea que parece realizable, aunque en realidad no lo sea.",
+      "note": "Sustituye modillón: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "mortaja",
+      "after": "raigambre",
+      "definition": "Conjunto de raíces entrelazadas de una planta.",
+      "note": "Sustituye mortaja: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "narria",
+      "after": "narria",
+      "definition": "Armazón que permite arrastrar cargas muy pesadas.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "olambre",
+      "after": "sosiego",
+      "definition": "Estado de calma, sin agitación ni inquietud.",
+      "note": "Sustituye olambre: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "parteluz",
+      "after": "umbría",
+      "definition": "Zona del terreno que recibe poco sol por su orientación.",
+      "note": "Sustituye parteluz: mejora de adecuación familiar, variedad o fiabilidad de la acepción."
+    },
+    {
+      "before": "péndola",
+      "after": "péndola",
+      "definition": "Varilla oscilante que regula la marcha de ciertos relojes.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "pilastra",
+      "after": "pilastra",
+      "definition": "Columna de sección cuadrangular.",
+      "note": "Redacción ajustada tras contrastar la acepción, para precisar su significado."
+    },
+    {
+      "before": "trébede",
+      "after": "trébedes",
+      "definition": "Soporte de hierro con tres patas para colocar recipientes sobre el fuego.",
+      "note": "Se usa la forma plural correspondiente a la acepción del utensilio."
+    }
+  ]
+}
