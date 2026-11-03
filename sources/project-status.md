@@ -14,18 +14,22 @@ deployed to production.
 ```yaml
 product: Impostor
 stage: approved beta
-production: main@8ef518cee74d467f74b6800941577ec9548fdbff
+production: main@8a5ccbf4d912fdef5eecdd3d5e4b67869e02b80c
 deployment_status: READY in Vercel Production
-observed_status: READY deployment verified on 2026-11-03; Cadaver exquisito validated locally and pending release
+observed_status: Cadaver exquisito deployed; READY verified on 2026-11-03 with public mobile/desktop and privacy checks
 ```
 
-The production baseline above was verified in Vercel on 2026-11-03 (Argentina
-time): deployment `dpl_FhUd1Jrnk3unBQVpWvomAj4qWw4J`, serving
-`https://juegos-familiares.vercel.app`, matches the Git `main` commit. It includes
-the Tutti Frutti UX release in PR #53. Supabase project `auytacgoahmqpgrkcdga`
-has the Dictionary structure, reviewed catalogue and activation migrations;
-Cadáver exquisito was not installed at preflight. Prior Dictionary release
-and public/mobile evidence remain in `sources/games/dictionary/validation.md`.
+The functional production baseline above was verified in Vercel on 2026-11-03
+(Argentina time): deployment `dpl_5dChmp5VmjHWdNUsBxhuG6nxK2VS`, serving
+`https://juegos-familiares.vercel.app`, matches the Git merge of PR #54. It
+preserves the previous Tutti Frutti UX release and adds Cadáver exquisito.
+Supabase project `auytacgoahmqpgrkcdga` has the new game migration applied;
+Dictionary remains enabled with 300 reviewed entries. Public mobile/desktop
+checks passed without production identity or gameplay fixtures. No runtime
+error records were returned in the checked window. This is release evidence,
+not continuous monitoring or a production playtest. Documentation-only commits
+can follow this functional baseline. Release evidence lives in
+`sources/games/cadaver-exquisito/validation.md`.
 
 Repeated real-world use and positive human evaluation remain prior product
 evidence; they do not verify every path in this deployment.
@@ -124,21 +128,21 @@ only in `sources/architecture.md`. Impostor-specific future capabilities remain
 classified in `sources/games/impostor/product-brief.md`. The next utility is
 already owned by the roadmap above.
 
-## Cadáver exquisito — release candidate
+## Cadáver exquisito — deployed
 
-Implementación y controles previos a publicación completados en
-`codex/cadaver-exquisito`: sala de dos o más participantes, 3/5/7 rondas,
-escritura por turnos con pista privada, historial por Group, abandono/regreso,
-sucesión y vencimiento. La tarjeta usa hoja y lápiz y el estilo compartido.
+Publicado mediante PR #54 y migration propia en el destino confirmado. Incluye
+sala de dos o más participantes, 3/5/7 rondas, escritura por turnos con pista
+privada, historial por Group, abandono/regreso, sucesión y vencimiento. La
+tarjeta usa hoja y lápiz y el estilo compartido.
 
 Pasaron 845 tests, 116 controles DB, build productivo, lint sin errores y
-smoke móvil con Auth/Realtime reales y PWA en entorno separado. No se atribuye
-prueba física. La publicación no se considera hecha hasta registrar su destino,
-migration y deployment verificados en
-[la evidencia](games/cadaver-exquisito/validation.md).
-[Contrato de producto](games/cadaver-exquisito/product-brief.md).
-Los tres archivos pendientes de puntos finales de Tutti Frutti quedan fuera
-de este release y se preservan.
+smoke móvil con Auth/Realtime reales y PWA en entorno separado. Los controles
+productivos verificaron rutas, tarjeta, permisos, cron y ausencia de errores
+en la ventana consultada; no se crearon fixtures productivos. No se atribuye
+prueba física. [Evidencia de publicación](games/cadaver-exquisito/validation.md)
+y [contrato de producto](games/cadaver-exquisito/product-brief.md).
+Los tres archivos pendientes de puntos finales de Tutti Frutti quedaron fuera
+del release y conservan sus hashes.
 
 ## Dictionary deployment — enabled
 
