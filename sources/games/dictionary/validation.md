@@ -211,7 +211,8 @@ alcance, incluida la configuración de contraseñas filtradas.
 
 La publicación inicial incluyó código deshabilitado; la evidencia de esa
 publicación no equivalía a aprobar el catálogo ni a cerrar los gates. La nueva
-revisión asistida autorizada y los gates se registran arriba. Un rollback de aplicación puede usar el
+revisión asistida autorizada y los gates se registran arriba. Un rollback de
+aplicación puede usar el
 build previo `dpl_5zJPN2JbHnKPTU8jHmXaPRKHBrNa`; la estructura nueva puede quedar
 instalada y el flag apagado. No ejecutar un rollback destructivo de DB como
 parte de una reversión de frontend.
@@ -224,5 +225,40 @@ Migrations nuevas y separadas:
 2. `20261102235852_dictionary_enable`: invoca la función interna con el gate
    autoritativo de 300 entradas. No modifica directamente el flag ni sus permisos.
 
-La aplicación de estas migrations al destino autorizado y el estado posterior
-se registrarán después de verificar la ejecución real.
+Aplicadas al destino confirmado `auytacgoahmqpgrkcdga` el 2 de noviembre de
+2026 (hora argentina; 3 de noviembre UTC). La CLI confirmó exclusivamente ambas
+migrations, sin seeds, roles ni Vault. Verificación posterior:
+
+- Flag `true`; 300 entradas, las 300 `reviewed`, válidas y atribuidas a Codex.
+- Sin lectura directa cliente de cartas ni permiso para ejecutar `set_enabled`.
+- Cron activo `*/15 * * * *`, última ejecución observada `succeeded`.
+- Cero salas de Diccionario al comprobar; no se crearon identidades ni partidas
+  de prueba productivas ni se alteraron datos de otros juegos.
+- RPC pública de disponibilidad: `200 / true`; estado sin sesión: `401`;
+  lectura del esquema privado: `406`; fuente editorial por URL pública: `404`.
+- Portada: enlace «Ir a Diccionario» visible en un navegador nuevo.
+  `/`, `/impostor`, `/tutti-frutti`, `/diccionario`: HTTP 200, sin errores
+  de página ni desborde horizontal a 390 × 844.
+- No hubo registros de error runtime devueltos para el despliegue en la ventana
+  consultada; esto no es monitorización continua.
+
+Publicación: [PR #50](https://github.com/RadikeCosa/juegos-familiares/pull/50),
+`main@6f3d333da5e7d5dd4ebab32687382445d91c833b`.
+Vercel Production `dpl_4vk51hgcaUkjnjztAjTouaLf9Mzk`, `READY`, con alias
+https://juegos-familiares.vercel.app y build
+https://juegos-familiares-oexi953sz-radikecosas-projects.vercel.app.
+La preview `dpl_4UKzRsHB6YJ2uAbBB49zu66Amjsb` también quedó `READY`,
+con las cuatro rutas comprobadas bajo su protección existente. Los controles
+de Vercel y GitGuardian de la PR terminaron correctamente.
+
+La repetición del smoke entregado terminó con código 0 y 78 eventos Realtime
+de navegador. Se preservaron los archivos preexistentes del workspace original,
+comprobando sus hashes. Sólo se trabajó en el worktree separado.
+
+Los gates del lanzamiento quedan satisfechos bajo la sustitución expresamente
+autorizada. No se ejecutaron revisión humana, instalación en teléfono físico ni
+suspensión real de sistema operativo; se usaron revisión asistida y emulación.
+Una corrección editorial posterior debe usar migration nueva. Para deshabilitar,
+aplicar una migration administrativa autorizada con
+`select dictionary_private.set_enabled(false)`; se conserva la continuidad de
+partidas existentes. Un rollback de frontend por sí solo no apaga este flag.
