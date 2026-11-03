@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CadaverHomeCard } from "./cadaver-exquisito/cadaver-entry";
 import { DictionaryHomeCard } from "./diccionario/dictionary-entry";
 import { useEffect, useState, type ReactNode } from "react";
 import { PlatformGroupOnboardingActions } from "./platform-group-onboarding-actions";
@@ -145,6 +146,7 @@ function renderPlatformGameEntries(
     <>
       {renderImpostorGameEntry(impostorContent)}
       <DictionaryHomeCard />
+      <CadaverHomeCard />
       <section className="game-entry" aria-labelledby="tutti-frutti-entry-title">
         <div className="game-entry__art game-entry__art--tutti-frutti" aria-hidden="true">
           <svg viewBox="0 0 96 96" fill="none" focusable="false">

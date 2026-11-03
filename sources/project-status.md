@@ -14,27 +14,19 @@ deployed to production.
 ```yaml
 product: Impostor
 stage: approved beta
-production: main@6f3d333da5e7d5dd4ebab32687382445d91c833b
+production: main@8ef518cee74d467f74b6800941577ec9548fdbff
 deployment_status: READY in Vercel Production
-observed_status: Dictionary enabled with 300 reviewed entries; production deployment READY and public mobile checks passed
+observed_status: READY deployment verified on 2026-11-03; Cadaver exquisito validated locally and pending release
 ```
 
-The functional production baseline above was verified in Vercel on 2026-11-02
-(Argentina time) as deployment `dpl_4vk51hgcaUkjnjztAjTouaLf9Mzk`, serving
-`https://juegos-familiares.vercel.app`. It preserves readable room codes and local
-fonts and enables Dictionary. The connected Supabase project
-`auytacgoahmqpgrkcdga` has the Dictionary structure, reviewed-catalogue and
-activation migrations applied. The flag is active with 300 valid reviewed
-entries; the user expressly authorized AI-assisted source review and emulated
-mobile testing in place of human editorial review and physical-device testing.
-Read-only privilege and public API checks passed.
+The production baseline above was verified in Vercel on 2026-11-03 (Argentina
+time): deployment `dpl_FhUd1Jrnk3unBQVpWvomAj4qWw4J`, serving
+`https://juegos-familiares.vercel.app`, matches the Git `main` commit. It includes
+the Tutti Frutti UX release in PR #53. Supabase project `auytacgoahmqpgrkcdga`
+has the Dictionary structure, reviewed catalogue and activation migrations;
+Cadáver exquisito was not installed at preflight. Prior Dictionary release
+and public/mobile evidence remain in `sources/games/dictionary/validation.md`.
 
-Mobile checks of `/`, `/impostor`, `/tutti-frutti` and `/diccionario` passed
-without page errors, horizontal overflow or identity creation. No runtime error
-records were returned for the new deployment in the checked window. This is
-release evidence, not a new real-world validation of every game loop.
-Documentation-only commits can follow this functional baseline; the verified
-release evidence lives in `sources/games/dictionary/validation.md`.
 Repeated real-world use and positive human evaluation remain prior product
 evidence; they do not verify every path in this deployment.
 
@@ -131,6 +123,22 @@ group-scoped Player identity and capabilities shared by future utilities live
 only in `sources/architecture.md`. Impostor-specific future capabilities remain
 classified in `sources/games/impostor/product-brief.md`. The next utility is
 already owned by the roadmap above.
+
+## Cadáver exquisito — release candidate
+
+Implementación y controles previos a publicación completados en
+`codex/cadaver-exquisito`: sala de dos o más participantes, 3/5/7 rondas,
+escritura por turnos con pista privada, historial por Group, abandono/regreso,
+sucesión y vencimiento. La tarjeta usa hoja y lápiz y el estilo compartido.
+
+Pasaron 845 tests, 116 controles DB, build productivo, lint sin errores y
+smoke móvil con Auth/Realtime reales y PWA en entorno separado. No se atribuye
+prueba física. La publicación no se considera hecha hasta registrar su destino,
+migration y deployment verificados en
+[la evidencia](games/cadaver-exquisito/validation.md).
+[Contrato de producto](games/cadaver-exquisito/product-brief.md).
+Los tres archivos pendientes de puntos finales de Tutti Frutti quedan fuera
+de este release y se preservan.
 
 ## Dictionary deployment — enabled
 

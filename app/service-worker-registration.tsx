@@ -11,7 +11,8 @@ function isCriticalGameplayPath(pathname: string) {
   return (
     pathname.startsWith("/impostor/sala/") ||
     pathname.startsWith("/tutti-frutti/sala/") ||
-    pathname.startsWith("/diccionario/sala/")
+    pathname.startsWith("/diccionario/sala/") ||
+    pathname.startsWith("/cadaver-exquisito/sala/")
   );
 }
 

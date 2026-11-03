@@ -1,0 +1,66 @@
+[
+  {
+    "text": "  Había una\nhistoria. — ...",
+    "words": [
+      "Había",
+      "una",
+      "historia."
+    ],
+    "hint": "Había una historia."
+  },
+  {
+    "text": "El ex-alumno tenía 2 lápices 🙂",
+    "words": [
+      "El",
+      "ex-alumno",
+      "tenía",
+      "2",
+      "lápices"
+    ],
+    "hint": "tenía 2 lápices"
+  },
+  {
+    "text": "… — 🙂",
+    "words": [],
+    "hint": ""
+  },
+  {
+    "text": "café 東京١٢٣﻿fin!",
+    "words": [
+      "café",
+      "東京",
+      "١٢٣",
+      "fin!"
+    ],
+    "hint": "東京 ١٢٣ fin!"
+  },
+  {
+    "text": "𐐀 Ⅳ ½ 𝟘",
+    "words": [
+      "𐐀",
+      "Ⅳ",
+      "½",
+      "𝟘"
+    ],
+    "hint": "Ⅳ ½ 𝟘"
+  },
+  {
+    "text": "uno dos tres cuatro... —",
+    "words": [
+      "uno",
+      "dos",
+      "tres",
+      "cuatro..."
+    ],
+    "hint": "dos tres cuatro..."
+  },
+  {
+    "text": "uno\rdos\r\ntres",
+    "words": [
+      "uno",
+      "dos",
+      "tres"
+    ],
+    "hint": "uno dos tres"
+  }
+]

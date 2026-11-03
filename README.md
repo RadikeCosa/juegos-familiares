@@ -20,6 +20,8 @@ de implementacion.
 - `sources/games/impostor/game-state.md`: estados, transiciones y actores.
 - `sources/games/impostor/technical-requirements.md`: invariantes y requisitos
   tecnicos.
+- `sources/games/cadaver-exquisito/product-brief.md`: reglas de escritura e historial.
+- `sources/games/cadaver-exquisito/validation.md`: comprobaciones y entorno desechable.
 - `sources/archive/`: evidencia historica seleccionada; no gobierna producto,
   arquitectura, roadmap, backlog ni operacion actual.
 
