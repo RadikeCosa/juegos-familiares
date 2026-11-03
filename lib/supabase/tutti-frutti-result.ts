@@ -21,7 +21,7 @@ export type TuttiFruttiFinalResult = {
   finishedAt: string;
   serverNow: string;
   roundCount: number;
-  totals: { playerId: string; nickname: string; totalPoints: number; rank: number }[];
+  totals: { playerId: string; nickname: string; totalPoints: number; lastRoundPoints: number | null; rank: number }[];
   winnerPlayerIds: string[];
   isTie: boolean;
   canReturnToRoom: boolean;
@@ -102,12 +102,24 @@ function parseFinalResult(value: unknown): TuttiFruttiFinalResult {
     throw new Error("No pudimos recuperar el resultado final.");
   }
   const players = new Set<string>();
+  const totals: TuttiFruttiFinalResult["totals"] = [];
   for (const total of value.totals) {
-    if (!record(total) || typeof total.playerId !== "string" || typeof total.nickname !== "string"
+    if (!record(total)) throw new Error("No pudimos recuperar el resultado final.");
+    const lastRoundPoints = total.lastRoundPoints === undefined ? null : total.lastRoundPoints;
+    if (typeof total.playerId !== "string" || typeof total.nickname !== "string"
       || !Number.isInteger(total.totalPoints) || (total.totalPoints as number) < 0
+      || !(lastRoundPoints === null || (Number.isInteger(lastRoundPoints)
+        && (lastRoundPoints as number) >= 0))
       || !Number.isInteger(total.rank) || (total.rank as number) < 1
       || players.has(total.playerId)) throw new Error("No pudimos recuperar el resultado final.");
     players.add(total.playerId);
+    totals.push({
+      playerId: total.playerId,
+      nickname: total.nickname,
+      totalPoints: total.totalPoints as number,
+      lastRoundPoints: lastRoundPoints as number | null,
+      rank: total.rank as number
+    });
   }
   if (value.totals.length < 1 || value.winnerPlayerIds.length < 1
     || value.winnerPlayerIds.some(id => typeof id !== "string" || !players.has(id))
@@ -121,7 +133,7 @@ function parseFinalResult(value: unknown): TuttiFruttiFinalResult {
   if (rankOne.join(",") !== [...value.winnerPlayerIds].sort().join(",")) {
     throw new Error("No pudimos recuperar el resultado final.");
   }
-  return value as TuttiFruttiFinalResult;
+  return { ...value, totals } as TuttiFruttiFinalResult;
 }
 
 function parsePostgameState(value: unknown): TuttiFruttiPostgameState {

@@ -52,9 +52,9 @@ describe("Tutti Frutti result RPC adapter", () => {
       roomId: "room-1", roomCode: "TUTT1234", sessionId: "session-1",
       finishedAt: "2026-09-25T13:00:00Z", serverNow: "2026-09-25T13:00:01Z",
       roundCount: 3, totals: [
-        { playerId: "a", nickname: "Ana", totalPoints: 30, rank: 1 },
-        { playerId: "b", nickname: "Beto", totalPoints: 30, rank: 1 },
-        { playerId: "c", nickname: "Cata", totalPoints: 20, rank: 3 }
+        { playerId: "a", nickname: "Ana", totalPoints: 30, lastRoundPoints: 10, rank: 1 },
+        { playerId: "b", nickname: "Beto", totalPoints: 30, lastRoundPoints: 0, rank: 1 },
+        { playerId: "c", nickname: "Cata", totalPoints: 20, lastRoundPoints: null, rank: 3 }
       ], winnerPlayerIds: ["a", "b"], isTie: true, canReturnToRoom: true
     };
     const rpc = vi.fn().mockResolvedValue({ data: finalResult, error: null });
@@ -63,6 +63,28 @@ describe("Tutti Frutti result RPC adapter", () => {
     expect(rpc).toHaveBeenCalledWith("get_tutti_frutti_final_result", {
       target_session_id: "session-1"
     });
+  });
+
+  it("treats a confirmed zero separately from legacy results without per-round data", async () => {
+    const resultWithoutNewField = {
+      roomId: "room-1", roomCode: null, sessionId: "session-1",
+      finishedAt: "2026-09-25T13:00:00Z", serverNow: "2026-09-25T13:00:01Z",
+      roundCount: 3, totals: [{ playerId: "a", nickname: "Ana", totalPoints: 0, rank: 1 }],
+      winnerPlayerIds: ["a"], isTie: false, canReturnToRoom: false
+    };
+    const oldClient = ({
+      rpc: vi.fn().mockResolvedValue({ data: resultWithoutNewField, error: null })
+    } as unknown) as TuttiFruttiResultClient;
+    await expect(getTuttiFruttiFinalResult(oldClient, "session-1"))
+      .resolves.toMatchObject({ totals: [{ lastRoundPoints: null }] });
+
+    const zeroClient = { rpc: vi.fn().mockResolvedValue({
+      data: { ...resultWithoutNewField,
+        totals: [{ playerId: "a", nickname: "Ana", totalPoints: 0, lastRoundPoints: 0, rank: 1 }] },
+      error: null
+    }) } as unknown as TuttiFruttiResultClient;
+    await expect(getTuttiFruttiFinalResult(zeroClient, "session-1"))
+      .resolves.toMatchObject({ totals: [{ lastRoundPoints: 0 }] });
   });
 
   it("rejects final results whose winners do not match rank one", async () => {

@@ -76,8 +76,40 @@ type PostgameState =
   | { status: "error"; roomId: string; message: string }
   | { status: "ready"; roomId: string; postgame: TuttiFruttiPostgameState };
 
+const RECOVERY_TIMEOUT_MS = 10_000;
+
+export function withRecoveryTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), RECOVERY_TIMEOUT_MS);
+    })
+  ]).finally(() => { if (timer !== undefined) clearTimeout(timer); });
+}
+
 function roomsClient(): ImpostorRoomsClient {
   return createBrowserSupabaseClient() as unknown as ImpostorRoomsClient;
+}
+
+export function TuttiFruttiClosingStatus({ connection, onRetry }: {
+  connection: "online" | "offline" | "reconnecting";
+  onRetry: () => void;
+}) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSlow(true), 8_000);
+    return () => window.clearTimeout(timer);
+  }, []);
+  return (
+    <div className="tutti-phase-action" role="status">
+      <p>{connection !== "online"
+        ? "Esperando conexión para confirmar el cierre de respuestas."
+        : slow ? "El cierre está tardando. Estamos intentando actualizar la partida." : "Cerrando respuestas…"}</p>
+      {slow ? <button type="button" className="impostor-action"
+        disabled={connection !== "online"} onClick={onRetry}>Reintentar actualización</button> : null}
+    </div>
+  );
 }
 
 export function TuttiFruttiLobbyContent(options: {
@@ -106,6 +138,7 @@ export function TuttiFruttiLobbyContent(options: {
   postgameError?: string | null;
   game: TuttiFruttiStartedGame | null;
   gameError: string | null;
+  onRetryGame?: () => void;
   actionError: string | null;
   onCopyCode?: () => void;
   copyNotice?: string | null;
@@ -125,7 +158,7 @@ export function TuttiFruttiLobbyContent(options: {
     challengeSeconds = 0, challengeBusy = false, challengeError = null,
     resultState = null, scoring = false, advancing = false, advanceError = null,
     postgame = false, postgameLoading = false, postgameError = null,
-    game, gameError, actionError, onCopyCode, copyNotice, onStart, onSkipVote, onCall = () => {},
+    game, gameError, onRetryGame = () => {}, actionError, onCopyCode, copyNotice, onStart, onSkipVote, onCall = () => {},
     onAnswerSaveState = () => {}, onRetryReview = () => {}, onOpenChallenge = () => {},
     onVoteChallenge = () => {}, onScore = () => {}, onRetryResult = () => {}, onAdvance = () => {}, onExit } = options;
   const isHost = lobby.participants.some((participant) => participant.isSelf && participant.isHost);
@@ -143,36 +176,74 @@ export function TuttiFruttiLobbyContent(options: {
           <span className="impostor-room-badges">
             {participant.isSelf ? <strong>Vos</strong> : null}
             {participant.isHost ? <strong>Host</strong> : null}
-            <span className={connected.has(participant.playerId) ? "impostor-presence impostor-presence--connected" : "impostor-presence impostor-presence--disconnected"}>
-              {connected.has(participant.playerId) ? "conectado" : "desconectado"}
+            <span className={participant.isSelf && connection !== "online"
+              ? "impostor-presence impostor-presence--disconnected"
+              : connected.has(participant.playerId)
+                ? "impostor-presence impostor-presence--connected" : "impostor-presence impostor-presence--disconnected"}>
+              {participant.isSelf && connection !== "online"
+                ? connection === "offline" ? "sin conexión" : "reconectando"
+                : connected.has(participant.playerId) ? "conectado" : "desconectado"}
             </span>
           </span>
         </li>
       ))}
     </ul>
   );
+  const phaseHeadingRef = useRef<HTMLHeadingElement>(null);
+  const previousPhaseRef = useRef<string | null>(null);
+  const focusedAnswerFieldRef = useRef(false);
+  const [phaseAnnouncement, setPhaseAnnouncement] = useState("");
+  const currentPhaseKey = game ? `${game.sessionId}:${game.round.id}:${game.round.phase}` : null;
+  const currentPhaseName = game ? ({
+    LETTER_PENDING: "letra por confirmar",
+    PLAYING: "escritura de respuestas",
+    FINAL_COUNTDOWN: "cuenta regresiva",
+    REVIEWING: "revisión de respuestas",
+    RESULT: "resultado de la ronda"
+  } as const)[game.round.phase] : "";
+
+  useEffect(() => {
+    const rememberFocus = (event: FocusEvent) => {
+      focusedAnswerFieldRef.current = event.target instanceof HTMLElement
+        && event.target.matches(".tutti-answer-field input, .tutti-answer-field textarea, .tutti-answer-field select");
+    };
+    document.addEventListener("focusin", rememberFocus);
+    return () => document.removeEventListener("focusin", rememberFocus);
+  }, []);
+
+  useEffect(() => {
+    if (!currentPhaseKey || !game) return;
+    const previous = previousPhaseRef.current;
+    if (previous && previous !== currentPhaseKey) {
+      setPhaseAnnouncement(`Ronda ${game.round.number}: ${currentPhaseName}.`);
+      const fieldStillFocused = document.activeElement instanceof HTMLElement
+        && document.activeElement.matches(".tutti-answer-field input, .tutti-answer-field textarea, .tutti-answer-field select");
+      if (focusedAnswerFieldRef.current && fieldStillFocused) {
+        // Keep the player's active field and mobile keyboard undisturbed.
+      } else {
+        focusedAnswerFieldRef.current = false;
+        const behavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+        phaseHeadingRef.current?.scrollIntoView({ block: "start", behavior });
+        phaseHeadingRef.current?.focus({ preventScroll: true });
+      }
+    }
+    previousPhaseRef.current = currentPhaseKey;
+  }, [currentPhaseKey, currentPhaseName, game]);
+
   return (
     <section className={`impostor-platform-context${isPlaying ? " tutti-room-context--playing" : ""}`} aria-labelledby="tutti-room-title">
       {isPlaying ? (
         <details className="tutti-room-summary">
           <summary>
-            <span className="tutti-room-summary__content">
-              <span id="tutti-room-title" className="tutti-room-summary__title" role="heading" aria-level={1}>
-                Sala · Código {formatRoomJoinCode(lobby.room.code)}
-              </span>
-              <span className={`tutti-room-summary__connection tutti-room-summary__connection--${connection}`} aria-live="polite">
-                {connectionLabel}
-              </span>
-              <span className="tutti-room-summary__count">
-                {lobby.participants.length} {lobby.participants.length === 1 ? "participante" : "participantes"}
-              </span>
-            </span>
+            <span id="tutti-room-title" className="tutti-room-summary__title">Sala y navegación</span>
           </summary>
           <div className="tutti-room-summary__details">
-            <p>{connection === "offline" ? "La sala se actualizará al volver la conexión." : "Compartí el código con personas de tu grupo."}</p>
+            <p>Código {formatRoomJoinCode(lobby.room.code)}</p>
             <h2>Participantes</h2>
             {participantList}
+            <Link className="impostor-action tutti-room-navigation" href="/">Volver a Juegos Familiares</Link>
           </div>
+          <span className="tutti-sr-only" aria-live="polite">{connectionLabel}</span>
         </details>
       ) : (
         <>
@@ -186,6 +257,11 @@ export function TuttiFruttiLobbyContent(options: {
           {participantList}
         </>
       )}
+      {isPlaying && connection !== "online" ? (
+        <p className={`tutti-connection-notice tutti-connection-notice--${connection}`} role="status" aria-live="polite">
+          {connection === "offline" ? "Sin conexión. La partida se actualizará al volver." : "Reconectando a la partida…"}
+        </p>
+      ) : null}
       {lobby.room.status === "lobby" ? (
         <>
           {postgameLoading ? (
@@ -215,14 +291,13 @@ export function TuttiFruttiLobbyContent(options: {
           ) : <p>Esperando a que el anfitrión inicie la partida.</p>}
         </>
       ) : (
-        <section aria-labelledby="tutti-game-started-title" className="tutti-setup">
-          <h2 id="tutti-game-started-title">Partida iniciada</h2>
+        <section aria-labelledby="tutti-phase-heading" className="tutti-game-session">
           {game ? (
             <>
-              <p>Ronda {game.round.number} de {game.roundCount}</p>
-              <p>Letra preparada</p>
-              <p aria-label={`Letra ${game.round.letter}`} className="tutti-game-letter">{game.round.letter}</p>
-              <p>Categorías: {game.categories.map((category) => category.label).join(", ")}</p>
+              <h2 id="tutti-phase-heading" ref={phaseHeadingRef} tabIndex={-1} className="tutti-phase-heading">
+                Ronda {game.round.number} de {game.roundCount} · Letra {game.round.letter}
+              </h2>
+              <p className="tutti-sr-only" role="status" aria-live="polite" aria-atomic="true">{phaseAnnouncement}</p>
               {game.round.phase === "LETTER_PENDING" && game.round.letterDecision ? (
                 <section className="tutti-letter-decision" aria-labelledby="tutti-letter-decision-title">
                   <h3 id="tutti-letter-decision-title">¿Saltamos esta letra?</h3>
@@ -244,42 +319,30 @@ export function TuttiFruttiLobbyContent(options: {
                   ) : (
                     <p>Esta letra se necesita para completar las rondas restantes y no se puede saltar.</p>
                   )}
+                  {game.round.letterDecision.hasVoted ? <p role="status">Tu voto quedó registrado. Esperando el cierre automático de la elección.</p> : null}
                 </section>
               ) : ["PLAYING", "FINAL_COUNTDOWN", "REVIEWING"].includes(game.round.phase) ? (
                 <>
                   {game.round.phase === "PLAYING" ? (
-                    <p role="status">Letra confirmada. Completá y guardá todas las categorías para llamar Tutti Frutti.</p>
+                    <p role="status">{callReady ? "Tus respuestas están guardadas. Podés llamar Tutti Frutti."
+                      : unconfirmedAnswers ? "Esperando que se guarden tus cambios para habilitar Tutti Frutti."
+                      : "Completá todas las categorías para habilitar Tutti Frutti."}</p>
                   ) : game.round.phase === "FINAL_COUNTDOWN" ? (
                     <div className="tutti-countdown" role="status">
                       <p>{game.participants.find((participant) => participant.playerId === game.round.calledByPlayerId)?.nickname ?? "Un participante"} llamó Tutti Frutti.</p>
-                      <p role="timer">{countdownSeconds > 0 ? `${countdownSeconds} segundos restantes` : "Cerrando respuestas…"}</p>
+                      {countdownSeconds > 0 ? (
+                        <><p role="timer">{countdownSeconds === 1 ? "1 segundo restante" : `${countdownSeconds} segundos restantes`}</p>
+                          <p>Todavía podés completar o editar tus respuestas.</p></>
+                      ) : <TuttiFruttiClosingStatus connection={connection} onRetry={onRetryGame} />}
                     </div>
                   ) : (
-                    <>
-                      <p role="status">Respuestas bloqueadas. Revisá las respuestas de la ronda.</p>
-                      <a className="impostor-action" href="#tutti-review">Ir a revisión</a>
-                    </>
+                    null
                   )}
-                  {lobby.room.id && selfPlayerId ? (
-                    <TuttiFruttiAnswerEntry
-                      roomId={lobby.room.id}
-                      sessionId={game.sessionId}
-                      playerId={selfPlayerId}
-                      roundNumber={game.round.number}
-                      categories={game.categories}
-                      connection={connection}
-                      editable={game.round.phase === "PLAYING" || game.round.phase === "FINAL_COUNTDOWN" && countdownSeconds > 0}
-                      onSaveState={onAnswerSaveState}
-                    />
-                  ) : null}
                   {game.round.phase === "PLAYING" ? (
                     <button className="impostor-action impostor-action--primary" type="button"
                       disabled={!callReady || calling || connection !== "online"} onClick={onCall}>
                       {calling ? "Iniciando cuenta…" : "Tutti Frutti"}
                     </button>
-                  ) : null}
-                  {game.round.phase === "REVIEWING" && unconfirmedAnswers ? (
-                    <p role="alert">Alguna edición no alcanzó a guardarse antes del cierre.</p>
                   ) : null}
                   {game.round.phase === "REVIEWING" ? (
                     <div id="tutti-review">
@@ -287,7 +350,7 @@ export function TuttiFruttiLobbyContent(options: {
                         <TuttiFruttiReview key={`${reviewState.sessionId}:${reviewState.roundNumber}`}
                           review={reviewState.review} currentPlayerId={selfPlayerId ?? ""}
                           challengeSeconds={challengeSeconds} connection={connection} busy={challengeBusy}
-                          error={challengeError} isHost={isHost} scoring={scoring} onScore={onScore}
+                          error={challengeError} isHost={isHost} isFinalRound={game.round.number === game.roundCount} scoring={scoring} onScore={onScore}
                           onOpenChallenge={onOpenChallenge} onVote={onVoteChallenge} />
                       ) : reviewState?.status === "error" ? (
                         <div role="alert">
@@ -297,6 +360,26 @@ export function TuttiFruttiLobbyContent(options: {
                         </div>
                       ) : <p aria-live="polite">Recuperando respuestas de la ronda…</p>}
                     </div>
+                  ) : null}
+                  {game.round.phase === "REVIEWING" && unconfirmedAnswers ? (
+                    <p role="alert">Alguna edición no alcanzó a guardarse antes del cierre.</p>
+                  ) : null}
+
+                  {lobby.room.id && selfPlayerId ? (
+                    <details className={game.round.phase === "REVIEWING" ? "tutti-locked-answers" : "tutti-writing-answers"}
+                      open={game.round.phase !== "REVIEWING"}>
+                      <summary>Tus respuestas guardadas y ediciones pendientes</summary>
+                      <TuttiFruttiAnswerEntry
+                        roomId={lobby.room.id}
+                        sessionId={game.sessionId}
+                        playerId={selfPlayerId}
+                        roundNumber={game.round.number}
+                        categories={game.categories}
+                        connection={connection}
+                        editable={game.round.phase === "PLAYING" || game.round.phase === "FINAL_COUNTDOWN" && countdownSeconds > 0}
+                        onSaveState={onAnswerSaveState}
+                      />
+                    </details>
                   ) : null}
                 </>
               ) : game.round.phase === "RESULT" ? (
@@ -313,7 +396,9 @@ export function TuttiFruttiLobbyContent(options: {
               ) : null}
             </>
           ) : <p aria-live="polite">Recuperando la partida…</p>}
-          {gameError ? <p role="alert">{gameError}</p> : null}
+          {gameError ? <div role="alert"><p>{gameError}</p>
+            <button type="button" className="impostor-action" onClick={onRetryGame} disabled={connection !== "online"}>Volver a intentar</button>
+          </div> : null}
         </section>
       )}
       {lobby.room.status === "lobby" ? (
@@ -322,7 +407,7 @@ export function TuttiFruttiLobbyContent(options: {
         </button>
       ) : null}
       {actionError ? <p role="alert">{actionError}</p> : null}
-      <Link className="impostor-action" href="/">Volver a Juegos Familiares</Link>
+      {!isPlaying ? <Link className="impostor-action" href="/">Volver a Juegos Familiares</Link> : null}
     </section>
   );
 }
@@ -423,10 +508,10 @@ export function TuttiFruttiRoomEntry({ code, postgameSessionId = null }: {
     const request = ++gameRequestSequence.current;
     try {
       const requestedAt = Date.now();
-      const snapshot = await getTuttiFruttiGameState(
+      const snapshot = await withRecoveryTimeout(getTuttiFruttiGameState(
         createBrowserSupabaseClient() as unknown as TuttiFruttiGameClient,
         roomId
-      );
+      ), "La partida tardó demasiado en responder. Podés volver a intentar.");
       if (request === gameRequestSequence.current) {
         serverOffsetMs.current = Date.parse(snapshot.serverNow) - (requestedAt + Date.now()) / 2;
         setGame(snapshot);
@@ -512,7 +597,8 @@ export function TuttiFruttiRoomEntry({ code, postgameSessionId = null }: {
   const refresh = useCallback(async () => {
     const request = ++requestSequence.current;
     try {
-      const lobby = await getMyActiveRoom(roomsClient());
+      const lobby = await withRecoveryTimeout(getMyActiveRoom(roomsClient()),
+        "La sala tardó demasiado en responder. Podés volver a intentar.");
       if (request !== requestSequence.current) return;
       if (!lobby) {
         setState({ status: "absent" });
@@ -985,7 +1071,16 @@ export function TuttiFruttiRoomEntry({ code, postgameSessionId = null }: {
   }
 
   if (state.status === "loading") return <p aria-live="polite">Comprobando sala...</p>;
-  if (state.status === "error") return <p role="alert">{state.message} <Link href="/tutti-frutti">Volver a Tutti Frutti</Link></p>;
+  if (state.status === "error") return (
+    <section className="tutti-recovery-error">
+      <p role="alert">{state.message}</p>
+      <button className="impostor-action" type="button" onClick={() => {
+        setState({ status: "loading" });
+        void refresh();
+      }}>Volver a intentar</button>
+      <Link href="/tutti-frutti">Volver a Tutti Frutti</Link>
+    </section>
+  );
   if (state.status === "absent") return (
     <section className="impostor-platform-context">
       <h1>Sala {normalizedCode}</h1>
@@ -1037,6 +1132,7 @@ export function TuttiFruttiRoomEntry({ code, postgameSessionId = null }: {
         postgameError={postgameError}
         game={game}
         gameError={gameError}
+        onRetryGame={() => { if (roomId) void refreshGame(roomId); }}
         actionError={actionError}
         copyNotice={copyNotice}
         onCopyCode={() => {
@@ -1065,9 +1161,9 @@ export function TuttiFruttiRoomEntry({ code, postgameSessionId = null }: {
         }}
         onExit={(asHost) => { void exitRoom(asHost); }}
       />
-      {!postgameBlocksSetup && setupForRoom?.status === "loading"
+      {isLobby && !postgameBlocksSetup && setupForRoom?.status === "loading"
         ? <p aria-live="polite">Recuperando configuración…</p> : null}
-      {!postgameBlocksSetup && setupForRoom?.status === "error" ? (
+      {isLobby && !postgameBlocksSetup && setupForRoom?.status === "error" ? (
         <section className="tutti-setup tutti-setup--error" aria-labelledby="tutti-setup-error-title">
           <h2 id="tutti-setup-error-title">No pudimos recuperar la configuración</h2>
           <p role="alert">{setupForRoom.message}</p>
@@ -1076,7 +1172,7 @@ export function TuttiFruttiRoomEntry({ code, postgameSessionId = null }: {
           </button>
         </section>
       ) : null}
-      {!postgameBlocksSetup && setupForRoom?.status === "ready" ? (
+      {isLobby && !postgameBlocksSetup && setupForRoom?.status === "ready" ? (
         <TuttiFruttiRoomSetup
           configuration={setupForRoom.draft}
           isHost={isHost}

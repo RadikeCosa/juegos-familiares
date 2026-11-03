@@ -897,12 +897,38 @@ body {
   margin-top: 0;
 }
 
+.tutti-room-context--playing {
+  align-content: start;
+}
+
 .tutti-room-summary {
   width: min(100%, 40rem);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
   color: var(--foreground-muted);
+}
+
+.tutti-room-summary > summary {
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+}
+
+.tutti-room-summary > summary::after,
+.tutti-locked-answers > summary::after,
+.tutti-round-result-details > summary::after {
+  content: "⌄";
+  margin-inline-start: auto;
+  color: var(--primary);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.tutti-room-summary[open] > summary::after,
+.tutti-locked-answers[open] > summary::after,
+.tutti-round-result-details[open] > summary::after {
+  content: "⌃";
 }
 
 .tutti-room-summary > summary {
@@ -975,6 +1001,80 @@ body {
   background: var(--surface);
   padding: clamp(var(--space-4), 5vw, var(--space-6));
   box-shadow: var(--shadow-soft);
+}
+
+.tutti-game-session {
+  display: grid;
+  gap: var(--space-3);
+  width: min(100%, 40rem);
+  margin-top: var(--space-2);
+  scroll-margin-top: var(--space-4);
+}
+
+.tutti-phase-heading {
+  margin: 0;
+  color: var(--foreground);
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(1.2rem, 4.5vw, 1.55rem);
+  line-height: 1.2;
+}
+
+.tutti-phase-heading:focus {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 4px;
+}
+
+.tutti-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.tutti-connection-notice {
+  width: min(100%, 40rem);
+  border-inline-start: 3px solid var(--accent);
+  padding-inline-start: var(--space-3);
+  color: var(--foreground);
+}
+
+.tutti-recovery-error {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+}
+
+.tutti-recovery-error p {
+  margin: 0;
+}
+
+.tutti-locked-answers {
+  width: min(100%, 40rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: var(--space-3) var(--space-4);
+}
+
+.tutti-locked-answers > summary,
+.tutti-round-result-details > summary {
+  min-height: 2.75rem;
+  display: flex;
+  align-items: center;
+  color: var(--foreground);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.tutti-locked-answers .tutti-answer-entry {
+  width: 100%;
+  margin-top: var(--space-3);
+  box-shadow: none;
 }
 
 .tutti-setup__heading,
@@ -1393,9 +1493,9 @@ body {
 }
 
 .tutti-review__navigation {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-2);
 }
 
@@ -1428,6 +1528,29 @@ body {
 .tutti-review__entry .impostor-action {
   min-height: 2.75rem;
   justify-self: start;
+}
+
+.tutti-round-score {
+  display: grid;
+  gap: var(--space-1);
+  border: 2px solid var(--primary);
+  border-radius: var(--radius-md);
+  background: var(--background);
+  padding: var(--space-4);
+}
+
+.tutti-round-score strong {
+  color: var(--foreground);
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(1.35rem, 5vw, 1.8rem);
+  line-height: 1.15;
+}
+
+.tutti-round-result-details {
+  display: grid;
+  gap: var(--space-3);
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-2);
 }
 
 .tutti-challenge {
@@ -2230,4 +2353,37 @@ body {
   .impostor-figure span:nth-child(5) {
     transform: none;
   }
+}
+
+/* Tutti Frutti: keep phase actions ahead of secondary game details. */
+.tutti-phase-action {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.tutti-phase-action .impostor-action {
+  width: 100%;
+  min-width: 0;
+}
+
+.tutti-writing-answers > summary {
+  display: none;
+}
+
+.tutti-writing-answers .tutti-answer-entry {
+  margin-top: 0;
+}
+
+.tutti-room-navigation {
+  margin-top: var(--space-4);
+}
+
+.tutti-review__navigation .impostor-action {
+  padding-inline: var(--space-2);
+  white-space: normal;
+  line-height: 1.3;
+}
+
+.tutti-review__navigation > span {
+  white-space: nowrap;
 }

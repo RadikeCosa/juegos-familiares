@@ -116,14 +116,6 @@ export function TuttiFruttiFinalResultView({ result }: { result: FinalResult }) 
         ? `Empate entre ${winners.map(player => player.nickname).join(", ")}`
         : `${winners[0]?.nickname ?? "Ganador"} ganó la partida`}</p>
       <p>{result.roundCount} rondas completadas</p>
-      <ol className="tutti-review__entries">
-        {result.totals.map(player => (
-          <li className="tutti-review__entry" key={player.playerId}>
-            <strong>{player.rank}. {player.nickname}</strong>
-            <span>{player.totalPoints} puntos</span>
-          </li>
-        ))}
-      </ol>
       {result.canReturnToRoom && result.roomCode ? (
         <Link className="impostor-action impostor-action--primary"
           href={`/tutti-frutti/sala/${encodeURIComponent(result.roomCode)}?postgame=${encodeURIComponent(result.sessionId)}`}>
@@ -134,6 +126,17 @@ export function TuttiFruttiFinalResultView({ result }: { result: FinalResult }) 
           Volver a Juegos Familiares
         </Link>
       )}
+      <h2>Clasificación general</h2>
+      <ol className="tutti-review__entries">
+        {result.totals.map(player => (
+          <li className="tutti-review__entry" key={player.playerId}>
+            <strong>{player.rank}. {player.nickname}</strong>
+            <span>{player.totalPoints} puntos</span>
+            {player.lastRoundPoints !== null ? <small>+{player.lastRoundPoints} en la última ronda</small> : null}
+          </li>
+        ))}
+      </ol>
+
     </section>
   );
 }
