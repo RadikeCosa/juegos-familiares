@@ -9,9 +9,9 @@ const result: TuttiFruttiFinalResult = {
   roomId: "room-1", roomCode: "TUTT1234", sessionId: "session-1",
   finishedAt: "2026-09-25T13:00:00Z", serverNow: "2026-09-25T13:00:01Z",
   roundCount: 3, totals: [
-    { playerId: "a", nickname: "Ana", totalPoints: 40, rank: 1 },
-    { playerId: "b", nickname: "Beto", totalPoints: 40, rank: 1 },
-    { playerId: "c", nickname: "Cata", totalPoints: 30, rank: 3 }
+    { playerId: "a", nickname: "Ana", totalPoints: 40, lastRoundPoints: 10, rank: 1 },
+    { playerId: "b", nickname: "Beto", totalPoints: 40, lastRoundPoints: 0, rank: 1 },
+    { playerId: "c", nickname: "Cata", totalPoints: 30, lastRoundPoints: 5, rank: 3 }
   ], winnerPlayerIds: ["a", "b"], isTie: true, canReturnToRoom: true
 };
 
@@ -34,7 +34,23 @@ describe("Tutti Frutti final result", () => {
     expect(markup).toContain("1. Ana");
     expect(markup).toContain("3. Cata");
     expect(markup).toContain("40 puntos");
+    expect(markup).toContain("Clasificación general");
+    expect(markup.match(/<ol /g)).toHaveLength(1);
+    expect(markup.indexOf("Empate entre")).toBeLessThan(markup.indexOf("Clasificación general"));
+    expect(markup).toContain("+0 en la última ronda");
     expect(markup).toContain("/tutti-frutti/sala/TUTT1234?postgame=session-1");
+  });
+
+  it("omits unavailable deltas without inventing points or hiding reliable subtotals", () => {
+    const markup = renderToStaticMarkup(createElement(TuttiFruttiFinalResultView, {
+      result: { ...result, totals: result.totals.map(player => ({
+        ...player, lastRoundPoints: player.playerId === "c" ? null : player.lastRoundPoints
+      })) }
+    }));
+    expect(markup).not.toContain("+null");
+    expect(markup).not.toContain("+5 en la última ronda");
+    expect(markup).toContain("+10 en la última ronda");
+    expect(markup).toContain("Resultado final");
   });
 
   it("does not offer Room return after the participant leaves", () => {

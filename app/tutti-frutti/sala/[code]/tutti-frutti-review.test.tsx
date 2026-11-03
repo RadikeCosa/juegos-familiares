@@ -35,7 +35,7 @@ describe("Tutti Frutti review UI", () => {
     expect(markup).not.toContain("Sin respuesta</span>");
     expect(markup).toContain("1 de 2");
     expect(markup).toContain("Impugnar respuesta");
-    expect(markup).toContain("Finalizar revisión y puntuar");
+    expect(markup).toContain("Calcular puntajes");
   });
 
   it("shows only the current player's choice and uses mutual agreement for two players", () => {
@@ -75,5 +75,40 @@ describe("Tutti Frutti review UI", () => {
     expect(markup).toContain("Votar inválida");
     expect(markup).toContain("La decisión cierra en 18 segundos.");
     expect(markup).not.toContain("votos para invalidar");
+  });
+});
+
+
+describe("review guidance and phase actions", () => {
+  const render = (overrides: Partial<Parameters<typeof TuttiFruttiReview>[0]> = {}) =>
+    renderToStaticMarkup(createElement(TuttiFruttiReview, {
+      review, currentPlayerId: "a", challengeSeconds: 10, connection: "online", busy: false,
+      error: null, isHost: false, scoring: false, onScore: () => {},
+      onOpenChallenge: () => {}, onVote: () => {}, ...overrides
+    }));
+
+  it("explains who closes review and places host advancement before the answers", () => {
+    expect(render()).toContain("El anfitrión cerrará la revisión para calcular los puntajes.");
+    expect(render()).not.toContain("Calcular puntajes</button>");
+    const host = render({ isHost: true });
+    expect(host.indexOf("Calcular puntajes</button>")).toBeLessThan(host.indexOf("tutti-review__entries"));
+    expect(host).toContain("Categoría siguiente");
+    expect(host).toContain("Categoría anterior");
+    expect(render({ isHost: true, isFinalRound: true })).toContain("Ver resultado final</button>");
+    expect(render({ isHost: true, isFinalRound: true })).toContain("terminará la partida");
+    expect(render({ isHost: true, connection: "offline" })).toContain("Esperando conexión para calcular");
+  });
+
+  it("locks category controls with a visible reason and explains the wait after voting", () => {
+    const markup = render({ review: { ...review, activeChallenge: {
+      id: "challenge-1", targetPlayerId: "b", categoryPosition: 1,
+      deadlineAt: "2026-09-25T12:00:30Z", myVote: "INVALID", canVote: false
+    } } });
+    expect(markup).toContain("Categoría fijada por la impugnación");
+    expect(markup).toMatch(/<select[^>]*disabled=""[^>]*aria-describedby="tutti-category-locked"/);
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Categoría siguiente/);
+    expect(markup).toMatch(/<button[^>]*disabled=""[^>]*>Categoría anterior/);
+    expect(markup).toContain("Tu voto quedó registrado: inválida. Esperando la resolución");
+    expect(markup).not.toContain("Calcular puntajes</button>");
   });
 });

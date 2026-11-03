@@ -5,7 +5,7 @@ import type { TuttiFruttiReview as Review } from "../../../../lib/supabase/tutti
 
 export function TuttiFruttiReview({
   review, currentPlayerId, challengeSeconds, connection, busy, error,
-  isHost, scoring, onScore, onOpenChallenge, onVote
+  isHost, isFinalRound = false, scoring, onScore, onOpenChallenge, onVote
 }: {
   review: Review;
   currentPlayerId: string;
@@ -14,6 +14,7 @@ export function TuttiFruttiReview({
   busy: boolean;
   error: string | null;
   isHost: boolean;
+  isFinalRound?: boolean;
   scoring: boolean;
   onScore: () => void;
   onOpenChallenge: (playerId: string, categoryPosition: number) => void;
@@ -35,8 +36,25 @@ export function TuttiFruttiReview({
 
   return (
     <section className="tutti-review" aria-labelledby="tutti-review-title">
-      <h2 id="tutti-review-title">Respuestas de la ronda</h2>
-      <p>Las coincidencias son provisionales. Las respuestas todavía no tienen puntaje.</p>
+      <h2 id="tutti-review-title">Revisión de respuestas</h2>
+      {!activeChallenge ? (
+        <div className="tutti-phase-action">
+          <p role="status">{isHost
+            ? "Ronda cerrada. Cuando terminen de revisar, podés calcular los puntajes."
+            : "Ronda cerrada. Podés impugnar respuestas. El anfitrión cerrará la revisión para calcular los puntajes."}</p>
+          {isHost ? (
+            <>
+              {isFinalRound ? <p>Se calcularán los puntajes y terminará la partida.</p> : null}
+              <button type="button" className="impostor-action impostor-action--primary"
+                disabled={busy || scoring || connection !== "online"} onClick={onScore}>
+                {scoring ? "Calculando puntajes…" : isFinalRound ? "Ver resultado final" : "Calcular puntajes"}
+              </button>
+              {connection !== "online" ? <p>Esperando conexión para calcular los puntajes.</p> : null}
+              {busy ? <p role="status">Registrando la impugnación…</p> : null}
+            </>
+          ) : null}
+        </div>
+      ) : null}
       {activeChallenge && targetAnswer ? (
         <section className="tutti-challenge" aria-labelledby="tutti-challenge-title">
           <h3 id="tutti-challenge-title">Impugnación · {targetCategory?.label}</h3>
@@ -67,16 +85,19 @@ export function TuttiFruttiReview({
               )}
             </div>
           ) : activeChallenge.myVote ? (
-            <p role="status">Tu voto quedó registrado: {activeChallenge.myVote === "INVALID" ? "inválida" : "válida"}.</p>
+            <p role="status">Tu voto quedó registrado: {activeChallenge.myVote === "INVALID" ? "inválida" : "válida"}. Esperando la resolución de la impugnación.</p>
           ) : (
-            <p role="status">Esperando la decisión del autor de la respuesta.</p>
+            <p role="status">Esperando la resolución de la impugnación.</p>
           )}
+          {busy ? <p role="status">Registrando tu decisión…</p> : null}
+          {connection !== "online" ? <p>Esperando conexión para participar en la decisión.</p> : null}
           {error ? <p role="alert">{error}</p> : null}
         </section>
       ) : null}
       {!activeChallenge && error ? <p role="alert">{error}</p> : null}
       <label htmlFor="tutti-review-category">Categoría</label>
-      <select id="tutti-review-category" value={category.position}
+      <select id="tutti-review-category" value={category.position} disabled={Boolean(activeChallenge)}
+        aria-describedby={activeChallenge ? "tutti-category-locked" : undefined}
         onChange={(event) => setSelectedPosition(Number(event.target.value))}>
         {review.categories.map((item) => (
           <option key={item.position} value={item.position}>
@@ -84,15 +105,16 @@ export function TuttiFruttiReview({
           </option>
         ))}
       </select>
+      {activeChallenge ? <p id="tutti-category-locked">Categoría fijada por la impugnación. La revisión continúa cuando se resuelva.</p> : null}
       <div className="tutti-review__navigation">
-        <button className="impostor-action" type="button" disabled={selectedIndex === 0}
+        <button className="impostor-action" type="button" disabled={Boolean(activeChallenge) || selectedIndex === 0}
           onClick={() => setSelectedPosition(review.categories[selectedIndex - 1].position)}>
-          Anterior
+          Categoría anterior
         </button>
         <span aria-live="polite">{selectedIndex + 1} de {review.categories.length}</span>
-        <button className="impostor-action" type="button" disabled={selectedIndex === review.categories.length - 1}
+        <button className="impostor-action" type="button" disabled={Boolean(activeChallenge) || selectedIndex === review.categories.length - 1}
           onClick={() => setSelectedPosition(review.categories[selectedIndex + 1].position)}>
-          Siguiente
+          Categoría siguiente
         </button>
       </div>
       <h3>{category.label}</h3>
@@ -121,14 +143,6 @@ export function TuttiFruttiReview({
           </li>
         ))}
       </ul>
-      {isHost ? (
-        <div className="tutti-challenge__actions">
-          <button type="button" className="impostor-action impostor-action--primary"
-            disabled={busy || scoring || connection !== "online" || Boolean(activeChallenge)} onClick={onScore}>
-            {scoring ? "Calculando puntajes…" : "Finalizar revisión y puntuar"}
-          </button>
-        </div>
-      ) : null}
     </section>
   );
 }

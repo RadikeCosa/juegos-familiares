@@ -5,7 +5,7 @@ import { createElement } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { ActiveRoomLobby } from "../../../../lib/supabase/impostor-rooms";
 import type { TuttiFruttiStartedGame } from "../../../../lib/supabase/tutti-frutti-game";
-import { TuttiFruttiLobbyContent } from "./tutti-frutti-room-entry";
+import { TuttiFruttiLobbyContent, withRecoveryTimeout } from "./tutti-frutti-room-entry";
 
 const lobby: ActiveRoomLobby = {
   room: { id: "room-1", code: "TUTT1234", status: "lobby", gameType: "tutti_frutti" },
@@ -35,6 +35,19 @@ function render(
 }
 
 describe("Tutti Frutti lobby", () => {
+  it("caps room recovery at ten seconds and lets a timely response through", async () => {
+    vi.useFakeTimers();
+    try {
+      const pending = withRecoveryTimeout(new Promise<never>(() => {}), "timeout");
+      const assertion = expect(pending).rejects.toThrow("timeout");
+      await vi.advanceTimersByTimeAsync(10_000);
+      await assertion;
+      await expect(withRecoveryTimeout(Promise.resolve("ready"), "timeout")).resolves.toBe("ready");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps authoritative liveness and host succession active while playing", () => {
     const effectStart = roomEntrySource.indexOf("if (!roomId || !selfPlayerId) return;");
     const effectEnd = roomEntrySource.indexOf("async function startGame()", effectStart);
@@ -140,13 +153,14 @@ describe("Tutti Frutti lobby", () => {
     const markup = render(playingLobby, new Set(), "online", game);
     expect(markup).toContain('<details class="tutti-room-summary">');
     expect(markup).not.toMatch(/<details[^>]*\bopen(?:="")?[^>]*>/);
-    expect(markup).toContain("Sala · Código TUTT1234");
+    expect(markup).toContain(">Sala y navegación</span></summary>");
+    expect(markup).toContain("Código TUTT1234");
     expect(markup).toContain("Conectado");
-    expect(markup).toContain("2 participantes");
     expect(markup).toContain("Participantes");
-    expect(markup).toContain("Partida iniciada");
+    expect(markup).toContain("Ronda 1 de 5 · Letra M");
     expect(markup).toContain("Letra M");
-    expect(markup).toContain("Categorías: Nombre");
+    expect(markup).not.toContain("Categorías: Nombre");
+    expect(markup).not.toContain("Letra confirmada");
     expect(markup).toContain("Votos para saltar: 0 de 2 necesarios.");
     expect(markup).toContain("Votar para saltarla");
     expect(markup).toContain("La letra se acepta en 5 segundos");
@@ -166,10 +180,14 @@ describe("Tutti Frutti lobby", () => {
     ] as const) {
       const markup = render(playingLobby, new Set(["host"]), connection);
       expect(markup).toContain(expected);
-      expect(markup).toContain("2 participantes");
       expect(markup).toContain("Ana");
       expect(markup).toContain("Beto");
       expect(markup).toContain("desconectado");
+      if (connection === "online") {
+        expect(markup).not.toContain("tutti-connection-notice");
+      } else {
+        expect(markup).toContain("tutti-connection-notice");
+      }
     }
   });
 
@@ -213,7 +231,7 @@ describe("Tutti Frutti lobby", () => {
       round: { id: "round-1", number: 1, phase: "PLAYING", letter: "M", countdownEndsAt: null, calledByPlayerId: null, lockedAt: null, letterDecision: null }
     };
     const markup = render(playingLobby, new Set(), "online", game);
-    expect(markup).toContain("Letra confirmada. Completá y guardá todas las categorías para llamar Tutti Frutti.");
+    expect(markup).toContain("Completá todas las categorías para habilitar Tutti Frutti.");
     expect(markup).not.toContain("Votar para saltarla");
     expect(markup).toContain("Tutti Frutti</button>");
   });
@@ -247,8 +265,9 @@ describe("Tutti Frutti lobby", () => {
         lockedAt: "2026-09-25T12:00:45.100Z", letterDecision: null }
     };
     const markup = render(playingLobby, new Set(), "online", game, { unconfirmedAnswers: true });
-    expect(markup).toContain("Respuestas bloqueadas. Revisá las respuestas de la ronda.");
-    expect(markup).toContain('href="#tutti-review"');
+    expect(markup).not.toContain("Respuestas bloqueadas. Revisá las respuestas de la ronda.");
+    expect(markup).toContain('<details class="tutti-locked-answers">');
+    expect(markup).toContain("Recuperando respuestas de la ronda…");
     expect(markup).toContain("Alguna edición no alcanzó a guardarse");
     expect(markup).toContain("Recuperando respuestas de la ronda");
     expect(markup).not.toContain("Tutti Frutti</button>");
@@ -294,12 +313,12 @@ describe("Tutti Frutti lobby", () => {
         { playerId: "host", nickname: "Ana", answerText: "Mono", isEmpty: false, isValid: true, points: 10 as const }
       ] }], totals: [{ playerId: "host", nickname: "Ana", roundPoints: 10, totalPoints: 10, rank: 1 }] };
     const resultState = { status: "ready" as const, sessionId: "session-1", roundNumber: 1, result };
-    expect(render(playingLobby, new Set(), "online", game, { resultState })).toContain("Siguiente ronda");
+    expect(render(playingLobby, new Set(), "online", game, { resultState })).toContain("Iniciar ronda 2");
     const memberLobby = { ...playingLobby, participants: playingLobby.participants.map(p => ({ ...p, isSelf: false })) };
-    expect(render(memberLobby, new Set(), "online", game, { resultState })).not.toContain("Siguiente ronda");
+    expect(render(memberLobby, new Set(), "online", game, { resultState })).not.toContain("Iniciar ronda 2");
     const finalRound = { ...game, round: { ...game.round, number: 3 } };
     expect(render(playingLobby, new Set(), "online", finalRound, { resultState: { ...resultState, roundNumber: 3,
-      result: { ...result, roundNumber: 3, roundId: "round-3" } } })).not.toContain("Siguiente ronda");
+      result: { ...result, roundNumber: 3, roundId: "round-3" } } })).not.toContain("Iniciar ronda 2");
   });
 
   it("keeps a submitted vote fixed and disables the action for that candidate", () => {

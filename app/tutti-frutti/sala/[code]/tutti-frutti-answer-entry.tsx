@@ -313,8 +313,8 @@ export function TuttiFruttiAnswerEntry({
 
   return (
     <section className="tutti-answer-entry" aria-labelledby="tutti-answer-entry-title">
-      <h2 id="tutti-answer-entry-title">Tus respuestas · Ronda {roundNumber}</h2>
-      <p>{editable ? "Solo vos podés ver tus respuestas durante la ronda. Se guardan automáticamente." : "La ronda ya no acepta respuestas."}</p>
+      <h2 id="tutti-answer-entry-title">Tus respuestas</h2>
+      <p>{editable ? "Tus respuestas se guardan automáticamente." : "La ronda ya no acepta respuestas."}</p>
       {!editable && Object.values(fields).some((field) => field.status !== "saved" || field.stale || field.draft !== field.saved) ? (
         <p role="alert">Algunas ediciones todavía no tienen confirmación de guardado.</p>
       ) : null}
@@ -364,7 +364,7 @@ export function TuttiFruttiAnswerEntry({
                   type="text"
                 />
                 <div id={statusId} className="tutti-answer-field__status" aria-live="polite" aria-atomic="true">
-                  <span>{length}/200 caracteres</span>
+                  {length >= 160 ? <span>{length}/200 caracteres</span> : null}
                   {tooLong ? <span role="alert"> La respuesta supera el límite.</span> : null}
                   {field?.status === "saving" ? <span> Guardando…</span> : null}
                   {field?.status === "saved" && !field.stale ? <span> Guardado.</span> : null}

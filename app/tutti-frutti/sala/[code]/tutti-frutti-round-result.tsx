@@ -14,9 +14,29 @@ export function TuttiFruttiRoundResultView({
   connection: "online" | "offline" | "reconnecting";
   onAdvance: () => void;
 }) {
+  const ownTotal = result.totals.find((player) => player.playerId === currentPlayerId);
   return (
     <section className="tutti-review" aria-labelledby="tutti-result-title">
       <h2 id="tutti-result-title">Resultado de la ronda {result.roundNumber}</h2>
+      {ownTotal ? (
+        <section className="tutti-round-score" aria-label="Tu puntaje">
+          <strong>Sumaste +{ownTotal.roundPoints} puntos</strong>
+          <span>Llevás {ownTotal.totalPoints} puntos en la partida</span>
+        </section>
+      ) : null}
+      {isHost && canAdvance ? (
+        <div className="tutti-phase-action">
+          {connection !== "online" ? <p>Esperando conexión para iniciar la ronda.</p> : null}
+          {advanceError ? <p role="alert">{advanceError}</p> : null}
+          <button className="impostor-action impostor-action--primary" type="button"
+            disabled={advancing || connection !== "online"} onClick={onAdvance}>
+            {advancing ? "Preparando ronda…" : `Iniciar ronda ${result.roundNumber + 1}`}
+          </button>
+        </div>
+      ) : !isHost && canAdvance ? (
+        <p role="status">Esperando a que el anfitrión inicie la ronda {result.roundNumber + 1}.</p>
+      ) : null}
+      <h3>Clasificación general</h3>
       <ol className="tutti-review__entries">
         {result.totals.map((player) => (
           <li className="tutti-review__entry" key={player.playerId}>
@@ -25,29 +45,24 @@ export function TuttiFruttiRoundResultView({
           </li>
         ))}
       </ol>
-      {result.categories.map((category) => (
-        <section key={category.position} aria-labelledby={`tutti-result-category-${category.position}`}>
-          <h3 id={`tutti-result-category-${category.position}`}>{category.label}</h3>
-          <ul className="tutti-review__entries">
-            {category.entries.map((entry) => (
-              <li className="tutti-review__entry" key={entry.playerId}>
-                <strong>{entry.nickname}</strong>
-                <span>{entry.isEmpty ? "Sin respuesta" : entry.answerText}</span>
-                <small>{entry.isEmpty ? "Sin respuesta" : entry.isValid ? "Válida" : "Invalidada"} · {entry.points} puntos</small>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
-      {isHost && canAdvance ? (
-        <div>
-          {advanceError ? <p role="alert">{advanceError}</p> : null}
-          <button className="impostor-action impostor-action--primary" type="button"
-            disabled={advancing || connection !== "online"} onClick={onAdvance}>
-            {advancing ? "Preparando ronda…" : "Siguiente ronda"}
-          </button>
-        </div>
-      ) : null}
+      <details className="tutti-round-result-details">
+        <summary>Ver puntaje por categoría</summary>
+        {result.categories.map((category) => (
+          <section key={category.position} aria-labelledby={`tutti-result-category-${category.position}`}>
+            <h3 id={`tutti-result-category-${category.position}`}>{category.label}</h3>
+            <ul className="tutti-review__entries">
+              {category.entries.map((entry) => (
+                <li className="tutti-review__entry" key={entry.playerId}>
+                  <strong>{entry.nickname}</strong>
+                  <span>{entry.isEmpty ? "Sin respuesta" : entry.answerText}</span>
+                  <small>{entry.isEmpty ? "Sin respuesta" : entry.isValid ? "Válida" : "Invalidada"} · {entry.points} puntos</small>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </details>
+
     </section>
   );
 }
