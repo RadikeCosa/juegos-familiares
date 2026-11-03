@@ -51,7 +51,7 @@ Estado autoritativo
 - coordinación actual de liveness y reconexión y transiciones de gameplay;
 - uso de Realtime y Presence para su experiencia sincronizada.
 
-Cada Room persiste un `game_type` inmutable (`impostor`, `tutti_frutti` o `dictionary`). Las
+Cada Room persiste un `game_type` inmutable (`impostor`, `tutti_frutti`, `dictionary` o `cadaver_exquisito`). Las
 Rooms históricas se identifican como Impostor y la creación sin
 argumentos continúa creando Impostor. Las RPCs con intención de juego validan
 create/join, rechazan una Room activa de otro juego y mantienen opaco el código
@@ -218,3 +218,40 @@ administración ni bypass público para habilitarlo. Está habilitado con 300
 entradas revisadas mediante la modalidad asistida expresamente autorizada por
 el usuario. La evidencia de catálogo, gates y publicación está en
 `sources/games/dictionary/validation.md`.
+
+## Cadáver exquisito
+
+Usa Room, Player, Group, `room_sessions` y su roster neutral. Las rutas propias
+viven bajo `/cadaver-exquisito`. El esquema `cadaver_private` mantiene
+configuración, sesiones, orden/nombres congelados y aportes. Todas sus tablas
+tienen RLS y carecen de grants cliente. Las RPCs derivan actor de `auth.uid()`,
+fijan `search_path` y autorizan grupo, estado, turno y lugar activo.
+
+La pista se calcula bajo demanda y sólo se entrega al escritor activo. La
+historia completa requiere sesión completada y pertenencia actual al Group.
+Cancelación/vencimiento eliminan los aportes, incluida su identidad de operación;
+conservan sólo configuración, participantes, orden, identificadores y metadatos
+de cierre. No hay otra tabla con texto ni hashes de reintento.
+
+`cadaver_signals` publica únicamente `room_id` y `version`, con RLS por lugar
+activo. Cada avance y cambio relevante incrementa la versión en su transacción.
+Realtime invalida; la misma RPC de estado reconstruye tras reload, foreground
+y reconexión. Polling visible usa 15 segundos y backoff a 30/60 ante errores.
+
+Las operaciones bloquean Room antes de sesión. El regreso que considera otra
+Room ocupada bloquea ambas por identificador para conservar un orden total.
+Una Room por Player sigue siendo una restricción de `player_active_room_slots`.
+El índice histórico de host activo mantiene su condición para los demás juegos;
+Cadáver permite una referencia de anfitrión inactiva sin ocupar lugar. La FK
+mediante `member_host_player_id` conserva la exigencia de membresía del anfitrión
+para los juegos existentes. En Cadáver, la autoridad exige un lugar activo y
+la sucesión se resuelve atómicamente al abandonar o regresar.
+
+El plazo es de 24 horas sin avances, no renovable mediante heartbeat, lectura,
+entrada o salida. RPCs y cron privado cada 15 minutos aplican el mismo cierre,
+con barrido idempotente y `SKIP LOCKED`. La lectura de estado materializa el
+vencimiento antes de responder. Las fechas de servidor permiten mostrar el
+tiempo restante sin confiar en el reloj del dispositivo.
+
+[Reglas](games/cadaver-exquisito/product-brief.md) y
+[evidencia de validación/publicación](games/cadaver-exquisito/validation.md).

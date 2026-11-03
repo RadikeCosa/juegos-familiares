@@ -460,7 +460,7 @@ export type RoomLobby = {
     participants: RoomLobbyParticipant[];
 };
 
-export type RoomGameType = "impostor" | "tutti_frutti" | "dictionary";
+export type RoomGameType = "impostor" | "tutti_frutti" | "dictionary" | "cadaver_exquisito";
 
 export function formatRoomJoinCode(code: string): string {
     return /^[A-Z]{3,7}-[A-Z]{3,7}$/i.test(code) ? code.toLowerCase() : code;
@@ -476,7 +476,7 @@ export async function copyRoomJoinCode(
 }
 
 export function roomPath(gameType: RoomGameType, code: string): string {
-    const prefix = { impostor: "/impostor", tutti_frutti: "/tutti-frutti", dictionary: "/diccionario" }[gameType];
+    const prefix = { impostor: "/impostor", tutti_frutti: "/tutti-frutti", dictionary: "/diccionario", cadaver_exquisito: "/cadaver-exquisito" }[gameType];
     return `${prefix}/sala/${encodeURIComponent(code)}`;
 }
 
@@ -2470,7 +2470,7 @@ export async function getMyActiveRoom(
     }
 
     if (!rows.every(isRoomLobbyRow) ||
-        !rows.every((row) => row.room_game_type === "impostor" || row.room_game_type === "tutti_frutti" || row.room_game_type === "dictionary") ||
+        !rows.every((row) => row.room_game_type === "impostor" || row.room_game_type === "tutti_frutti" || row.room_game_type === "dictionary" || row.room_game_type === "cadaver_exquisito") ||
         !rows.every((row) => row.room_game_type === rows[0].room_game_type)) {
         throw new Error("No pudimos confirmar tu sala activa.");
     }

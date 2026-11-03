@@ -1,0 +1,19 @@
+.content { display: grid; gap: 1.25rem; padding-block: 1rem 3rem; min-width: 0; }
+.content h1 { font-size: clamp(1.75rem, 7vw, 2.5rem); line-height: 1.12; margin: 0; }
+.content h2 { font-size: 1.2rem; }
+.content p { margin: 0; line-height: 1.65; }
+.content textarea { min-height: 11rem; resize: vertical; font: inherit; line-height: 1.65; }
+.actions { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
+.hint { padding: 1rem 1.25rem; border-inline-start: 4px solid var(--accent); background: var(--surface, #fff); overflow-wrap: anywhere; }
+.roster { padding-left: 1.5rem; margin: 0; }
+.roster li { padding-block: .4rem; overflow-wrap: anywhere; }
+.deadline { font-size: .875rem; opacity: .8; }
+.story { list-style: none; padding: 0; display: grid; gap: 1.5rem; }
+.story li { border-top: 1px solid var(--border, #ddd); padding-top: 1rem; }
+.story p { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 1.125rem; line-height: 1.85; }
+.story small { display: block; margin-top: .5rem; opacity: .75; }
+.dialog { color: inherit; background: var(--surface, white); border: 1px solid var(--border, #ddd); border-radius: 1rem; padding: 1.5rem; max-width: min(32rem, calc(100vw - 2rem)); max-height: 85dvh; overflow-y: auto; overflow-wrap: anywhere; }
+.dialog::backdrop { background: #0008; }
+.dialog p { line-height: 1.6; }
+.content textarea { width: 100%; padding: 1rem; border: 1px solid var(--border, #cbd5e1); border-radius: .75rem; background: var(--surface, #fff); color: inherit; }
+.content textarea:focus-visible { outline: 3px solid var(--primary, #2563eb); outline-offset: 2px; }

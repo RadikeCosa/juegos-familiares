@@ -25,6 +25,7 @@ describe("service worker registration contract", () => {
   it("shows update UX without offering reload inside an active room route", () => {
     expect(registrationSource).toContain('pathname.startsWith("/impostor/sala/")');
     expect(registrationSource).toContain('pathname.startsWith("/tutti-frutti/sala/")');
+    expect(registrationSource).toContain('pathname.startsWith("/cadaver-exquisito/sala/")');
     expect(registrationSource).toContain('import { usePathname } from "next/navigation"');
     expect(registrationSource).toContain("Salí de la sala o terminá la tanda antes de actualizar.");
     expect(registrationSource).toContain("Actualizá cuando no estés jugando una tanda.");

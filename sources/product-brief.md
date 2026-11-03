@@ -10,9 +10,12 @@ cuando esa interacción es el núcleo de la utilidad.
 
 ## Producto actual
 
-Impostor es actualmente la única utilidad jugable implementada dentro de
-Juegos Familiares. Mantiene su propio dominio de producto, reglas, estado y
-operación.
+Juegos Familiares implementa Impostor, Tutti Frutti, Diccionario y Cadáver
+exquisito. Cada juego conserva sus reglas, estado y operación. La disponibilidad
+productiva y la evidencia de publicación pertenecen a `project-status.md`.
+Cadáver exquisito es escritura colaborativa por turnos con pistas privadas e
+historial de historias del Group; su contrato vive en
+[su product brief](games/cadaver-exquisito/product-brief.md).
 
 La portada `/` es la entrada común a la aplicación y el espacio de gestión del
 grupo: allí se crean o aceptan invitaciones, se consulta el contexto y se ven
@@ -29,6 +32,8 @@ la implementación actual:
 - `Group` y pertenencia del `Player` a un grupo;
 - contexto de jugador y grupo reconstruido desde estado remoto autorizado;
 - navegación común y gestión de grupo en la portada `/`;
+- Room y RoomParticipant para juego, Group, host, membresía y lifecycle;
+- identidad neutral de sesión y roster congelado cuando corresponde;
 - shell de aplicación mobile-first y capacidades PWA.
 
 Estas capacidades no forman todavía un sistema genérico de perfiles ni un
@@ -56,7 +61,6 @@ múltiples grupos.
 
 Pertenecen a Impostor, no a la plataforma:
 
-- `Room` y `RoomParticipant`;
 - `GameSession` y `SessionPlayer`;
 - rondas, roles y palabras;
 - votos, resultados y puntuación;
